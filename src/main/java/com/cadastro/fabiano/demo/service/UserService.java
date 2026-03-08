@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.service;
 
 import com.cadastro.fabiano.demo.dto.request.UpdateUserRequest;
 import com.cadastro.fabiano.demo.dto.response.UserResponse;
+import com.cadastro.fabiano.demo.entity.Role;
 import com.cadastro.fabiano.demo.entity.User;
 import com.cadastro.fabiano.demo.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,20 @@ public class UserService {
                 ))
                 .toList();
 
+    }
+
+    public List<UserResponse> findByRole(Role role) {
+        return repository.findAll()
+                .stream()
+                .filter(user -> user.getActive() && user.getRole() == role)
+                .map(user -> new UserResponse(
+                        user.getId(),
+                        user.getName(),
+                        user.getEmail(),
+                        user.getUsername(),
+                        user.getRole().name()
+                ))
+                .toList();
     }
 
     public void update(Long id, UpdateUserRequest request) {
