@@ -2,11 +2,13 @@ package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.ClientRequest;
 import com.cadastro.fabiano.demo.dto.response.ClientResponse;
+import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.service.ClientService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,10 +19,9 @@ public class ClientController {
     private final ClientService service;
 
     @PostMapping
-    public ClientResponse create(
-            @RequestBody @Valid ClientRequest dto
-    ){
-        return service.create(dto);
+    public ResponseEntity<ClientResponse> create(@RequestBody ClientRequest dto) {
+        ClientResponse response = service.createClient(dto);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping

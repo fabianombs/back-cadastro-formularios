@@ -16,6 +16,8 @@ public record ClientRequest(
 
         String company,
 
-        String notes
+        String notes,
+
+        String username
 
 ) {}

@@ -6,9 +6,11 @@ import com.cadastro.fabiano.demo.dto.response.ClientResponse;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.mapper.ClientMapper;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,16 +18,20 @@ import org.springframework.stereotype.Service;
 public class ClientService {
 
     private final ClientRepository repository;
+    private final PasswordEncoder passwordEncoder;
 
-    public ClientResponse create(ClientRequest dto){
 
-        Client client = ClientMapper.toEntity(dto);
+    @Transactional
+    public ClientResponse createClient(ClientRequest dto) {
+
+        // converte DTO em entidade com User
+        Client client = ClientMapper.toEntityWithUser(dto, passwordEncoder);
 
         Client saved = repository.save(client);
 
+        // converte para DTO de resposta
         return ClientMapper.toDTO(saved);
     }
-
     public Page<ClientResponse> findAll(Pageable pageable){
 
         return repository

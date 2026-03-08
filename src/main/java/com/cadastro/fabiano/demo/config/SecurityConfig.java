@@ -45,8 +45,8 @@ public class SecurityConfig {
                         // ROTAS ADMIN
                         .requestMatchers(HttpMethod.PUT, "/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/clients/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/clients/**").hasRole("ADMIN")
+//                        .requestMatchers(HttpMethod.PUT, "/clients/**").hasRole("ADMIN")
+//                        .requestMatchers(HttpMethod.DELETE, "/clients/**").hasRole("ADMIN")
 
                         // QUALQUER OUTRA REQUISIÇÃO
                         .anyRequest().authenticated()
