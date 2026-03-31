@@ -7,6 +7,10 @@ import com.cadastro.fabiano.demo.entity.AttendanceRecord;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,12 +62,15 @@ public class AttendanceService {
     // ============================
     // LISTAR POR TEMPLATE
     // ============================
-    public List<AttendanceRecordResponse> getByTemplate(Long templateId) {
+    public Page<AttendanceRecordResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = findTemplate(templateId);
-        return attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Order.asc("rowOrder"), Sort.Order.asc("createdAt"))
+        );
+        return attendanceRepository.findByFormTemplate(template, sortedPageable)
+                .map(this::toResponse);
     }
 
     // ============================

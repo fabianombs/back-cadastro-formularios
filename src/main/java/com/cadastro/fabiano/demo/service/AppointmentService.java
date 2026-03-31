@@ -8,6 +8,8 @@ import com.cadastro.fabiano.demo.entity.AppointmentStatus;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.AppointmentRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -114,14 +116,12 @@ public class AppointmentService {
     // ==========================
     // BUSCAR AGENDAMENTOS DO TEMPLATE
     // ==========================
-    public List<AppointmentResponse> getByTemplate(Long templateId) {
+    public Page<AppointmentResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = formTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
-        return appointmentRepository.findByFormTemplate(template)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return appointmentRepository.findByFormTemplate(template, pageable)
+                .map(this::toResponse);
     }
 
     // ==========================

@@ -3,11 +3,11 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.dto.request.CreateFormSubmissionRequest;
 import com.cadastro.fabiano.demo.dto.response.FormSubmissionResponse;
 import com.cadastro.fabiano.demo.service.FormSubmissionService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/form-submissions")
@@ -19,28 +19,23 @@ public class FormSubmissionController {
         this.submissionService = submissionService;
     }
 
-    // =========================
-    // ENVIAR RESPOSTA (PÚBLICO)
-    // =========================
     @PostMapping
     public FormSubmissionResponse submitForm(@RequestBody CreateFormSubmissionRequest request) {
         return submissionService.submitForm(request);
     }
 
-    // =========================
-    // LISTAR POR TEMPLATE ID
-    // =========================
     @GetMapping("/template/{templateId}")
-    public List<FormSubmissionResponse> getByTemplate(@PathVariable Long templateId) {
-        return submissionService.getSubmissionsByTemplate(templateId);
+    public Page<FormSubmissionResponse> getByTemplate(
+            @PathVariable Long templateId,
+            Pageable pageable) {
+        return submissionService.getSubmissionsByTemplate(templateId, pageable);
     }
 
-    // =========================
-    // 🔥 LISTAR POR SLUG (IDEAL)
-    // =========================
     @GetMapping("/slug/{slug}")
-    public List<FormSubmissionResponse> getBySlug(@PathVariable String slug) {
-        return submissionService.getSubmissionsBySlug(slug);
+    public Page<FormSubmissionResponse> getBySlug(
+            @PathVariable String slug,
+            Pageable pageable) {
+        return submissionService.getSubmissionsBySlug(slug, pageable);
     }
 
     @DeleteMapping("/{id}")

@@ -3,12 +3,12 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
 import com.cadastro.fabiano.demo.service.FormTemplateService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/form-templates")
@@ -20,7 +20,6 @@ public class FormTemplateController {
         this.templateService = templateService;
     }
 
-    // 🔥 ADMIN cria form para cliente
     @PostMapping("/create/{clientId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<FormTemplateResponse> createTemplate(
@@ -32,28 +31,25 @@ public class FormTemplateController {
         );
     }
 
-    // 🔥 CLIENTE vê seus forms
     @GetMapping("/my-templates")
-    public ResponseEntity<List<FormTemplateResponse>> getMyTemplates(Authentication authentication) {
-
-        String username = authentication.getName();
+    public ResponseEntity<Page<FormTemplateResponse>> getMyTemplates(
+            Authentication authentication,
+            Pageable pageable) {
 
         return ResponseEntity.ok(
-                templateService.findTemplatesByUsername(username)
+                templateService.findTemplatesByUsername(authentication.getName(), pageable)
         );
     }
 
-    // 🔥 ADMIN vê todos
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<FormTemplateResponse>> getAllTemplates() {
+    public ResponseEntity<Page<FormTemplateResponse>> getAllTemplates(Pageable pageable) {
 
         return ResponseEntity.ok(
-                templateService.findAllTemplates()
+                templateService.findAllTemplates(pageable)
         );
     }
 
-    // 🔥 acessar por slug
     @GetMapping("/slug/{slug}")
     public ResponseEntity<FormTemplateResponse> getBySlug(@PathVariable String slug) {
 

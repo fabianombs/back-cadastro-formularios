@@ -6,6 +6,8 @@ import com.cadastro.fabiano.demo.entity.FormSubmission;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,26 +47,21 @@ public class FormSubmissionService {
     // =========================
     // LISTAR POR TEMPLATE ID
     // =========================
-    public List<FormSubmissionResponse> getSubmissionsByTemplate(Long templateId) {
-
-        return submissionRepository.findByTemplate_Id(templateId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+    public Page<FormSubmissionResponse> getSubmissionsByTemplate(Long templateId, Pageable pageable) {
+        return submissionRepository.findByTemplate_Id(templateId, pageable)
+                .map(this::toResponse);
     }
 
     // =========================
-    // 🔥 LISTAR POR SLUG (RECOMENDADO)
+    // LISTAR POR SLUG
     // =========================
-    public List<FormSubmissionResponse> getSubmissionsBySlug(String slug) {
+    public Page<FormSubmissionResponse> getSubmissionsBySlug(String slug, Pageable pageable) {
 
         FormTemplate template = templateRepository.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
-        return submissionRepository.findByTemplate_Id(template.getId())
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return submissionRepository.findByTemplate_Id(template.getId(), pageable)
+                .map(this::toResponse);
     }
 
     // =========================

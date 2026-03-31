@@ -4,6 +4,8 @@ import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.service.AttendanceService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -31,8 +33,10 @@ public class AttendanceController {
 
     @GetMapping("/template/{templateId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
-    public ResponseEntity<List<AttendanceRecordResponse>> getByTemplate(@PathVariable Long templateId) {
-        return ResponseEntity.ok(attendanceService.getByTemplate(templateId));
+    public ResponseEntity<Page<AttendanceRecordResponse>> getByTemplate(
+            @PathVariable Long templateId,
+            Pageable pageable) {
+        return ResponseEntity.ok(attendanceService.getByTemplate(templateId, pageable));
     }
 
     @PatchMapping("/{recordId}/mark")

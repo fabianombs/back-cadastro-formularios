@@ -4,6 +4,8 @@ import com.cadastro.fabiano.demo.dto.request.BookAppointmentRequest;
 import com.cadastro.fabiano.demo.dto.response.AppointmentResponse;
 import com.cadastro.fabiano.demo.dto.response.AvailableSlotsResponse;
 import com.cadastro.fabiano.demo.service.AppointmentService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -62,7 +64,9 @@ public class AppointmentController {
     // Admin/funcionário vê todos os agendamentos do template
     @GetMapping("/template/{templateId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
-    public ResponseEntity<List<AppointmentResponse>> getByTemplate(@PathVariable Long templateId) {
-        return ResponseEntity.ok(appointmentService.getByTemplate(templateId));
+    public ResponseEntity<Page<AppointmentResponse>> getByTemplate(
+            @PathVariable Long templateId,
+            Pageable pageable) {
+        return ResponseEntity.ok(appointmentService.getByTemplate(templateId, pageable));
     }
 }

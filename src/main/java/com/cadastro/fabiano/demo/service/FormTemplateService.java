@@ -12,6 +12,8 @@ import com.cadastro.fabiano.demo.entity.User;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import com.cadastro.fabiano.demo.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,31 +37,24 @@ public class FormTemplateService {
     // ==========================
     // ADMIN - TODOS OS FORMS
     // ==========================
-    public List<FormTemplateResponse> findAllTemplates() {
-        return templateRepository.findAll()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+    public Page<FormTemplateResponse> findAllTemplates(Pageable pageable) {
+        return templateRepository.findAll(pageable)
+                .map(this::toResponse);
     }
 
     // ==========================
     // CLIENTE - MEUS FORMS
     // ==========================
-    public List<FormTemplateResponse> findTemplatesByUsername(String username) {
+    public Page<FormTemplateResponse> findTemplatesByUsername(String username, Pageable pageable) {
 
-        // 🔥 pega o user
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-        // 🔥 pega o client ligado ao user
         Client client = clientRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
 
-        // 🔥 busca forms pelo client
-        return templateRepository.findByClient(client)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return templateRepository.findByClient(client, pageable)
+                .map(this::toResponse);
     }
 
     // ==========================

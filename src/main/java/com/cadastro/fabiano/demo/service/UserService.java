@@ -5,9 +5,9 @@ import com.cadastro.fabiano.demo.dto.response.UserResponse;
 import com.cadastro.fabiano.demo.entity.Role;
 import com.cadastro.fabiano.demo.entity.User;
 import com.cadastro.fabiano.demo.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 public class UserService {
@@ -18,34 +18,26 @@ public class UserService {
         this.repository = repository;
     }
 
-    public List<UserResponse> findAll() {
-
-        return repository.findAll()
-                .stream()
-                .filter(User::getActive)
+    public Page<UserResponse> findAll(Pageable pageable) {
+        return repository.findByActiveTrue(pageable)
                 .map(user -> new UserResponse(
                         user.getId(),
                         user.getName(),
                         user.getEmail(),
                         user.getUsername(),
                         user.getRole().name()
-                ))
-                .toList();
-
+                ));
     }
 
-    public List<UserResponse> findByRole(Role role) {
-        return repository.findAll()
-                .stream()
-                .filter(user -> user.getActive() && user.getRole() == role)
+    public Page<UserResponse> findByRole(Role role, Pageable pageable) {
+        return repository.findByActiveTrueAndRole(role, pageable)
                 .map(user -> new UserResponse(
                         user.getId(),
                         user.getName(),
                         user.getEmail(),
                         user.getUsername(),
                         user.getRole().name()
-                ))
-                .toList();
+                ));
     }
 
     public void update(Long id, UpdateUserRequest request) {
