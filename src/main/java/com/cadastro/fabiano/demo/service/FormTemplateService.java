@@ -1,8 +1,10 @@
 package com.cadastro.fabiano.demo.service;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.response.FormFieldResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
+import com.cadastro.fabiano.demo.dto.response.ScheduleConfigResponse;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
@@ -75,6 +77,16 @@ public class FormTemplateService {
 
         template.setSlug(generateUniqueSlug(request.name()));
 
+        // Configuração de agenda (opcional)
+        if (request.scheduleConfig() != null) {
+            ScheduleConfigRequest sc = request.scheduleConfig();
+            template.setHasSchedule(true);
+            template.setScheduleStartTime(sc.startTime());
+            template.setScheduleEndTime(sc.endTime());
+            template.setSlotDurationMinutes(sc.slotDurationMinutes());
+            template.setMaxDaysAhead(sc.maxDaysAhead());
+        }
+
         List<FormField> fields = request.fields().stream()
                 .map(f -> {
                     FormField field = new FormField();
@@ -137,12 +149,24 @@ public class FormTemplateService {
                 ))
                 .toList();
 
+        ScheduleConfigResponse scheduleConfig = null;
+        if (template.isHasSchedule()) {
+            scheduleConfig = new ScheduleConfigResponse(
+                    template.getScheduleStartTime(),
+                    template.getScheduleEndTime(),
+                    template.getSlotDurationMinutes(),
+                    template.getMaxDaysAhead()
+            );
+        }
+
         return new FormTemplateResponse(
                 template.getId(),
                 template.getName(),
                 template.getSlug(),
                 template.getClient().getName(),
-                fields
+                fields,
+                template.isHasSchedule(),
+                scheduleConfig
         );
     }
 }

@@ -6,6 +6,8 @@ public record FormTemplateResponse(
         Long id,
         String name,
         String slug,
-        String clientName,            // ⚡ o nome da empresa como string
-        List<FormFieldResponse> fields  // ⚡ lista de campos do formulário
+        String clientName,
+        List<FormFieldResponse> fields,
+        boolean hasSchedule,
+        ScheduleConfigResponse scheduleConfig
 ) {}

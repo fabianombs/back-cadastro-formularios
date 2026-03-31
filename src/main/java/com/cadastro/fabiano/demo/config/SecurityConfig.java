@@ -37,7 +37,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/form-submissions/**").permitAll()
-                        .requestMatchers("/forms/**").permitAll() // 🔥 importante pro front
+                        .requestMatchers("/forms/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots/range").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/appointments/book").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
