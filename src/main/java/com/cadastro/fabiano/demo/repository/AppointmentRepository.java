@@ -18,7 +18,15 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     List<Appointment> findByFormTemplateAndSlotDateAndSlotTimeAndStatus(
             FormTemplate formTemplate, LocalDate date, LocalTime time, AppointmentStatus status);
 
+    // Para o DashboardService (stats, sem paginação)
+    List<Appointment> findByFormTemplate(FormTemplate formTemplate);
+
+    // Para o controller (paginado)
     Page<Appointment> findByFormTemplate(FormTemplate formTemplate, Pageable pageable);
 
     List<Appointment> findByFormTemplateAndStatus(FormTemplate formTemplate, AppointmentStatus status);
+
+    long countByFormTemplate(FormTemplate formTemplate);
+
+    long countByFormTemplateAndStatus(FormTemplate formTemplate, AppointmentStatus status);
 }

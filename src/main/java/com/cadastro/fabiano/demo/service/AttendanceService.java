@@ -8,9 +8,9 @@ import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,14 +31,9 @@ public class AttendanceService {
         this.templateRepository = templateRepository;
     }
 
-    // ============================
-    // IMPORTAR PLANILHA
-    // ============================
     @Transactional
     public List<AttendanceRecordResponse> importAttendance(Long templateId, ImportAttendanceRequest request) {
         FormTemplate template = findTemplate(templateId);
-
-        // Remove lista anterior e reimporta
         attendanceRepository.deleteByFormTemplate(template);
 
         AtomicInteger order = new AtomicInteger(1);
@@ -49,8 +44,7 @@ public class AttendanceService {
                         .rowData(row)
                         .attended(false)
                         .rowOrder(order.getAndIncrement())
-                        .build()
-                )
+                        .build())
                 .toList();
 
         return attendanceRepository.saveAll(records)
@@ -59,50 +53,35 @@ public class AttendanceService {
                 .toList();
     }
 
-    // ============================
-    // LISTAR POR TEMPLATE
-    // ============================
     public Page<AttendanceRecordResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = findTemplate(templateId);
-        Pageable sortedPageable = PageRequest.of(
+        Pageable sorted = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
                 Sort.by(Sort.Order.asc("rowOrder"), Sort.Order.asc("createdAt"))
         );
-        return attendanceRepository.findByFormTemplate(template, sortedPageable)
+        return attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template, sorted)
                 .map(this::toResponse);
     }
 
-    // ============================
-    // MARCAR / DESMARCAR PRESENÇA
-    // ============================
     @Transactional
     public AttendanceRecordResponse markAttendance(Long recordId, MarkAttendanceRequest request) {
         AttendanceRecord record = attendanceRepository.findById(recordId)
                 .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
-
         record.setAttended(request.attended());
         record.setNotes(request.notes());
         record.setAttendedAt(request.attended() ? LocalDateTime.now() : null);
-
         return toResponse(attendanceRepository.save(record));
     }
 
-    // ============================
-    // ATUALIZAR DADOS DE UMA LINHA
-    // ============================
     @Transactional
     public AttendanceRecordResponse updateRowData(Long recordId, Map<String, String> rowData) {
         AttendanceRecord record = attendanceRepository.findById(recordId)
                 .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
-
         record.setRowData(rowData);
         return toResponse(attendanceRepository.save(record));
     }
 
-    // ============================
-    // DELETAR REGISTRO
-    // ============================
     @Transactional
     public void deleteRecord(Long recordId) {
         attendanceRepository.findById(recordId)
@@ -110,9 +89,6 @@ public class AttendanceService {
         attendanceRepository.deleteById(recordId);
     }
 
-    // ============================
-    // HELPERS
-    // ============================
     private FormTemplate findTemplate(Long templateId) {
         return templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));

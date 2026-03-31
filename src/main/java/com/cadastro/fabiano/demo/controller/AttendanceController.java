@@ -56,7 +56,7 @@ public class AttendanceController {
     }
 
     @DeleteMapping("/{recordId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<Void> deleteRecord(@PathVariable Long recordId) {
         attendanceService.deleteRecord(recordId);
         return ResponseEntity.noContent().build();

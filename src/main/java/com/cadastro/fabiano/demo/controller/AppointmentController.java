@@ -69,4 +69,12 @@ public class AppointmentController {
             Pageable pageable) {
         return ResponseEntity.ok(appointmentService.getByTemplate(templateId, pageable));
     }
+
+    // Admin ou client pode excluir um agendamento permanentemente
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENT', 'FUNCIONARIO')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        appointmentService.deleteAppointment(id);
+        return ResponseEntity.noContent().build();
+    }
 }

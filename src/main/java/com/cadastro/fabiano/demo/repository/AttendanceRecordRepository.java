@@ -10,9 +10,15 @@ import java.util.List;
 
 public interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, Long> {
 
+    // Para stats (DashboardService)
     List<AttendanceRecord> findByFormTemplateOrderByRowOrderAscCreatedAtAsc(FormTemplate template);
 
-    Page<AttendanceRecord> findByFormTemplate(FormTemplate template, Pageable pageable);
+    // Para listagem paginada
+    Page<AttendanceRecord> findByFormTemplateOrderByRowOrderAscCreatedAtAsc(FormTemplate template, Pageable pageable);
 
     void deleteByFormTemplate(FormTemplate template);
+
+    long countByFormTemplate(FormTemplate template);
+
+    long countByFormTemplateAndAttended(FormTemplate template, boolean attended);
 }

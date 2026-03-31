@@ -114,6 +114,16 @@ public class AppointmentService {
     }
 
     // ==========================
+    // EXCLUIR AGENDAMENTO
+    // ==========================
+    @Transactional
+    public void deleteAppointment(Long id) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Agendamento não encontrado"));
+        appointmentRepository.delete(appointment);
+    }
+
+    // ==========================
     // BUSCAR AGENDAMENTOS DO TEMPLATE
     // ==========================
     public Page<AppointmentResponse> getByTemplate(Long templateId, Pageable pageable) {
