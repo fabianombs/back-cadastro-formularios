@@ -68,6 +68,16 @@ public class FormSubmissionService {
     }
 
     // =========================
+    // DELETAR SUBMISSÃO
+    // =========================
+    @Transactional
+    public void deleteSubmission(Long id) {
+        FormSubmission submission = submissionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Resposta não encontrada"));
+        submissionRepository.delete(submission);
+    }
+
+    // =========================
     // MAPPER
     // =========================
     private FormSubmissionResponse toResponse(FormSubmission s) {

@@ -11,4 +11,6 @@ public interface FormSubmissionRepository extends JpaRepository<FormSubmission, 
 
     List<FormSubmission> findByTemplate_Id(Long templateId);
 
+    boolean existsByIdAndTemplate_Id(Long id, Long templateId);
+
 }
