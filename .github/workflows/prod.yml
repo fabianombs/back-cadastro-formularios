@@ -1,4 +1,4 @@
-name: Master - Build & Deploy to Railway
+name: Master - Build, Test & Deploy to Railway
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
       - master
 
 jobs:
-  build-and-deploy:
-    name: Build & Deploy to Railway
+  build-and-test:
+    name: Build & Test (Railway deploys automatically on success)
     runs-on: ubuntu-latest
 
     services:
@@ -62,13 +62,3 @@ jobs:
 
       - name: Verify JAR was generated
         run: ls -la target/*.jar
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli@latest
-
-      - name: Deploy to Railway
-        run: railway up --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_SECRET }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
