@@ -1,0 +1,10 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "./mvnw package -DskipTests"
+
+[deploy]
+startCommand = "java -jar target/demo-0.0.1-SNAPSHOT.jar"
+healthcheckPath = "/actuator/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
