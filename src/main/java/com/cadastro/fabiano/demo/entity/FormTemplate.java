@@ -39,6 +39,10 @@ public class FormTemplate {
     @Builder.Default
     private boolean hasSchedule = false;
 
+    @Column(name = "has_attendance", nullable = false)
+    @Builder.Default
+    private boolean hasAttendance = false;
+
     @Column(name = "schedule_start_time")
     private LocalTime scheduleStartTime;
 

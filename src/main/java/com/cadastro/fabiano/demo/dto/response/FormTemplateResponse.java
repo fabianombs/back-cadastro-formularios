@@ -9,5 +9,6 @@ public record FormTemplateResponse(
         String clientName,
         List<FormFieldResponse> fields,
         boolean hasSchedule,
+        boolean hasAttendance,
         ScheduleConfigResponse scheduleConfig
 ) {}

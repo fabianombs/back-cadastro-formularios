@@ -161,6 +161,7 @@ public class FormTemplateService {
                 template.getClient().getName(),
                 fields,
                 template.isHasSchedule(),
+                template.isHasAttendance(),
                 scheduleConfig
         );
     }

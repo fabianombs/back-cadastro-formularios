@@ -47,6 +47,9 @@ public class AttendanceService {
                         .build())
                 .toList();
 
+        template.setHasAttendance(true);
+        templateRepository.save(template);
+
         return attendanceRepository.saveAll(records)
                 .stream()
                 .map(this::toResponse)
