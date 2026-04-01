@@ -32,7 +32,7 @@ public class DashboardService {
         Page<FormTemplate> page = templateRepository.findAll(pageable);
         long totalClients = clientRepository.count();
 
-        return buildResponse(page.getContent(), totalClients);
+        return buildResponse(page, totalClients);
     }
 
     // Client: vê apenas os templates do seu cliente
@@ -42,10 +42,11 @@ public class DashboardService {
 
         Page<FormTemplate> page = templateRepository.findByClient(client, pageable);
 
-        return buildResponse(page.getContent(), page.getTotalElements());
+        return buildResponse(page, page.getTotalElements());
     }
 
-    private DashboardResponse buildResponse(List<FormTemplate> templates, long totalClients) {
+    private DashboardResponse buildResponse(Page<FormTemplate> page, long totalClients) {
+        List<FormTemplate> templates = page.getContent();
         List<TemplateStatResponse> templateStats = templates.stream().map(t -> {
             long submissions = submissionRepository.countByTemplate_Id(t.getId());
             long apptTotal = appointmentRepository.countByFormTemplate(t);
@@ -71,10 +72,14 @@ public class DashboardService {
         long presentAttendance     = templateStats.stream().mapToLong(TemplateStatResponse::attendancePresent).sum();
 
         return new DashboardResponse(
-                templates.size(), totalClients,
+                page.getTotalElements(), totalClients,
                 totalSubmissions, totalAppointments, confirmedAppointments, cancelledAppointments,
                 totalAttendance, presentAttendance,
-                templateStats
+                templateStats,
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages()
         );
     }
 }

@@ -11,5 +11,9 @@ public record DashboardResponse(
         long cancelledAppointments,
         long totalAttendanceRecords,
         long presentAttendanceRecords,
-        List<TemplateStatResponse> templates
+        List<TemplateStatResponse> templates,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages
 ) {}
