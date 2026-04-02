@@ -21,7 +21,7 @@ public class FormTemplateController {
     }
 
     @PostMapping("/create/{clientId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     public ResponseEntity<FormTemplateResponse> createTemplate(
             @PathVariable Long clientId,
             @RequestBody CreateFormTemplateRequest request) {
@@ -42,7 +42,7 @@ public class FormTemplateController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     public ResponseEntity<Page<FormTemplateResponse>> getAllTemplates(Pageable pageable) {
 
         return ResponseEntity.ok(

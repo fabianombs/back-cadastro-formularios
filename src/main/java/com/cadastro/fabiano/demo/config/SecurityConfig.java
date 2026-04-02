@@ -40,10 +40,13 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/form-submissions/**").permitAll()
                         .requestMatchers("/forms/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/form-templates/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/clients/*/templates").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots/range").permitAll()
                         .requestMatchers(HttpMethod.POST, "/appointments/book").permitAll()

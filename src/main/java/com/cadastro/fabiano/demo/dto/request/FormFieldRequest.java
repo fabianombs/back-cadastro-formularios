@@ -3,6 +3,9 @@ package com.cadastro.fabiano.demo.dto.request;
 public record FormFieldRequest(
         String label,
         String type,
-        boolean required
+        boolean required,
+        String fieldColor,
+        /** 2 = largura total, 1 = meia largura. Padrão: 2 */
+        Integer colSpan
 ) {
 }

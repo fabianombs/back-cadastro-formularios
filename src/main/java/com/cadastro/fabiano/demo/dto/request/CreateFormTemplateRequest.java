@@ -6,6 +6,7 @@ public record CreateFormTemplateRequest(
         String name,
         Long clientId,
         List<FormFieldRequest> fields,
-        ScheduleConfigRequest scheduleConfig
+        ScheduleConfigRequest scheduleConfig,
+        TemplateAppearanceRequest appearance
 ) {
 }

@@ -4,5 +4,8 @@ public record FormFieldResponse(
         Long id,
         String label,
         String type,
-        boolean required
+        boolean required,
+        String fieldColor,
+        /** 2 = largura total, 1 = meia largura */
+        int colSpan
 ) {}

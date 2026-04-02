@@ -2,9 +2,11 @@ package com.cadastro.fabiano.demo.service;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
+import com.cadastro.fabiano.demo.dto.request.TemplateAppearanceRequest;
 import com.cadastro.fabiano.demo.dto.response.FormFieldResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
 import com.cadastro.fabiano.demo.dto.response.ScheduleConfigResponse;
+import com.cadastro.fabiano.demo.dto.response.TemplateAppearanceResponse;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
@@ -58,6 +60,16 @@ public class FormTemplateService {
     }
 
     // ==========================
+    // TEMPLATES POR CLIENT ID (público)
+    // ==========================
+    public Page<FormTemplateResponse> findTemplatesByClientId(Long clientId, Pageable pageable) {
+        Client client = clientRepository.findById(clientId)
+                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
+        return templateRepository.findByClient(client, pageable)
+                .map(this::toResponse);
+    }
+
+    // ==========================
     // CRIAR TEMPLATE
     // ==========================
     @Transactional
@@ -69,7 +81,6 @@ public class FormTemplateService {
         FormTemplate template = new FormTemplate();
         template.setName(request.name());
         template.setClient(client);
-
         template.setSlug(generateUniqueSlug(request.name()));
 
         // Configuração de agenda (opcional)
@@ -82,12 +93,19 @@ public class FormTemplateService {
             template.setMaxDaysAhead(sc.maxDaysAhead());
         }
 
+        // Aparência / customização (opcional)
+        if (request.appearance() != null) {
+            applyAppearance(template, request.appearance());
+        }
+
         List<FormField> fields = request.fields().stream()
                 .map(f -> {
                     FormField field = new FormField();
                     field.setLabel(f.label());
                     field.setType(f.type());
                     field.setRequired(f.required());
+                    field.setFieldColor(f.fieldColor());
+                    field.setColSpan(f.colSpan() != null ? f.colSpan() : 2);
                     field.setFormTemplate(template);
                     return field;
                 })
@@ -131,6 +149,52 @@ public class FormTemplateService {
     }
 
     // ==========================
+    // APARÊNCIA
+    // ==========================
+    private void applyAppearance(FormTemplate template, TemplateAppearanceRequest a) {
+        template.setBackgroundColor(a.backgroundColor());
+        template.setBackgroundGradient(a.backgroundGradient());
+        template.setBackgroundImageUrl(a.backgroundImageUrl());
+        template.setHeaderImageUrl(a.headerImageUrl());
+        template.setFooterImageUrl(a.footerImageUrl());
+        template.setPrimaryColor(a.primaryColor());
+        template.setFormTextColor(a.formTextColor());
+        template.setFieldBackgroundColor(a.fieldBackgroundColor());
+        template.setFieldTextColor(a.fieldTextColor());
+        template.setCardBackgroundColor(a.cardBackgroundColor());
+        template.setCardBorderColor(a.cardBorderColor());
+    }
+
+    private TemplateAppearanceResponse buildAppearanceResponse(FormTemplate t) {
+        if (t.getBackgroundColor() == null
+                && t.getBackgroundGradient() == null
+                && t.getBackgroundImageUrl() == null
+                && t.getHeaderImageUrl() == null
+                && t.getFooterImageUrl() == null
+                && t.getPrimaryColor() == null
+                && t.getFormTextColor() == null
+                && t.getFieldBackgroundColor() == null
+                && t.getFieldTextColor() == null
+                && t.getCardBackgroundColor() == null
+                && t.getCardBorderColor() == null) {
+            return null;
+        }
+        return new TemplateAppearanceResponse(
+                t.getBackgroundColor(),
+                t.getBackgroundGradient(),
+                t.getBackgroundImageUrl(),
+                t.getHeaderImageUrl(),
+                t.getFooterImageUrl(),
+                t.getPrimaryColor(),
+                t.getFormTextColor(),
+                t.getFieldBackgroundColor(),
+                t.getFieldTextColor(),
+                t.getCardBackgroundColor(),
+                t.getCardBorderColor()
+        );
+    }
+
+    // ==========================
     // DTO
     // ==========================
     private FormTemplateResponse toResponse(FormTemplate template) {
@@ -140,7 +204,9 @@ public class FormTemplateService {
                         f.getId(),
                         f.getLabel(),
                         f.getType(),
-                        f.isRequired()
+                        f.isRequired(),
+                        f.getFieldColor(),
+                        f.getColSpan()
                 ))
                 .toList();
 
@@ -162,7 +228,8 @@ public class FormTemplateService {
                 fields,
                 template.isHasSchedule(),
                 template.isHasAttendance(),
-                scheduleConfig
+                scheduleConfig,
+                buildAppearanceResponse(template)
         );
     }
 }

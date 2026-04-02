@@ -20,16 +20,16 @@ public class DashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<DashboardResponse> getSummary(
             Authentication authentication,
             Pageable pageable) {
 
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isAdminOrFuncionario = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_FUNCIONARIO"));
 
-        DashboardResponse response = isAdmin
-                ? dashboardService.getSummary(pageable) // 👈 ajustar se quiser paginar admin também
+        DashboardResponse response = isAdminOrFuncionario
+                ? dashboardService.getSummary(pageable)
                 : dashboardService.getSummaryForClient(authentication.getName(), pageable);
 
         return ResponseEntity.ok(response);
