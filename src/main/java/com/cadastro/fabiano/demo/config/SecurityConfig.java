@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/form-submissions/**").permitAll()
                         .requestMatchers("/forms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/form-templates/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/clients/*/templates").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots/range").permitAll()
