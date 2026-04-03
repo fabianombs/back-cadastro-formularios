@@ -20,7 +20,7 @@ public class ImageUploadController {
     }
 
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
+//     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     public ResponseEntity<?> uploadImage(@RequestPart("file") MultipartFile file) {
         try {
             String url = service.store(file);
