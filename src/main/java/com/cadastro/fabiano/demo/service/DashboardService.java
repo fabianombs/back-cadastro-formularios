@@ -32,7 +32,7 @@ public class DashboardService {
         Page<FormTemplate> page = templateRepository.findAll(pageable);
         long totalClients = clientRepository.count();
 
-        return buildResponse(page, totalClients);
+        return buildResponse(page, totalClients, true);
     }
 
     // Client: vê apenas os templates do seu cliente
@@ -42,10 +42,14 @@ public class DashboardService {
 
         Page<FormTemplate> page = templateRepository.findByClient(client, pageable);
 
-        return buildResponse(page, page.getTotalElements());
+        return buildResponse(page, page.getTotalElements(), false, client);
     }
 
-    private DashboardResponse buildResponse(Page<FormTemplate> page, long totalClients) {
+    private DashboardResponse buildResponse(Page<FormTemplate> page, long totalClients, boolean isAdmin) {
+        return buildResponse(page, totalClients, isAdmin, null);
+    }
+
+    private DashboardResponse buildResponse(Page<FormTemplate> page, long totalClients, boolean isAdmin, Client client) {
         List<FormTemplate> templates = page.getContent();
         List<TemplateStatResponse> templateStats = templates.stream().map(t -> {
             long submissions = submissionRepository.countByTemplate_Id(t.getId());
@@ -58,7 +62,7 @@ public class DashboardService {
 
             return new TemplateStatResponse(
                     t.getId(), t.getName(), t.getSlug(), clientName,
-                    t.isHasSchedule(), submissions,
+                    t.isHasSchedule(), t.getFields().size(), submissions,
                     apptTotal, apptConfirmed, apptCancelled,
                     attTotal, attPresent
             );
@@ -71,15 +75,53 @@ public class DashboardService {
         long totalAttendance       = templateStats.stream().mapToLong(TemplateStatResponse::attendanceTotal).sum();
         long presentAttendance     = templateStats.stream().mapToLong(TemplateStatResponse::attendancePresent).sum();
 
+        long formTemplateCount;
+        long appointmentTemplateCount;
+        long attendanceTemplateCount;
+
+        long globalTotalSubmissions = 0;
+        long globalTotalAppointments = 0;
+        long globalConfirmedAppointments = 0;
+        long globalCancelledAppointments = 0;
+        long globalTotalAttendanceRecords = 0;
+        long globalPresentAttendanceRecords = 0;
+
+        if (isAdmin) {
+            formTemplateCount = templateRepository.countByHasScheduleFalseAndHasAttendanceFalse();
+            appointmentTemplateCount = templateRepository.countByHasScheduleTrue();
+            attendanceTemplateCount = templateRepository.countByHasScheduleFalseAndHasAttendanceTrue();
+
+            globalTotalSubmissions = submissionRepository.count();
+            globalTotalAppointments = appointmentRepository.count();
+            globalConfirmedAppointments = appointmentRepository.countByStatus(AppointmentStatus.AGENDADO);
+            globalCancelledAppointments = appointmentRepository.countByStatus(AppointmentStatus.CANCELADO);
+            globalTotalAttendanceRecords = attendanceRecordRepository.count();
+            globalPresentAttendanceRecords = attendanceRecordRepository.countByAttended(true);
+        } else {
+            formTemplateCount = templateRepository.countByClientAndHasScheduleFalseAndHasAttendanceFalse(client);
+            appointmentTemplateCount = templateRepository.countByClientAndHasScheduleTrue(client);
+            attendanceTemplateCount = templateRepository.countByClientAndHasScheduleFalseAndHasAttendanceTrue(client);
+
+            globalTotalSubmissions = submissionRepository.countByTemplate_Client(client);
+            globalTotalAppointments = appointmentRepository.countByFormTemplate_Client(client);
+            globalConfirmedAppointments = appointmentRepository.countByFormTemplate_ClientAndStatus(client, AppointmentStatus.AGENDADO);
+            globalCancelledAppointments = appointmentRepository.countByFormTemplate_ClientAndStatus(client, AppointmentStatus.CANCELADO);
+            globalTotalAttendanceRecords = attendanceRecordRepository.countByFormTemplate_Client(client);
+            globalPresentAttendanceRecords = attendanceRecordRepository.countByFormTemplate_ClientAndAttended(client, true);
+        }
+
         return new DashboardResponse(
                 page.getTotalElements(), totalClients,
                 totalSubmissions, totalAppointments, confirmedAppointments, cancelledAppointments,
                 totalAttendance, presentAttendance,
+                formTemplateCount, appointmentTemplateCount, attendanceTemplateCount,
                 templateStats,
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),
-                page.getTotalPages()
+                page.getTotalPages(),
+                globalTotalSubmissions, globalTotalAppointments, globalConfirmedAppointments,
+                globalCancelledAppointments, globalTotalAttendanceRecords, globalPresentAttendanceRecords
         );
     }
 }

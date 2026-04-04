@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.repository;
 
 import com.cadastro.fabiano.demo.entity.Appointment;
 import com.cadastro.fabiano.demo.entity.AppointmentStatus;
+import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,4 +30,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     long countByFormTemplate(FormTemplate formTemplate);
 
     long countByFormTemplateAndStatus(FormTemplate formTemplate, AppointmentStatus status);
+
+    long countByStatus(AppointmentStatus status);
+
+    long countByFormTemplate_Client(Client client);
+
+    long countByFormTemplate_ClientAndStatus(Client client, AppointmentStatus status);
 }

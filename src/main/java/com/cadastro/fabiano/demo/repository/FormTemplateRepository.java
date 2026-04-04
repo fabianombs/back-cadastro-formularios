@@ -16,4 +16,16 @@ public interface FormTemplateRepository extends JpaRepository<FormTemplate, Long
     Optional<FormTemplate> findBySlug(String slug);
 
     boolean existsBySlug(String slug);
+
+    long countByHasScheduleTrue();
+
+    long countByHasScheduleFalseAndHasAttendanceTrue();
+
+    long countByHasScheduleFalseAndHasAttendanceFalse();
+
+    long countByClientAndHasScheduleTrue(Client client);
+
+    long countByClientAndHasScheduleFalseAndHasAttendanceTrue(Client client);
+
+    long countByClientAndHasScheduleFalseAndHasAttendanceFalse(Client client);
 }

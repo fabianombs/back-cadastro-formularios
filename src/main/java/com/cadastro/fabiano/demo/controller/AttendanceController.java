@@ -39,6 +39,13 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.getByTemplate(templateId, pageable));
     }
 
+    @GetMapping("/template/existence")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    public ResponseEntity<Map<Long, Boolean>> getAttendanceExistence(
+            @RequestParam List<Long> templateIds) {
+        return ResponseEntity.ok(attendanceService.attendanceExistsForTemplates(templateIds));
+    }
+
     @PatchMapping("/{recordId}/mark")
     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<AttendanceRecordResponse> markAttendance(

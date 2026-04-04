@@ -11,9 +11,19 @@ public record DashboardResponse(
         long cancelledAppointments,
         long totalAttendanceRecords,
         long presentAttendanceRecords,
+        long formTemplateCount,
+        long appointmentTemplateCount,
+        long attendanceTemplateCount,
         List<TemplateStatResponse> templates,
         int page,
         int size,
         long totalElements,
-        int totalPages
+        int totalPages,
+        // Totais globais para evitar segunda chamada
+        long globalTotalSubmissions,
+        long globalTotalAppointments,
+        long globalConfirmedAppointments,
+        long globalCancelledAppointments,
+        long globalTotalAttendanceRecords,
+        long globalPresentAttendanceRecords
 ) {}

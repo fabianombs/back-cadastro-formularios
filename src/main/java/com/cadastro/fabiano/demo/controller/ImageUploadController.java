@@ -3,7 +3,6 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.service.ImageStorageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,7 +19,6 @@ public class ImageUploadController {
     }
 
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     public ResponseEntity<?> uploadImage(@RequestPart("file") MultipartFile file) {
         try {
             String url = service.store(file);
