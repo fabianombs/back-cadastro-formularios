@@ -6,6 +6,7 @@ public record TemplateStatResponse(
         String slug,
         String clientName,
         boolean hasSchedule,
+        int fieldCount,
         long submissionCount,
         long appointmentTotal,
         long appointmentConfirmed,

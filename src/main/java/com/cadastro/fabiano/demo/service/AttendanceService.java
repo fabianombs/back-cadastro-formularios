@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Service
 public class AttendanceService {
@@ -90,6 +91,18 @@ public class AttendanceService {
         attendanceRepository.findById(recordId)
                 .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
         attendanceRepository.deleteById(recordId);
+    }
+
+    public Map<Long, Boolean> attendanceExistsForTemplates(List<Long> templateIds) {
+        if (templateIds == null || templateIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return attendanceRepository.countByTemplateIds(templateIds).stream()
+                .collect(Collectors.toMap(
+                        AttendanceRecordRepository.AttendanceCountByTemplate::getTemplateId,
+                        count -> count.getAttendanceCount() > 0
+                ));
     }
 
     private FormTemplate findTemplate(Long templateId) {
