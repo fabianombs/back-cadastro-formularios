@@ -52,7 +52,7 @@ public class AppointmentController {
 
     // ROLE_CLIENT ou ADMIN pode cancelar
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('CLIENT', 'ADMIN', 'FUNCIONARIO')")
+    // @PreAuthorize("hasAnyRole('CLIENT', 'ADMIN', 'FUNCIONARIO')")
     public ResponseEntity<AppointmentResponse> cancel(
             @PathVariable Long id,
             Authentication authentication) {
@@ -63,7 +63,7 @@ public class AppointmentController {
 
     // Admin/funcionário vê todos os agendamentos do template
     @GetMapping("/template/{templateId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<Page<AppointmentResponse>> getByTemplate(
             @PathVariable Long templateId,
             Pageable pageable) {
@@ -72,7 +72,7 @@ public class AppointmentController {
 
     // Admin ou client pode excluir um agendamento permanentemente
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENT', 'FUNCIONARIO')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'CLIENT', 'FUNCIONARIO')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         appointmentService.deleteAppointment(id);
         return ResponseEntity.noContent().build();
