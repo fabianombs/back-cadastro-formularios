@@ -44,7 +44,7 @@ public class AuthService {
 
         user.setPassword(encoder.encode(request.password()));
 
-        user.setRole(Role.ROLE_FUNCIONARIO);
+        user.setRole(Role.ROLE_ADMIN);
 
         repository.save(user);
 
