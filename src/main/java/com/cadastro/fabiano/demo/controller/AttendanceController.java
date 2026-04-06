@@ -24,7 +24,7 @@ public class AttendanceController {
     }
 
     @PostMapping("/template/{templateId}/import")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<List<AttendanceRecordResponse>> importAttendance(
             @PathVariable Long templateId,
             @RequestBody ImportAttendanceRequest request) {
@@ -32,7 +32,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/template/{templateId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<Page<AttendanceRecordResponse>> getByTemplate(
             @PathVariable Long templateId,
             Pageable pageable) {
@@ -40,14 +40,14 @@ public class AttendanceController {
     }
 
     @GetMapping("/template/existence")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<Map<Long, Boolean>> getAttendanceExistence(
             @RequestParam List<Long> templateIds) {
         return ResponseEntity.ok(attendanceService.attendanceExistsForTemplates(templateIds));
     }
 
     @PatchMapping("/{recordId}/mark")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<AttendanceRecordResponse> markAttendance(
             @PathVariable Long recordId,
             @RequestBody MarkAttendanceRequest request) {
@@ -55,7 +55,7 @@ public class AttendanceController {
     }
 
     @PatchMapping("/{recordId}/data")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<AttendanceRecordResponse> updateRowData(
             @PathVariable Long recordId,
             @RequestBody Map<String, String> rowData) {
@@ -63,7 +63,7 @@ public class AttendanceController {
     }
 
     @DeleteMapping("/{recordId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO', 'CLIENT')")
     public ResponseEntity<Void> deleteRecord(@PathVariable Long recordId) {
         attendanceService.deleteRecord(recordId);
         return ResponseEntity.noContent().build();
