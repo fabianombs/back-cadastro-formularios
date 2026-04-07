@@ -67,4 +67,11 @@ public class FormTemplateController {
 
         return ResponseEntity.ok(templateService.updateScheduleConfig(id, request));
     }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
+    public ResponseEntity<Void> deleteTemplate(@PathVariable Long id) {
+        templateService.deleteTemplate(id);
+        return ResponseEntity.noContent().build();
+    }
 }

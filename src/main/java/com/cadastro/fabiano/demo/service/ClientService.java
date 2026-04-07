@@ -48,10 +48,18 @@ public class ClientService {
         return ClientMapper.toDTO(client);
     }
 
-    public void delete(Long id){
+    @Transactional
+    public void delete(Long id) {
+        Client client = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
 
-        repository.deleteById(id);
+        // Cascade: soft-delete todos os templates vinculados
+        if (client.getTemplates() != null) {
+            client.getTemplates().forEach(t -> t.setDeleted(true));
+        }
 
+        client.setDeleted(true);
+        repository.save(client);
     }
 
 }
