@@ -143,6 +143,17 @@ public class FormTemplateService {
     }
 
     // ==========================
+    // EXCLUIR TEMPLATE (SOFT DELETE)
+    // ==========================
+    @Transactional
+    public void deleteTemplate(Long templateId) {
+        FormTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+        template.setDeleted(true);
+        templateRepository.save(template);
+    }
+
+    // ==========================
     // BUSCAR POR SLUG
     // ==========================
     public FormTemplateResponse findBySlug(String slug) {
