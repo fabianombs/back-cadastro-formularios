@@ -3,6 +3,7 @@ package com.cadastro.fabiano.demo.service;
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.TemplateAppearanceRequest;
+import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.response.FormFieldResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
 import com.cadastro.fabiano.demo.dto.response.ScheduleConfigResponse;
@@ -119,6 +120,38 @@ public class FormTemplateService {
 
         FormTemplate saved = templateRepository.save(template);
         return toResponse(saved);
+    }
+
+    // ==========================
+    // EDITAR TEMPLATE (ADMIN)
+    // ==========================
+    @Transactional
+    public FormTemplateResponse updateTemplate(Long templateId, UpdateFormTemplateRequest request) {
+        FormTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+
+        if (request.name() != null) {
+            template.setName(request.name());
+        }
+
+        if (request.fields() != null) {
+            template.getFields().clear();
+            List<FormField> newFields = request.fields().stream()
+                    .map(f -> {
+                        FormField field = new FormField();
+                        field.setLabel(f.label());
+                        field.setType(f.type());
+                        field.setRequired(f.required());
+                        field.setFieldColor(f.fieldColor());
+                        field.setColSpan(f.colSpan() != null ? f.colSpan() : 2);
+                        field.setFormTemplate(template);
+                        return field;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            template.getFields().addAll(newFields);
+        }
+
+        return toResponse(templateRepository.save(template));
     }
 
     // ==========================
