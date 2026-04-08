@@ -1,4 +1,4 @@
-name: Master - Build, Test & Deploy to Railway
+name: Master - Build, Test & Deploy to AWS EC2
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Build & Test (Railway deploys automatically on success)
+    name: Build & Test
     runs-on: ubuntu-latest
 
     services:
@@ -62,3 +62,44 @@ jobs:
 
       - name: Verify JAR was generated
         run: ls -la target/*.jar
+
+      - name: Upload JAR as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/demo-0.0.1-SNAPSHOT.jar
+          retention-days: 1
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: target/
+
+      - name: Deploy JAR via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          source:   "target/demo-0.0.1-SNAPSHOT.jar"
+          target:   "/app/"
+          strip_components: 1
+
+      - name: Restart service via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo systemctl stop poc-fabiano || true
+            sudo systemctl start poc-fabiano
+            sleep 8
+            systemctl is-active poc-fabiano && echo "Deploy OK" || (sudo journalctl -u poc-fabiano -n 50; exit 1)
