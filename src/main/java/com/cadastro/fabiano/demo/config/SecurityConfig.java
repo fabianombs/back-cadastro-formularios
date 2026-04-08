@@ -64,14 +64,34 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setAllowCredentials(false);
+
+        // ── Endpoints públicos (formulários, agendamentos, presença) ──────────
+        // Aceita qualquer origem: mobile, tablet, totem, qualquer dispositivo na rede
+        CorsConfiguration publicConfig = new CorsConfiguration();
+        publicConfig.setAllowedOriginPatterns(List.of("*"));
+        publicConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        publicConfig.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        publicConfig.setAllowCredentials(false);
+
+        // ── Endpoints privados (admin, criação de templates, etc.) ────────────
+        // Aceita apenas as origens configuradas (painel administrativo)
+        CorsConfiguration privateConfig = new CorsConfiguration();
+        privateConfig.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
+        privateConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        privateConfig.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        privateConfig.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+
+        // Rotas consumidas pelos links públicos dos formulários
+        source.registerCorsConfiguration("/form-templates/slug/**", publicConfig);
+        source.registerCorsConfiguration("/form-submissions/**",    publicConfig);
+        source.registerCorsConfiguration("/appointments/**",        publicConfig);
+        source.registerCorsConfiguration("/attendance/**",          publicConfig);
+        source.registerCorsConfiguration("/files/**",               publicConfig);
+
+        // Tudo mais: painel admin, autenticação, criação/edição de templates
+        source.registerCorsConfiguration("/**", privateConfig);
 
         return source;
     }
