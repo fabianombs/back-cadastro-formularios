@@ -304,6 +304,10 @@ public class FormTemplateService {
         template.setFieldTextColor(a.fieldTextColor());
         template.setCardBackgroundColor(a.cardBackgroundColor());
         template.setCardBorderColor(a.cardBorderColor());
+        template.setFontFamily(a.fontFamily());
+        template.setTitleFontSize(a.titleFontSize());
+        template.setLabelFontSize(a.labelFontSize());
+        template.setButtonFontSize(a.buttonFontSize());
     }
 
     private TemplateAppearanceResponse buildAppearanceResponse(FormTemplate t) {
@@ -317,7 +321,11 @@ public class FormTemplateService {
                 && t.getFieldBackgroundColor() == null
                 && t.getFieldTextColor() == null
                 && t.getCardBackgroundColor() == null
-                && t.getCardBorderColor() == null) {
+                && t.getCardBorderColor() == null
+                && t.getFontFamily() == null
+                && t.getTitleFontSize() == null
+                && t.getLabelFontSize() == null
+                && t.getButtonFontSize() == null) {
             return null;
         }
         return new TemplateAppearanceResponse(
@@ -331,7 +339,11 @@ public class FormTemplateService {
                 t.getFieldBackgroundColor(),
                 t.getFieldTextColor(),
                 t.getCardBackgroundColor(),
-                t.getCardBorderColor()
+                t.getCardBorderColor(),
+                t.getFontFamily(),
+                t.getTitleFontSize(),
+                t.getLabelFontSize(),
+                t.getButtonFontSize()
         );
     }
 

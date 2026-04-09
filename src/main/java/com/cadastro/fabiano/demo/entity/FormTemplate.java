@@ -127,6 +127,22 @@ public class FormTemplate {
     @Column(name = "card_border_color")
     private String cardBorderColor;
 
+    /** Família tipográfica (ex: Poppins) */
+    @Column(name = "font_family")
+    private String fontFamily;
+
+    /** Tamanho da fonte do título (ex: 22px) */
+    @Column(name = "title_font_size")
+    private String titleFontSize;
+
+    /** Tamanho da fonte dos labels dos campos (ex: 14px) */
+    @Column(name = "label_font_size")
+    private String labelFontSize;
+
+    /** Tamanho da fonte do botão de envio (ex: 15px) */
+    @Column(name = "button_font_size")
+    private String buttonFontSize;
+
     // =====================
     // SOFT DELETE
     // =====================

@@ -11,5 +11,9 @@ public record TemplateAppearanceResponse(
         String fieldBackgroundColor,
         String fieldTextColor,
         String cardBackgroundColor,
-        String cardBorderColor
+        String cardBorderColor,
+        String fontFamily,
+        String titleFontSize,
+        String labelFontSize,
+        String buttonFontSize
 ) {}

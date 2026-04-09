@@ -17,5 +17,13 @@ public record TemplateAppearanceRequest(
         /** Cor de fundo dos cards, tabelas e área de filtros */
         String cardBackgroundColor,
         /** Cor da borda dos cards e tabelas */
-        String cardBorderColor
+        String cardBorderColor,
+        /** Família tipográfica (ex: Poppins) */
+        String fontFamily,
+        /** Tamanho da fonte do título (ex: 22px) */
+        String titleFontSize,
+        /** Tamanho da fonte dos labels (ex: 14px) */
+        String labelFontSize,
+        /** Tamanho da fonte do botão (ex: 15px) */
+        String buttonFontSize
 ) {}
