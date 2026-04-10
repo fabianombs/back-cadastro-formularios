@@ -25,6 +25,15 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
+    /**
+     * Registra um novo usuário administrativo.
+     * <p>Valida que {@code password} e {@code confirmPassword} são iguais,
+     * codifica a senha com BCrypt e atribui automaticamente a role {@code ROLE_ADMIN}.</p>
+     *
+     * @param request dados de registro (nome, e-mail, username, senha e confirmação)
+     * @return {@link AuthResponse} contendo o token JWT gerado
+     * @throws RuntimeException se as senhas não coincidirem
+     */
     public AuthResponse register(RegisterRequest request) {
 
         if (!request.password().equals(request.confirmPassword())) {
@@ -50,6 +59,14 @@ public class AuthService {
 
     }
 
+    /**
+     * Autentica um usuário existente.
+     * <p>Busca o usuário pelo username, valida a senha com BCrypt e retorna o token JWT.</p>
+     *
+     * @param request credenciais (username e password)
+     * @return {@link AuthResponse} contendo o token JWT gerado
+     * @throws RuntimeException se o usuário não for encontrado ou a senha estiver incorreta
+     */
     public AuthResponse login(LoginRequest request) {
 
         User user = repository.findByUsername(request.username())

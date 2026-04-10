@@ -3,7 +3,11 @@
     "allow": [
       "Bash(ls \"C:\\\\Users\\\\Vini\\\\.claude\\\\projects\\\\D--Projetos-back-poc-fabiano\\\\memory\"\" 2>/dev/null || echo \"vazio \")",
       "Bash(dir \"D:\\\\Projetos\\\\front\\\\app-forms-clients\\\\src\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://100-30-35-83.sslip.io/actuator/health)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://100-30-35-83.sslip.io/actuator/health)",
+      "Bash(./mvnw compile:*)",
+      "Bash(./mvnw test-compile:*)",
+      "Bash(./mvnw test:*)",
+      "Bash(./mvnw verify:*)"
     ]
   }
 }

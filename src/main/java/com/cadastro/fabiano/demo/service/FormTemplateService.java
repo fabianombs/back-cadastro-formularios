@@ -76,6 +76,21 @@ public class FormTemplateService {
     // ==========================
     // CRIAR TEMPLATE
     // ==========================
+
+    /**
+     * Cria um novo template de formulário associado ao cliente informado.
+     * <p>Fluxo:</p>
+     * <ul>
+     *   <li>Gera slug único a partir do nome (normalizado, sem acentos, sem caracteres especiais).</li>
+     *   <li>Aplica configuração de agenda caso {@code scheduleConfig} seja fornecido.</li>
+     *   <li>Aplica aparência visual caso {@code appearance} seja fornecido.</li>
+     *   <li>Cria os campos ({@link com.cadastro.fabiano.demo.entity.FormField}) em cascata.</li>
+     * </ul>
+     *
+     * @param request  dados do template (nome, campos, agenda e aparência)
+     * @param clientId ID do cliente proprietário
+     * @return {@link FormTemplateResponse} com os dados completos do template criado
+     */
     @Transactional
     public FormTemplateResponse createTemplate(CreateFormTemplateRequest request, Long clientId) {
 

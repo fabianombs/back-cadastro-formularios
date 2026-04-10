@@ -101,6 +101,13 @@
 			<version>0.11.5</version>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- Swagger / OpenAPI -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.7.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -128,6 +135,72 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off</argLine>
+				</configuration>
+			</plugin>
+
+			<!-- JaCoCo: cobertura de testes -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>check</id>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+							<excludes>
+								<!-- Entidades e DTOs: simples mapeamento, sem lógica -->
+								<exclude>com/cadastro/fabiano/demo/entity/**</exclude>
+								<exclude>com/cadastro/fabiano/demo/dto/**</exclude>
+								<!-- Ponto de entrada da aplicação -->
+								<exclude>com/cadastro/fabiano/demo/CadastroFabianoApplication.class</exclude>
+								<!-- Controllers requerem MockMvc (testes de integração) -->
+								<exclude>com/cadastro/fabiano/demo/controller/**</exclude>
+								<!-- Infraestrutura de segurança/JWT (glue code do framework) -->
+								<exclude>com/cadastro/fabiano/demo/config/SecurityConfig.class</exclude>
+								<exclude>com/cadastro/fabiano/demo/config/JwtAuthenticationFilter.class</exclude>
+								<exclude>com/cadastro/fabiano/demo/config/WebConfig.class</exclude>
+								<exclude>com/cadastro/fabiano/demo/config/OpenApiConfig.class</exclude>
+								<!-- Utilitários e mapper -->
+								<exclude>com/cadastro/fabiano/demo/utils/**</exclude>
+								<exclude>com/cadastro/fabiano/demo/mapper/**</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

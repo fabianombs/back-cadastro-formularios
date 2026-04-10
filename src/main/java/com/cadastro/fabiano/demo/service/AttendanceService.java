@@ -32,6 +32,16 @@ public class AttendanceService {
         this.templateRepository = templateRepository;
     }
 
+    /**
+     * Importa (ou reimporta) a lista de presença de um template.
+     * <p>A operação é destrutiva: exclui todos os registros existentes do template
+     * antes de inserir os novos, garantindo que a lista sempre reflita o CSV mais recente.
+     * Linhas vazias são descartadas automaticamente.</p>
+     *
+     * @param templateId ID do template que receberá a lista
+     * @param request    objeto contendo as linhas da lista (cada linha é um {@code Map<String,String>})
+     * @return lista de {@link AttendanceRecordResponse} com os registros criados, em ordem de importação
+     */
     @Transactional
     public List<AttendanceRecordResponse> importAttendance(Long templateId, ImportAttendanceRequest request) {
         FormTemplate template = findTemplate(templateId);
@@ -68,6 +78,16 @@ public class AttendanceService {
                 .map(this::toResponse);
     }
 
+    /**
+     * Atualiza o status de presença de um registro individual.
+     * <p>Se {@code attended} for {@code true}, registra o timestamp atual em {@code attendedAt}.
+     * Se for {@code false}, limpa o timestamp.</p>
+     *
+     * @param recordId ID do registro de presença
+     * @param request  novo status (attended) e observações opcionais (notes)
+     * @return registro atualizado
+     * @throws RuntimeException se o registro não for encontrado
+     */
     @Transactional
     public AttendanceRecordResponse markAttendance(Long recordId, MarkAttendanceRequest request) {
         AttendanceRecord record = attendanceRepository.findById(recordId)

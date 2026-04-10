@@ -38,6 +38,16 @@ public class AppointmentService {
     // ==========================
     // SLOTS DISPONÍVEIS POR DIA
     // ==========================
+
+    /**
+     * Retorna todos os horários do dia para um template com agenda ativa,
+     * indicando quantas vagas estão disponíveis e quantas já foram reservadas.
+     *
+     * @param templateId ID do template com configuração de agenda
+     * @param date       data para consulta de disponibilidade
+     * @return {@link AvailableSlotsResponse} com lista de slots e suas disponibilidades
+     * @throws RuntimeException se o template não existir ou não possuir agenda configurada
+     */
     public AvailableSlotsResponse getAvailableSlots(Long templateId, LocalDate date) {
         FormTemplate template = findTemplateWithSchedule(templateId);
         int capacity = Math.max(1, template.getSlotCapacity());
@@ -68,6 +78,25 @@ public class AppointmentService {
     // ==========================
     // AGENDAR HORÁRIO
     // ==========================
+
+    /**
+     * Realiza o agendamento de um horário, aplicando as seguintes regras de negócio:
+     * <ol>
+     *   <li>Lock pessimista no template para evitar race conditions concorrentes.</li>
+     *   <li>Valida que a data está dentro do período permitido ({@code maxDaysAhead}).</li>
+     *   <li>Valida que o horário é um slot válido gerado pela configuração de agenda.</li>
+     *   <li>Deduplicação: se o template possuir {@code dedupFields} configurados,
+     *       constrói uma chave a partir dos valores dos campos extras e rejeita
+     *       um segundo agendamento com a mesma chave.</li>
+     *   <li>Capacidade: rejeita o agendamento se o slot já atingiu {@code slotCapacity}.</li>
+     * </ol>
+     *
+     * @param request dados do agendamento (templateId, data, horário, nome, contato e campos extras)
+     * @return {@link AppointmentResponse} com os dados do agendamento criado
+     * @throws DuplicateBookingException se a chave de deduplicação já existir para o template/data
+     * @throws SlotFullException         se a capacidade máxima do slot já foi atingida
+     * @throws RuntimeException          para template não encontrado, data/horário inválidos
+     */
     @Transactional
     public AppointmentResponse book(BookAppointmentRequest request) {
         // Lock pessimista no template para serializar bookings concorrentes no mesmo evento
