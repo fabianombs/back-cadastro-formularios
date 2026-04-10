@@ -114,6 +114,9 @@ public class FormTemplateService {
                     field.setRequired(f.required());
                     field.setFieldColor(f.fieldColor());
                     field.setColSpan(f.colSpan() != null ? f.colSpan() : 2);
+                    if (f.options() != null && !f.options().isEmpty()) {
+                        field.setOptions(new java.util.ArrayList<>(f.options()));
+                    }
                     field.setFormTemplate(template);
                     return field;
                 })
@@ -147,6 +150,9 @@ public class FormTemplateService {
                         field.setRequired(f.required());
                         field.setFieldColor(f.fieldColor());
                         field.setColSpan(f.colSpan() != null ? f.colSpan() : 2);
+                        if (f.options() != null && !f.options().isEmpty()) {
+                            field.setOptions(new java.util.ArrayList<>(f.options()));
+                        }
                         field.setFormTemplate(template);
                         return field;
                     })
@@ -359,7 +365,8 @@ public class FormTemplateService {
                         f.getType(),
                         f.isRequired(),
                         f.getFieldColor(),
-                        f.getColSpan()
+                        f.getColSpan(),
+                        f.getOptions() != null ? f.getOptions() : List.of()
                 ))
                 .toList();
 
