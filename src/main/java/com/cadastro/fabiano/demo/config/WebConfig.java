@@ -20,9 +20,9 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/files/**")
                 .addResourceLocations(uploadPath)
                 // Cache de 1 ano: cada upload gera nome UUID único,
-                // então a imagem nunca muda — pode ser cacheada ao máximo.
+                // então a imagem nunca muda — pode ser cacheada ao máximo
                 // ATENÇÃO: em produção (Railway/Heroku) a pasta uploads/ é
-                // apagada a cada deploy. Para persistência real, use S3 ou R2.
+                // apagada a cada deploy. Para persistência real, use S3 ou R2
                 .setCachePeriod(31536000);
     }
 }
