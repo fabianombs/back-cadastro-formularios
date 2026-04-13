@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +58,13 @@ public class AttendanceService {
                         .rowOrder(order.getAndIncrement())
                         .build())
                 .toList();
+
+        // Captura a ordem das colunas da primeira linha (Jackson desserializa em LinkedHashMap,
+        // preservando a ordem do JSON enviado pelo frontend que leu o Excel).
+        if (!request.rows().isEmpty()) {
+            List<String> colOrder = new ArrayList<>(request.rows().get(0).keySet());
+            template.setAttendanceColumnOrder(String.join(",", colOrder));
+        }
 
         template.setHasAttendance(true);
         templateRepository.save(template);

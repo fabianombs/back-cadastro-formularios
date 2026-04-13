@@ -47,6 +47,10 @@ public class FormTemplate {
     @Builder.Default
     private boolean hasAttendance = false;
 
+    /** Ordem das colunas da planilha de presença, separadas por vírgula. */
+    @Column(name = "attendance_column_order", columnDefinition = "TEXT")
+    private String attendanceColumnOrder;
+
     @Column(name = "schedule_start_time")
     private LocalTime scheduleStartTime;
 
