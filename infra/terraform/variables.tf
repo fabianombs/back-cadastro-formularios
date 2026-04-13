@@ -32,3 +32,4 @@ variable "public_key_path" {
   description = "Caminho para a chave pública SSH"
   default     = "~/.ssh/poc-fabiano.pub"
 }
+
