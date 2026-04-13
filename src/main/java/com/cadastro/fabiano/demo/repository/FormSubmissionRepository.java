@@ -20,6 +20,8 @@ public interface FormSubmissionRepository extends JpaRepository<FormSubmission, 
 
     boolean existsByIdAndTemplate_Id(Long id, Long templateId);
 
+    void deleteByTemplate_Id(Long templateId);
+
     long countByTemplate_Id(Long templateId);
 
     long countByTemplate_Client(Client client);

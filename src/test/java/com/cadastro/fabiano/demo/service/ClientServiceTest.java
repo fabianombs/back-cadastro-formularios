@@ -106,7 +106,7 @@ class ClientServiceTest {
     }
 
     @Test
-    @DisplayName("delete: realiza soft delete de cliente com templates e limpa imagens")
+    @DisplayName("delete: realiza soft delete de cliente com templates e deleta cada template")
     void delete_success_withTemplates() {
         FormTemplate t1 = FormTemplate.builder().id(10L).name("Form 1").slug("form-1").build();
         FormTemplate t2 = FormTemplate.builder().id(11L).name("Form 2").slug("form-2").build();
@@ -118,10 +118,8 @@ class ClientServiceTest {
         clientService.delete(1L);
 
         assertThat(client.isDeleted()).isTrue();
-        assertThat(t1.isDeleted()).isTrue();
-        assertThat(t2.isDeleted()).isTrue();
-        verify(formTemplateService).deleteTemplateImages(t1);
-        verify(formTemplateService).deleteTemplateImages(t2);
+        verify(formTemplateService).deleteTemplate(10L);
+        verify(formTemplateService).deleteTemplate(11L);
     }
 
     @Test

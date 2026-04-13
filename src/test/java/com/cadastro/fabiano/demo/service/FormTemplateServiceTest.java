@@ -9,7 +9,10 @@ import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.entity.User;
+import com.cadastro.fabiano.demo.repository.AppointmentRepository;
+import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
+import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import com.cadastro.fabiano.demo.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +43,15 @@ class FormTemplateServiceTest {
 
     @Mock
     private FormTemplateRepository templateRepository;
+
+    @Mock
+    private FormSubmissionRepository submissionRepository;
+
+    @Mock
+    private AppointmentRepository appointmentRepository;
+
+    @Mock
+    private AttendanceRecordRepository attendanceRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -251,19 +263,20 @@ class FormTemplateServiceTest {
     // ─── deleteTemplate ───────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("deleteTemplate: realiza soft delete")
+    @DisplayName("deleteTemplate: realiza hard delete do template e dependências")
     void deleteTemplate_success() {
         FormTemplate t = buildTemplate("Form Deletado", "form-deletado");
 
         when(templateRepository.findById(1L)).thenReturn(Optional.of(t));
-        when(templateRepository.save(any())).thenReturn(t);
-        // template não possui URLs de imagem, logo tryDeleteOrphanedImageExcluding retorna cedo
-        // sem precisar consultar o repositório
+        // template não possui URLs de imagem, logo imageStorageService.delete não é chamado
 
         service.deleteTemplate(1L);
 
-        assertThat(t.isDeleted()).isTrue();
-        verify(templateRepository).save(t);
+        verify(submissionRepository).deleteByTemplate_Id(1L);
+        verify(appointmentRepository).deleteByFormTemplate(t);
+        verify(attendanceRepository).deleteByFormTemplate(t);
+        verify(templateRepository).delete(t);
+        verifyNoInteractions(imageStorageService);
     }
 
     @Test
