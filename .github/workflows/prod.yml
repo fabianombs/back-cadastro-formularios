@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: target/demo-0.0.1-SNAPSHOT.jar
+          path: target/*.jar
           retention-days: 1
 
   deploy:
@@ -88,7 +88,7 @@ jobs:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          source:   "target/demo-0.0.1-SNAPSHOT.jar"
+          source: "target/*.jar"
           target:   "/home/ec2-user/"
           strip_components: 1
 
@@ -99,9 +99,25 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # Pega o JAR enviado (qualquer nome)
+            JAR_FILE=$(ls /home/ec2-user/*.jar | head -n 1)
+
+            if [ -z "$JAR_FILE" ]; then
+              echo "ERRO: Nenhum JAR encontrado em /home/ec2-user/"
+              exit 1
+            fi
+
+            echo "JAR encontrado: $JAR_FILE"
+
             sudo systemctl stop poc-fabiano || true
-            sudo mv /home/ec2-user/demo-0.0.1-SNAPSHOT.jar /app/demo-0.0.1-SNAPSHOT.jar
-            sudo chown appuser:appuser /app/demo-0.0.1-SNAPSHOT.jar
+
+            # Move e padroniza nome
+            sudo mv $JAR_FILE /app/app.jar
+
+            sudo chown appuser:appuser /app/app.jar
+
             sudo systemctl start poc-fabiano
+
             sleep 8
+
             systemctl is-active poc-fabiano && echo "Deploy OK" || (sudo journalctl -u poc-fabiano -n 50; exit 1)
