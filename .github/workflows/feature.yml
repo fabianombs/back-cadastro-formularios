@@ -75,7 +75,7 @@ jobs:
 
       - name: Create Pull Request to develop
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="${{ github.ref_name }}"
           PR_TITLE="feat: merge ${BRANCH} into develop"

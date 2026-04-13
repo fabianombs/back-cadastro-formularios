@@ -7,6 +7,7 @@ import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.mapper.ClientMapper;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
+import com.cadastro.fabiano.demo.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,12 +16,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ClientService {
 
     private final ClientRepository repository;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final FormTemplateService formTemplateService;
 
@@ -28,8 +31,22 @@ public class ClientService {
     @Transactional
     public ClientResponse createClient(ClientRequest dto) {
 
+        String resolvedUsername = resolveUsername(dto.username(), dto.company());
+        String resolvedName     = (dto.name() != null && !dto.name().isBlank()) ? dto.name() : dto.company();
+        String resolvedEmail    = (dto.email() != null && !dto.email().isBlank()) ? dto.email() : resolvedUsername + "@noconta.local";
+
+        if (userRepository.existsByUsername(resolvedUsername)) {
+            throw new RuntimeException("Username '" + resolvedUsername + "' já está em uso");
+        }
+
+        if (userRepository.existsByEmail(resolvedEmail) && dto.email() != null && !dto.email().isBlank()) {
+            throw new RuntimeException("Email '" + resolvedEmail + "' já está em uso");
+        }
+
+        ClientRequest effective = new ClientRequest(resolvedName, resolvedEmail, dto.phone(), dto.company(), dto.notes(), resolvedUsername);
+
         // converte DTO em entidade com User
-        Client client = ClientMapper.toEntityWithUser(dto, passwordEncoder);
+        Client client = ClientMapper.toEntityWithUser(effective, passwordEncoder);
 
         Client saved = repository.save(client);
 
@@ -50,6 +67,13 @@ public class ClientService {
                 .orElseThrow(() -> new RuntimeException("Client not found"));
 
         return ClientMapper.toDTO(client);
+    }
+
+    private String resolveUsername(String username, String company) {
+        if (username != null && !username.isBlank()) return username;
+        String base = company != null ? company.toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+        if (base.isEmpty()) base = "cliente";
+        return base + "_" + UUID.randomUUID().toString().substring(0, 6);
     }
 
     @Transactional

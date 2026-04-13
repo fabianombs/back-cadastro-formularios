@@ -78,7 +78,7 @@ jobs:
 
       - name: Create Pull Request to master
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR_TITLE="release: develop → master"
           PR_BODY="## Release PR\n\nBranch \`develop\` passou em todos os testes e está pronta para produção.\n\n**Merge para master irá disparar deploy automático no Railway.**"

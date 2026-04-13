@@ -50,7 +50,7 @@ public class AuthService {
 
         user.setPassword(encoder.encode(request.password()));
 
-        user.setRole(Role.ROLE_ADMIN);
+        user.setRole(Role.ROLE_FUNCIONARIO);
 
         repository.save(user);
 
