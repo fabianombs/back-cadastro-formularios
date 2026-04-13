@@ -47,4 +47,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     long countByFormTemplate_Client(Client client);
 
     long countByFormTemplate_ClientAndStatus(Client client, AppointmentStatus status);
+
+    void deleteByFormTemplate(FormTemplate formTemplate);
 }

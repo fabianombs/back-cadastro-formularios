@@ -2,8 +2,6 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLRestriction;
-
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
@@ -11,7 +9,6 @@ import java.util.Set;
 
 @Entity
 @Table(name = "form_templates")
-@SQLRestriction("deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -147,11 +144,4 @@ public class FormTemplate {
     @Column(name = "button_font_size")
     private String buttonFontSize;
 
-    // =====================
-    // SOFT DELETE
-    // =====================
-
-    @Column(nullable = false, columnDefinition = "boolean default false")
-    @Builder.Default
-    private boolean deleted = false;
 }
