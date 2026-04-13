@@ -12,7 +12,10 @@ import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.entity.User;
+import com.cadastro.fabiano.demo.repository.AppointmentRepository;
+import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
+import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import com.cadastro.fabiano.demo.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -27,15 +30,24 @@ import java.util.List;
 public class FormTemplateService {
 
     private final FormTemplateRepository templateRepository;
+    private final FormSubmissionRepository submissionRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final AttendanceRecordRepository attendanceRepository;
     private final UserRepository userRepository;
     private final ClientRepository clientRepository;
     private final ImageStorageService imageStorageService;
 
     public FormTemplateService(FormTemplateRepository templateRepository,
+                               FormSubmissionRepository submissionRepository,
+                               AppointmentRepository appointmentRepository,
+                               AttendanceRecordRepository attendanceRepository,
                                UserRepository userRepository,
                                ClientRepository clientRepository,
                                ImageStorageService imageStorageService) {
         this.templateRepository = templateRepository;
+        this.submissionRepository = submissionRepository;
+        this.appointmentRepository = appointmentRepository;
+        this.attendanceRepository = attendanceRepository;
         this.userRepository = userRepository;
         this.clientRepository = clientRepository;
         this.imageStorageService = imageStorageService;
@@ -226,20 +238,22 @@ public class FormTemplateService {
         FormTemplate template = templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
-        // Captura IDs e URLs antes do soft-delete
-        Long id          = template.getId();
         String headerUrl     = template.getHeaderImageUrl();
         String footerUrl     = template.getFooterImageUrl();
         String backgroundUrl = template.getBackgroundImageUrl();
 
-        template.setDeleted(true);
-        templateRepository.save(template);
+        // Deleta registros relacionados que não têm cascade (FK sem orphanRemoval)
+        submissionRepository.deleteByTemplate_Id(templateId);
+        appointmentRepository.deleteByFormTemplate(template);
+        attendanceRepository.deleteByFormTemplate(template);
 
-        // Usa exclusão explícita pelo ID para não depender do flush do @SQLRestriction
-        // na mesma transação — garante que o arquivo é removido mesmo sem auto-flush
-        tryDeleteOrphanedImageExcluding(headerUrl,     id);
-        tryDeleteOrphanedImageExcluding(footerUrl,     id);
-        tryDeleteOrphanedImageExcluding(backgroundUrl, id);
+        // Hard delete do template (cascade remove os FormFields via orphanRemoval)
+        templateRepository.delete(template);
+
+        // Remove as imagens do servidor (template já deletado, não há mais referências)
+        if (headerUrl     != null && !headerUrl.isBlank())     imageStorageService.delete(headerUrl);
+        if (footerUrl     != null && !footerUrl.isBlank())     imageStorageService.delete(footerUrl);
+        if (backgroundUrl != null && !backgroundUrl.isBlank()) imageStorageService.delete(backgroundUrl);
     }
 
     // ==========================
