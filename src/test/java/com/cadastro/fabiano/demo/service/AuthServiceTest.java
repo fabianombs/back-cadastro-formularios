@@ -79,7 +79,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("register: atribui ROLE_ADMIN ao novo usuário")
+    @DisplayName("register: atribui ROLE_FUNCIONARIO ao novo usuário")
     void register_assignsAdminRole() {
         RegisterRequest request = new RegisterRequest(
                 "Admin", "admin@email.com", "admin", "pass", "pass");
@@ -89,7 +89,7 @@ class AuthServiceTest {
         when(passwordEncoder.encode(anyString())).thenReturn("hash");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
-            assertThat(u.getRole()).isEqualTo(Role.ROLE_ADMIN);
+            assertThat(u.getRole()).isEqualTo(Role.ROLE_FUNCIONARIO); // Verifica que a role é ROLE_FUNCIONARIO
             return savedUser;
         });
         when(jwtService.generateToken(any(), any())).thenReturn("token");
