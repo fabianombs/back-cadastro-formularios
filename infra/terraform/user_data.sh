@@ -39,7 +39,7 @@ DB_USER=PLACEHOLDER_DB_USER
 DB_PASSWORD=PLACEHOLDER_DB_PASSWORD
 JWT_SECRET=PLACEHOLDER_JWT_SECRET_MIN_32_CHARS
 JWT_EXPIRATION=86400000
-CORS_ALLOWED_ORIGINS=https://app-forms-clients.vercel.app
+CORS_ALLOWED_ORIGINS=https://front-cadastro-formularios.vercel.app,https://app-forms-clients.vercel.app
 UPLOAD_DIR=/app/uploads
 APP_BASE_URL=https://100-30-35-83.sslip.io
 ENVEOF

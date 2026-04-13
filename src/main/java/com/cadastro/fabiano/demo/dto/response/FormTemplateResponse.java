@@ -7,6 +7,7 @@ public record FormTemplateResponse(
         String name,
         String slug,
         String clientName,
+        String clientCompany,
         List<FormFieldResponse> fields,
         boolean hasSchedule,
         boolean hasAttendance,

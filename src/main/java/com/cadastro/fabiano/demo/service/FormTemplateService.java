@@ -404,6 +404,7 @@ public class FormTemplateService {
                 template.getName(),
                 template.getSlug(),
                 template.getClient().getName(),
+                template.getClient().getCompany(),
                 fields,
                 template.isHasSchedule(),
                 template.isHasAttendance(),
