@@ -34,12 +34,12 @@ cat > /etc/poc-fabiano.env << 'ENVEOF'
 SPRING_PROFILES_ACTIVE=prod
 DB_HOST=PLACEHOLDER_RDS_ENDPOINT
 DB_PORT=3306
-DB_NAME=cadastro_fabiano
+DB_NAME=poc_fabiano_new
 DB_USER=PLACEHOLDER_DB_USER
 DB_PASSWORD=PLACEHOLDER_DB_PASSWORD
 JWT_SECRET=PLACEHOLDER_JWT_SECRET_MIN_32_CHARS
 JWT_EXPIRATION=86400000
-CORS_ALLOWED_ORIGINS=https://front-cadastro-formularios.vercel.app,https://app-forms-clients.vercel.app
+CORS_ALLOWED_ORIGINS=https://front-cadastro-formularios.vercel.app,https://app-forms-clients.vercel.app,https://www.nexventa.com.br,https://nexventa.com.br
 UPLOAD_DIR=/app/uploads
 APP_BASE_URL=https://100-30-35-83.sslip.io
 ENVEOF
