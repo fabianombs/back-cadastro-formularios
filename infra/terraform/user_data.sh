@@ -57,7 +57,7 @@ After=network.target
 [Service]
 User=appuser
 Group=appuser
-ExecStart=/usr/bin/java -jar /app/demo-0.0.1-SNAPSHOT.jar
+ExecStart=/usr/bin/java -jar /app/app.jar
 EnvironmentFile=/etc/poc-fabiano.env
 WorkingDirectory=/app
 Restart=on-failure
