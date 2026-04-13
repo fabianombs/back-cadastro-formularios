@@ -29,6 +29,19 @@
 	<properties>
 		<java.version>21</java.version>
 	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>2.25.70</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 
 		<dependency>
@@ -107,6 +120,16 @@
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.7.0</version>
+		</dependency>
+
+		<!-- AWS S3 -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>apache-client</artifactId>
 		</dependency>
 	</dependencies>
 
@@ -194,6 +217,7 @@
 								<exclude>com/cadastro/fabiano/demo/config/JwtAuthenticationFilter.class</exclude>
 								<exclude>com/cadastro/fabiano/demo/config/WebConfig.class</exclude>
 								<exclude>com/cadastro/fabiano/demo/config/OpenApiConfig.class</exclude>
+								<exclude>com/cadastro/fabiano/demo/config/S3Config.class</exclude>
 								<!-- Utilitários e mapper -->
 								<exclude>com/cadastro/fabiano/demo/utils/**</exclude>
 								<exclude>com/cadastro/fabiano/demo/mapper/**</exclude>
