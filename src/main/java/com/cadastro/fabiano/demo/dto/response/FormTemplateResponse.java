@@ -11,6 +11,7 @@ public record FormTemplateResponse(
         List<FormFieldResponse> fields,
         boolean hasSchedule,
         boolean hasAttendance,
+        List<String> attendanceColumnOrder,
         ScheduleConfigResponse scheduleConfig,
         TemplateAppearanceResponse appearance
 ) {}

@@ -52,7 +52,7 @@ class FormTemplateControllerTest {
 
     private FormTemplateResponse buildResponse() {
         return new FormTemplateResponse(1L, "Form", "form", "Cliente", "Empresa XYZ",
-                List.of(), false, false, null, null);
+                List.of(), false, false, null, null, null);
     }
 
     @Test
