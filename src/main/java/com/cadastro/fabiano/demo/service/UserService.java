@@ -48,6 +48,10 @@ public class UserService {
         user.setName(request.name());
         user.setEmail(request.email());
 
+        if (request.role() != null) {
+            user.setRole(Role.valueOf(request.role()));
+        }
+
         repository.save(user);
 
     }

@@ -82,7 +82,7 @@ class UserServiceTest {
     @DisplayName("update: atualiza nome e e-mail do usuário")
     void update_success() {
         User user = buildUser(1L, Role.ROLE_ADMIN);
-        UpdateUserRequest request = new UpdateUserRequest("Novo Nome", "novo@email.com");
+        UpdateUserRequest request = new UpdateUserRequest("Novo Nome", "novo@email.com", "ROLE_FUNCIONARIO");
 
         when(repository.findById(1L)).thenReturn(Optional.of(user));
         when(repository.save(any(User.class))).thenReturn(user);
@@ -91,6 +91,7 @@ class UserServiceTest {
 
         assertThat(user.getName()).isEqualTo("Novo Nome");
         assertThat(user.getEmail()).isEqualTo("novo@email.com");
+        assertThat(user.getRole()).isEqualTo(Role.ROLE_FUNCIONARIO);
         verify(repository).save(user);
     }
 
@@ -100,7 +101,7 @@ class UserServiceTest {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 
         org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
-                () -> service.update(99L, new UpdateUserRequest("X", "x@x.com")));
+                () -> service.update(99L, new UpdateUserRequest("X", "x@x.com", null)));
     }
 
     // ─── delete ───────────────────────────────────────────────────────────────
