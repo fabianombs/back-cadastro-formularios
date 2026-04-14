@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -34,7 +35,8 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Atualizar usuário")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Atualizar usuário (somente ADMIN)")
     public void update(
             @PathVariable Long id,
             @RequestBody UpdateUserRequest request) {
@@ -42,7 +44,8 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Excluir usuário")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Excluir usuário (somente ADMIN)")
     public void delete(@PathVariable Long id) {
         service.delete(id);
     }
