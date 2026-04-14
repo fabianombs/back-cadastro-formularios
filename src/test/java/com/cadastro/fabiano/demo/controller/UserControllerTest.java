@@ -72,7 +72,7 @@ class UserControllerTest {
     @Test
     @DisplayName("PUT /users/{id}: atualiza usuário")
     void update_success() throws Exception {
-        UpdateUserRequest request = new UpdateUserRequest("Novo Nome", "novo@email.com");
+        UpdateUserRequest request = new UpdateUserRequest("Novo Nome", "novo@email.com", "ROLE_FUNCIONARIO");
         doNothing().when(userService).update(eq(1L), any());
 
         mockMvc.perform(put("/users/1")
