@@ -86,9 +86,9 @@ public class ClientService {
                 .forEach(t -> formTemplateService.deleteTemplate(t.getId()));
         }
 
-        // Soft delete do cliente
-        client.setDeleted(true);
-        repository.save(client);
+        // Soft delete via JPQL direto — evita que o JPA tente fazer cascade
+        // nos templates que já foram hard-deletados acima
+        repository.softDelete(id);
     }
 
 }
