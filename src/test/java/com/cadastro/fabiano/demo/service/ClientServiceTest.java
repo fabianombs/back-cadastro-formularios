@@ -23,7 +23,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -96,12 +95,10 @@ class ClientServiceTest {
     @DisplayName("delete: realiza soft delete do cliente sem templates")
     void delete_success_noTemplates() {
         when(repository.findById(1L)).thenReturn(Optional.of(client));
-        when(repository.save(any(Client.class))).thenReturn(client);
 
         clientService.delete(1L);
 
-        assertThat(client.isDeleted()).isTrue();
-        verify(repository).save(client);
+        verify(repository).softDelete(1L);
         verifyNoInteractions(formTemplateService);
     }
 
@@ -113,11 +110,10 @@ class ClientServiceTest {
         client.setTemplates(List.of(t1, t2));
 
         when(repository.findById(1L)).thenReturn(Optional.of(client));
-        when(repository.save(any(Client.class))).thenReturn(client);
 
         clientService.delete(1L);
 
-        assertThat(client.isDeleted()).isTrue();
+        verify(repository).softDelete(1L);
         verify(formTemplateService).deleteTemplate(10L);
         verify(formTemplateService).deleteTemplate(11L);
     }

@@ -13,5 +13,7 @@ public record FormTemplateResponse(
         boolean hasAttendance,
         List<String> attendanceColumnOrder,
         ScheduleConfigResponse scheduleConfig,
-        TemplateAppearanceResponse appearance
+        TemplateAppearanceResponse appearance,
+        boolean lgpdEnabled,
+        String lgpdText
 ) {}
