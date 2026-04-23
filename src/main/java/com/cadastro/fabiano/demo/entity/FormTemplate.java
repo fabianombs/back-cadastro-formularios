@@ -144,4 +144,15 @@ public class FormTemplate {
     @Column(name = "button_font_size")
     private String buttonFontSize;
 
+    // =====================
+    // LGPD
+    // =====================
+
+    @Column(name = "lgpd_enabled", nullable = false)
+    @Builder.Default
+    private boolean lgpdEnabled = false;
+
+    @Column(name = "lgpd_text", columnDefinition = "TEXT")
+    private String lgpdText;
+
 }

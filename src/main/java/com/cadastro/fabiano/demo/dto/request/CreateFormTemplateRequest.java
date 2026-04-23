@@ -7,6 +7,8 @@ public record CreateFormTemplateRequest(
         Long clientId,
         List<FormFieldRequest> fields,
         ScheduleConfigRequest scheduleConfig,
-        TemplateAppearanceRequest appearance
+        TemplateAppearanceRequest appearance,
+        boolean lgpdEnabled,
+        String lgpdText
 ) {
 }
