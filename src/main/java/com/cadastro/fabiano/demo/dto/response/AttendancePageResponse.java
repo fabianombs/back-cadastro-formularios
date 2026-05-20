@@ -9,5 +9,9 @@ public record AttendancePageResponse(
         int page,
         int size,
         long presentCount,
-        long absentCount
+        long absentCount,
+        // Total de acompanhantes de todos os convidados da lista
+        long totalCompanions,
+        // Acompanhantes dos convidados que efetivamente compareceram
+        long presentCompanions
 ) {}

@@ -6,6 +6,7 @@ import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.entity.AttendanceRecord;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
+import com.cadastro.fabiano.demo.repository.AttendanceCompanionRepository;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,10 @@ class AttendanceServiceTest {
 
     @Mock
     private FormTemplateRepository templateRepository;
+
+    // Necessário pois AttendanceService injeta este repositório para carregar companions
+    @Mock
+    private AttendanceCompanionRepository companionRepository;
 
     @InjectMocks
     private AttendanceService service;
@@ -74,6 +79,7 @@ class AttendanceServiceTest {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
         when(attendanceRepository.saveAll(any())).thenReturn(List.of(r1, r2));
         when(templateRepository.save(any())).thenReturn(template);
+        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         List<AttendanceRecordResponse> result = service.importAttendance(1L, request);
 
@@ -87,7 +93,7 @@ class AttendanceServiceTest {
     void importAttendance_emptyRowsFiltered() {
         List<Map<String, String>> rows = List.of(
                 Map.of("Nome", "João"),
-                Map.of() // linha vazia — deve ser ignorada
+                Map.of()
         );
         ImportAttendanceRequest request = new ImportAttendanceRequest(rows);
 
@@ -123,6 +129,7 @@ class AttendanceServiceTest {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
         when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(eq(template), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(r)));
+        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         Page<AttendanceRecordResponse> result = service.getByTemplate(1L, pageable);
 
@@ -135,10 +142,11 @@ class AttendanceServiceTest {
     @DisplayName("markAttendance: marca presença com sucesso")
     void markAttendance_markPresent() {
         AttendanceRecord record = buildRecord(5L, "Carlos", false);
-        MarkAttendanceRequest request = new MarkAttendanceRequest(true, "Presente");
+        MarkAttendanceRequest request = new MarkAttendanceRequest(true, "Presente", null);
 
         when(attendanceRepository.findById(5L)).thenReturn(Optional.of(record));
         when(attendanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         AttendanceRecordResponse response = service.markAttendance(5L, request);
 
@@ -152,10 +160,11 @@ class AttendanceServiceTest {
         AttendanceRecord record = buildRecord(5L, "Carlos", true);
         record.setAttendedAt(LocalDateTime.now());
 
-        MarkAttendanceRequest request = new MarkAttendanceRequest(false, null);
+        MarkAttendanceRequest request = new MarkAttendanceRequest(false, null, null);
 
         when(attendanceRepository.findById(5L)).thenReturn(Optional.of(record));
         when(attendanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         service.markAttendance(5L, request);
 
@@ -168,7 +177,7 @@ class AttendanceServiceTest {
     void markAttendance_notFound_throws() {
         when(attendanceRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.markAttendance(99L, new MarkAttendanceRequest(true, null)))
+        assertThatThrownBy(() -> service.markAttendance(99L, new MarkAttendanceRequest(true, null, null)))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("não encontrado");
     }
@@ -216,7 +225,7 @@ class AttendanceServiceTest {
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private AttendanceRecord buildRecord(Long id, String nome, boolean attended) {
-        AttendanceRecord r = AttendanceRecord.builder()
+        return AttendanceRecord.builder()
                 .id(id)
                 .formTemplate(template)
                 .rowData(Map.of("Nome", nome))
@@ -224,6 +233,5 @@ class AttendanceServiceTest {
                 .rowOrder(id.intValue())
                 .createdAt(LocalDateTime.now())
                 .build();
-        return r;
     }
 }
