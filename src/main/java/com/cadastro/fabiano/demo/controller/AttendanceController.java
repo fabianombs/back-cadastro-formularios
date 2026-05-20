@@ -1,7 +1,9 @@
 package com.cadastro.fabiano.demo.controller;
 
+import com.cadastro.fabiano.demo.dto.request.AddCompanionRequest;
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
+import com.cadastro.fabiano.demo.dto.request.MarkCompanionAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.service.AttendanceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,5 +80,32 @@ public class AttendanceController {
     public ResponseEntity<Void> deleteRecord(@PathVariable Long recordId) {
         attendanceService.deleteRecord(recordId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Acompanhantes ────────────────────────────────────────────────────────
+
+    @PostMapping("/{recordId}/companions")
+    @Operation(summary = "Adicionar acompanhante", description = "Vincula um acompanhante (nome + telefone) a um convidado")
+    @ApiResponse(responseCode = "200", description = "Acompanhante adicionado")
+    public ResponseEntity<AttendanceRecordResponse> addCompanion(
+            @PathVariable Long recordId,
+            @RequestBody AddCompanionRequest request) {
+        return ResponseEntity.ok(attendanceService.addCompanion(recordId, request));
+    }
+
+    @PatchMapping("/companions/{companionId}/mark")
+    @Operation(summary = "Marcar presença do acompanhante", description = "Marca ou desmarca a presença individual de um acompanhante")
+    @ApiResponse(responseCode = "200", description = "Presença do acompanhante atualizada")
+    public ResponseEntity<AttendanceRecordResponse> markCompanionAttendance(
+            @PathVariable Long companionId,
+            @RequestBody MarkCompanionAttendanceRequest request) {
+        return ResponseEntity.ok(attendanceService.markCompanionAttendance(companionId, request));
+    }
+
+    @DeleteMapping("/companions/{companionId}")
+    @Operation(summary = "Remover acompanhante", description = "Remove um acompanhante pelo id")
+    @ApiResponse(responseCode = "200", description = "Acompanhante removido")
+    public ResponseEntity<AttendanceRecordResponse> removeCompanion(@PathVariable Long companionId) {
+        return ResponseEntity.ok(attendanceService.removeCompanion(companionId));
     }
 }

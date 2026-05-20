@@ -44,6 +44,11 @@ public class AttendanceRecord {
     @Column(name = "notes")
     private String notes;
 
+    // Quantidade de acompanhantes que o convidado trouxe ao evento
+    @Column(name = "companions_count", nullable = false)
+    @Builder.Default
+    private int companionsCount = 0;
+
     @Column(name = "row_order")
     private Integer rowOrder;
 

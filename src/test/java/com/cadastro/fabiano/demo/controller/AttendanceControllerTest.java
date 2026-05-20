@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
+import com.cadastro.fabiano.demo.dto.response.AttendanceCompanionResponse;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.config.JwtService;
 import com.cadastro.fabiano.demo.service.AttendanceService;
@@ -50,9 +51,13 @@ class AttendanceControllerTest {
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
 
+    // Helper alinhado com a assinatura atual do record
     private AttendanceRecordResponse buildRecord(Long id) {
-        return new AttendanceRecordResponse(id, 1L, Map.of("Nome", "João"),
-                false, null, null, 1, LocalDateTime.now());
+        return new AttendanceRecordResponse(
+                id, 1L, Map.of("Nome", "João"),
+                false, null, null,
+                0, List.of(),
+                1, LocalDateTime.now());
     }
 
     @Test
@@ -83,7 +88,7 @@ class AttendanceControllerTest {
     @Test
     @DisplayName("PATCH /attendance/{id}/mark: marca presença")
     void markAttendance_success() throws Exception {
-        MarkAttendanceRequest request = new MarkAttendanceRequest(true, "OK");
+        MarkAttendanceRequest request = new MarkAttendanceRequest(true, "OK", null);
         when(attendanceService.markAttendance(eq(5L), any())).thenReturn(buildRecord(5L));
 
         mockMvc.perform(patch("/attendance/5/mark")
