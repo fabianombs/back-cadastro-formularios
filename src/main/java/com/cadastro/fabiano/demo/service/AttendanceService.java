@@ -1,10 +1,15 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.dto.request.AddCompanionRequest;
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
+import com.cadastro.fabiano.demo.dto.request.MarkCompanionAttendanceRequest;
+import com.cadastro.fabiano.demo.dto.response.AttendanceCompanionResponse;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
+import com.cadastro.fabiano.demo.entity.AttendanceCompanion;
 import com.cadastro.fabiano.demo.entity.AttendanceRecord;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
+import com.cadastro.fabiano.demo.repository.AttendanceCompanionRepository;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import org.springframework.data.domain.Page;
@@ -25,11 +30,14 @@ import java.util.stream.Collectors;
 public class AttendanceService {
 
     private final AttendanceRecordRepository attendanceRepository;
+    private final AttendanceCompanionRepository companionRepository;
     private final FormTemplateRepository templateRepository;
 
     public AttendanceService(AttendanceRecordRepository attendanceRepository,
+                             AttendanceCompanionRepository companionRepository,
                              FormTemplateRepository templateRepository) {
         this.attendanceRepository = attendanceRepository;
+        this.companionRepository = companionRepository;
         this.templateRepository = templateRepository;
     }
 
@@ -51,12 +59,18 @@ public class AttendanceService {
         AtomicInteger order = new AtomicInteger(1);
         List<AttendanceRecord> records = request.rows().stream()
                 .filter(row -> !row.isEmpty())
-                .map(row -> AttendanceRecord.builder()
-                        .formTemplate(template)
-                        .rowData(row)
-                        .attended(false)
-                        .rowOrder(order.getAndIncrement())
-                        .build())
+                .map(row -> {
+                    // Detecta coluna de acompanhantes na planilha importada.
+                    // Aceita variações comuns: "Acompanhantes", "Qtd Acompanhantes", "Nº Acompanhantes", etc.
+                    int companions = extractCompanionsFromRow(row);
+                    return AttendanceRecord.builder()
+                            .formTemplate(template)
+                            .rowData(row)
+                            .attended(false)
+                            .companionsCount(companions)
+                            .rowOrder(order.getAndIncrement())
+                            .build();
+                })
                 .toList();
 
         // Captura a ordem das colunas da primeira linha (Jackson desserializa em LinkedHashMap,
@@ -103,6 +117,12 @@ public class AttendanceService {
         record.setAttended(request.attended());
         record.setNotes(request.notes());
         record.setAttendedAt(request.attended() ? LocalDateTime.now() : null);
+
+        // Atualiza acompanhantes apenas quando informado explicitamente
+        if (request.companionsCount() != null) {
+            record.setCompanionsCount(Math.max(0, request.companionsCount()));
+        }
+
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -133,12 +153,102 @@ public class AttendanceService {
                 ));
     }
 
+    /**
+     * Adiciona um acompanhante ao convidado informado.
+     * Atualiza o cache companions_count no registro pai.
+     */
+    @Transactional
+    public AttendanceRecordResponse addCompanion(Long recordId, AddCompanionRequest request) {
+        AttendanceRecord record = attendanceRepository.findById(recordId)
+                .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
+
+        AttendanceCompanion companion = AttendanceCompanion.builder()
+                .attendanceRecord(record)
+                .name(request.name().trim())
+                .phone(request.phone() != null ? request.phone().trim() : null)
+                .build();
+        companionRepository.save(companion);
+
+        // Atualiza cache de contagem para facilitar stats
+        record.setCompanionsCount(record.getCompanionsCount() + 1);
+        attendanceRepository.save(record);
+
+        return toResponse(record);
+    }
+
+    /**
+     * Marca ou desmarca a presença de um acompanhante individualmente.
+     * Retorna o registro pai atualizado (com a lista de companions).
+     */
+    @Transactional
+    public AttendanceRecordResponse markCompanionAttendance(Long companionId, MarkCompanionAttendanceRequest request) {
+        AttendanceCompanion companion = companionRepository.findById(companionId)
+                .orElseThrow(() -> new RuntimeException("Acompanhante não encontrado"));
+
+        companion.setAttended(request.attended());
+        companion.setAttendedAt(request.attended() ? LocalDateTime.now() : null);
+        companionRepository.save(companion);
+
+        return toResponse(companion.getAttendanceRecord());
+    }
+
+    /**
+     * Remove um acompanhante pelo id e atualiza o cache companions_count no pai.
+     */
+    @Transactional
+    public AttendanceRecordResponse removeCompanion(Long companionId) {
+        AttendanceCompanion companion = companionRepository.findById(companionId)
+                .orElseThrow(() -> new RuntimeException("Acompanhante não encontrado"));
+
+        AttendanceRecord record = companion.getAttendanceRecord();
+        companionRepository.delete(companion);
+
+        // Garante que o cache não fique negativo
+        record.setCompanionsCount(Math.max(0, record.getCompanionsCount() - 1));
+        attendanceRepository.save(record);
+
+        return toResponse(record);
+    }
+
     private FormTemplate findTemplate(Long templateId) {
         return templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
     }
 
+    /**
+     * Tenta ler a quantidade de acompanhantes de uma linha da planilha importada.
+     * Busca por chaves que comecem com "acompan" (case-insensitive) para cobrir
+     * variações como "Acompanhantes", "Qtd Acompanhantes", "Nº Acompanhantes", etc.
+     */
+    private int extractCompanionsFromRow(Map<String, String> row) {
+        return row.entrySet().stream()
+                .filter(e -> e.getKey().trim().toLowerCase().contains("acompan"))
+                .findFirst()
+                .map(e -> {
+                    try {
+                        return Math.max(0, Integer.parseInt(e.getValue().trim()));
+                    } catch (NumberFormatException ex) {
+                        return 0;
+                    }
+                })
+                .orElse(0);
+    }
+
     private AttendanceRecordResponse toResponse(AttendanceRecord r) {
+        List<AttendanceCompanionResponse> companions = companionRepository
+                .findByAttendanceRecordOrderByCreatedAtAsc(r)
+                .stream()
+                .map(c -> new AttendanceCompanionResponse(
+                        c.getId(),
+                        r.getId(),
+                        c.getName(),
+                        c.getPhone(),
+                        c.isAttended(),
+                        c.getAttendedAt(),
+                        c.getCreatedAt()
+                ))
+                .toList();
+
         return new AttendanceRecordResponse(
                 r.getId(),
                 r.getFormTemplate().getId(),
@@ -146,6 +256,8 @@ public class AttendanceService {
                 r.isAttended(),
                 r.getAttendedAt(),
                 r.getNotes(),
+                companions.size(),
+                companions,
                 r.getRowOrder(),
                 r.getCreatedAt()
         );
