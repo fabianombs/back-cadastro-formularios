@@ -155,4 +155,13 @@ public class FormTemplate {
     @Column(name = "lgpd_text", columnDefinition = "TEXT")
     private String lgpdText;
 
+    // =====================
+    // QUIZ (opcional)
+    // =====================
+
+    // Quiz associado a este template — null quando nenhum quiz foi selecionado
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "quiz_config_id")
+    private QuizConfig quiz;
+
 }

@@ -74,6 +74,8 @@ class FormTemplateServiceTest {
                 .name("Cliente Teste")
                 .username("cliente_teste")
                 .build();
+
+        // Templates não têm quiz associado por padrão nos testes (quiz é null no entity)
     }
 
     // ─── createTemplate ───────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ class FormTemplateServiceTest {
     void createTemplate_success_noSchedule() {
         FormFieldRequest field = new FormFieldRequest("Nome", "text", true, null, 2, null);
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Formulário de Contato", 1L, List.of(field), null, null, false, null);
+                "Formulário de Contato", 1L, List.of(field), null, null, false, null, null);
 
         FormTemplate saved = buildTemplate("Formulário de Contato", "formulario-de-contato");
 
@@ -104,7 +106,7 @@ class FormTemplateServiceTest {
                 LocalTime.of(8, 0), LocalTime.of(17, 0), 30, 7, 3, List.of("CPF"));
 
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Agenda Médica", 1L, List.of(), sc, null, false, null);
+                "Agenda Médica", 1L, List.of(), sc, null, false, null, null);
 
         FormTemplate saved = buildTemplate("Agenda Médica", "agenda-medica");
         saved.setHasSchedule(true);
@@ -130,7 +132,7 @@ class FormTemplateServiceTest {
     void createTemplate_slugConflict_generatesUnique() {
         // "Formulario" (sem acento) → slug "formulario"
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Formulario", 1L, List.of(), null, null, false, null);
+                "Formulario", 1L, List.of(), null, null, false, null, null);
 
         FormTemplate saved = buildTemplate("Formulario", "formulario-1");
 
@@ -148,7 +150,7 @@ class FormTemplateServiceTest {
     @DisplayName("createTemplate: lança exceção se cliente não encontrado")
     void createTemplate_clientNotFound_throws() {
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Form", 99L, List.of(), null, null, false, null);
+                "Form", 99L, List.of(), null, null, false, null, null);
 
         when(clientRepository.findById(99L)).thenReturn(Optional.empty());
 
