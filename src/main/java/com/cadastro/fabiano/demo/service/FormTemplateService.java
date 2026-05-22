@@ -11,13 +11,16 @@ import com.cadastro.fabiano.demo.dto.response.TemplateAppearanceResponse;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
+import com.cadastro.fabiano.demo.entity.QuizConfig;
 import com.cadastro.fabiano.demo.entity.User;
 import com.cadastro.fabiano.demo.repository.AppointmentRepository;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
 import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
+import com.cadastro.fabiano.demo.repository.QuizConfigRepository;
 import com.cadastro.fabiano.demo.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,6 +39,14 @@ public class FormTemplateService {
     private final UserRepository userRepository;
     private final ClientRepository clientRepository;
     private final ImageStorageService imageStorageService;
+    private final QuizConfigRepository quizConfigRepository;
+
+    @Value("${app.base-url:http://localhost:8080}")
+    private String baseUrl;
+
+    // URL do frontend — links públicos do quiz apontam para o Angular, não para a API
+    @Value("${app.frontend-url:http://localhost:4200}")
+    private String frontendUrl;
 
     public FormTemplateService(FormTemplateRepository templateRepository,
                                FormSubmissionRepository submissionRepository,
@@ -43,7 +54,8 @@ public class FormTemplateService {
                                AttendanceRecordRepository attendanceRepository,
                                UserRepository userRepository,
                                ClientRepository clientRepository,
-                               ImageStorageService imageStorageService) {
+                               ImageStorageService imageStorageService,
+                               QuizConfigRepository quizConfigRepository) {
         this.templateRepository = templateRepository;
         this.submissionRepository = submissionRepository;
         this.appointmentRepository = appointmentRepository;
@@ -51,6 +63,7 @@ public class FormTemplateService {
         this.userRepository = userRepository;
         this.clientRepository = clientRepository;
         this.imageStorageService = imageStorageService;
+        this.quizConfigRepository = quizConfigRepository;
     }
 
     // ==========================
@@ -157,6 +170,15 @@ public class FormTemplateService {
         template.setFields(fields);
 
         FormTemplate saved = templateRepository.save(template);
+
+        // Vincula quiz imediatamente se o frontend selecionou um antes de salvar
+        if (request.quizId() != null) {
+            quizConfigRepository.findById(request.quizId()).ifPresent(quiz -> {
+                saved.setQuiz(quiz);
+                templateRepository.save(saved);
+            });
+        }
+
         return toResponse(saved);
     }
 
@@ -426,6 +448,13 @@ public class FormTemplateService {
                 ? Arrays.asList(template.getAttendanceColumnOrder().split(","))
                 : List.of();
 
+        // Quiz associado diretamente ao template (nova arquitetura independente)
+        QuizConfig quiz = template.getQuiz();
+        boolean hasQuiz = quiz != null && quiz.isActive();
+        Long quizId        = quiz != null ? quiz.getId() : null;
+        String quizLink    = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() : null;
+        String rankingLink = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() + "/ranking" : null;
+
         return new FormTemplateResponse(
                 template.getId(),
                 template.getName(),
@@ -439,7 +468,11 @@ public class FormTemplateService {
                 scheduleConfig,
                 buildAppearanceResponse(template),
                 template.isLgpdEnabled(),
-                template.getLgpdText()
+                template.getLgpdText(),
+                hasQuiz,
+                quizId,
+                quizLink,
+                rankingLink
         );
     }
 }

@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.repository;
 
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
+import com.cadastro.fabiano.demo.entity.QuizConfig;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,4 +55,7 @@ public interface FormTemplateRepository extends JpaRepository<FormTemplate, Long
     long countByClientAndHasScheduleFalseAndHasAttendanceTrue(Client client);
 
     long countByClientAndHasScheduleFalseAndHasAttendanceFalse(Client client);
+
+    // Verifica se algum template está usando determinado quiz (para impedir exclusão)
+    boolean existsByQuiz(QuizConfig quiz);
 }

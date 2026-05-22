@@ -9,6 +9,8 @@ public record CreateFormTemplateRequest(
         ScheduleConfigRequest scheduleConfig,
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        // Quiz a vincular imediatamente após criar o template (opcional)
+        Long quizId
 ) {
 }
