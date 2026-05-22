@@ -15,5 +15,10 @@ public record FormTemplateResponse(
         ScheduleConfigResponse scheduleConfig,
         TemplateAppearanceResponse appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        // Quiz integrado: presentes apenas quando existe um QuizConfig ativo para o template
+        boolean hasQuiz,
+        Long quizId,
+        String quizLink,
+        String rankingLink
 ) {}

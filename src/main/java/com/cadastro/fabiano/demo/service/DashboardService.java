@@ -5,12 +5,14 @@ import com.cadastro.fabiano.demo.dto.response.TemplateStatResponse;
 import com.cadastro.fabiano.demo.entity.AppointmentStatus;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
+import com.cadastro.fabiano.demo.entity.QuizConfig;
 import com.cadastro.fabiano.demo.repository.AppointmentRepository;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
 import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,13 @@ public class DashboardService {
     private final AppointmentRepository appointmentRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final ClientRepository clientRepository;
+
+    @Value("${app.base-url:http://localhost:8080}")
+    private String baseUrl;
+
+    // URL do frontend — links públicos do quiz apontam para o Angular, não para a API
+    @Value("${app.frontend-url:http://localhost:4200}")
+    private String frontendUrl;
 
     // Admin: vê todos os templates e todos os clientes
     public DashboardResponse getSummary(Pageable pageable) {
@@ -60,11 +69,18 @@ public class DashboardService {
             long attPresent = attendanceRecordRepository.countByFormTemplateAndAttended(t, true);
             String clientName = t.getClient() != null ? t.getClient().getName() : null;
 
+            // Quiz associado diretamente ao template (nova arquitetura independente)
+            QuizConfig quiz = t.getQuiz();
+            boolean hasQuiz = quiz != null && quiz.isActive();
+            String quizLink    = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() : null;
+            String rankingLink = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() + "/ranking" : null;
+
             return new TemplateStatResponse(
                     t.getId(), t.getName(), t.getSlug(), clientName,
                     t.isHasSchedule(), t.getFields().size(), submissions,
                     apptTotal, apptConfirmed, apptCancelled,
-                    attTotal, attPresent
+                    attTotal, attPresent,
+                    hasQuiz, quizLink, rankingLink
             );
         }).toList();
 

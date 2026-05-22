@@ -55,6 +55,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/appointments/book").permitAll()
                         .requestMatchers("/attendance/**").permitAll()
                         .requestMatchers("/appointments/**").permitAll()
+                        // Endpoints públicos do quiz (jogador + ranking)
+                        .requestMatchers(HttpMethod.GET,  "/quizzes/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/quizzes/slug/*/sessions").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/answers").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/complete").permitAll()
                         .requestMatchers("/dashboard/**").authenticated()
                         .anyRequest().authenticated()
                 )
@@ -90,6 +95,8 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/appointments/**",        publicConfig);
         source.registerCorsConfiguration("/attendance/**",          publicConfig);
         source.registerCorsConfiguration("/files/**",               publicConfig);
+        source.registerCorsConfiguration("/quizzes/slug/**",        publicConfig);
+        source.registerCorsConfiguration("/quizzes/sessions/**",    publicConfig);
 
         // Tudo mais: painel admin, autenticação, criação/edição de templates
         source.registerCorsConfiguration("/**", privateConfig);

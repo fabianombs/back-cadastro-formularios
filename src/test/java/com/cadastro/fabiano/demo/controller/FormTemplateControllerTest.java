@@ -52,7 +52,8 @@ class FormTemplateControllerTest {
 
     private FormTemplateResponse buildResponse() {
         return new FormTemplateResponse(1L, "Form", "form", "Cliente", "Empresa XYZ",
-                List.of(), false, false, null, null, null, false, null);
+                List.of(), false, false, null, null, null, false, null,
+                false, null, null, null);
     }
 
     @Test
@@ -69,7 +70,7 @@ class FormTemplateControllerTest {
     @DisplayName("POST /form-templates/create/{clientId}: cria template")
     void createTemplate_success() throws Exception {
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Novo Form", 1L, List.of(), null, null, false, null);
+                "Novo Form", 1L, List.of(), null, null, false, null, null);
         when(templateService.createTemplate(any(), eq(1L))).thenReturn(buildResponse());
 
         mockMvc.perform(post("/form-templates/create/1")

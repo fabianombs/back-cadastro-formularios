@@ -12,5 +12,9 @@ public record TemplateStatResponse(
         long appointmentConfirmed,
         long appointmentCancelled,
         long attendanceTotal,
-        long attendancePresent
+        long attendancePresent,
+        // Quiz integrado — presentes quando o template tem quiz ativo
+        boolean hasQuiz,
+        String quizLink,
+        String rankingLink
 ) {}
