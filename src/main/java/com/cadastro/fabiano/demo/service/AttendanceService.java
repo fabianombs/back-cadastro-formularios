@@ -210,6 +210,29 @@ public class AttendanceService {
         return toResponse(record);
     }
 
+    /**
+     * Permite ao organizador/cliente adicionar um novo convidado diretamente
+     * via link público, sem precisar importar planilha novamente.
+     * O rowOrder é calculado como total atual + 1 para manter a ordem de chegada.
+     */
+    @Transactional
+    public AttendanceRecordResponse addPublicGuest(String slug, Map<String, String> rowData) {
+        FormTemplate template = templateRepository.findBySlug(slug)
+                .orElseThrow(() -> new RuntimeException("Formulário não encontrado"));
+
+        long nextOrder = attendanceRepository.countByFormTemplate(template) + 1;
+
+        AttendanceRecord record = AttendanceRecord.builder()
+                .formTemplate(template)
+                .rowData(rowData)
+                .attended(false)
+                .companionsCount(0)
+                .rowOrder((int) nextOrder)
+                .build();
+
+        return toResponse(attendanceRepository.save(record));
+    }
+
     private FormTemplate findTemplate(Long templateId) {
         return templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
