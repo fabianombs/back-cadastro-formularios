@@ -75,7 +75,8 @@ public class SecurityConfig {
         // Aceita qualquer origem: mobile, tablet, totem, qualquer dispositivo na rede
         CorsConfiguration publicConfig = new CorsConfiguration();
         publicConfig.setAllowedOriginPatterns(List.of("*"));
-        publicConfig.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+        // DELETE necessário para remover acompanhantes via painel (endpoint público)
+        publicConfig.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         publicConfig.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         publicConfig.setAllowCredentials(false);
 
