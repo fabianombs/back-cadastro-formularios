@@ -82,6 +82,18 @@ public class AttendanceController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Auto-cadastro público ─────────────────────────────────────────────────
+
+    @PostMapping("/template/slug/{slug}/guest")
+    @Operation(summary = "Adicionar convidado via link público",
+            description = "Permite ao organizador cadastrar um novo convidado sem autenticação, usando o slug do formulário")
+    @ApiResponse(responseCode = "200", description = "Convidado adicionado")
+    public ResponseEntity<AttendanceRecordResponse> addPublicGuest(
+            @PathVariable String slug,
+            @RequestBody Map<String, String> rowData) {
+        return ResponseEntity.ok(attendanceService.addPublicGuest(slug, rowData));
+    }
+
     // ── Acompanhantes ────────────────────────────────────────────────────────
 
     @PostMapping("/{recordId}/companions")
