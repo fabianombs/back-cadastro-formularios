@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,6 +63,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/complete").permitAll()
                         .requestMatchers("/dashboard/**").authenticated()
                         .anyRequest().authenticated()
+                )
+                // Retorna 401 para requests sem token — Spring Security 6 padrão é 403, o que
+                // impede o interceptor Angular de detectar sessão expirada e redirecionar para login
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((req, res, authEx) ->
+                                res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

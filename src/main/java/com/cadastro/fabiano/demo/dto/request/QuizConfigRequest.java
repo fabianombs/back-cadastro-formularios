@@ -15,5 +15,18 @@ public record QuizConfigRequest(
     String primaryColor,
     String textColor,
     // Cor dos cards de resposta — null usa o padrão glassmorphism
-    String cardColor
+    String cardColor,
+    // Cor dos cards de cadastro/ready — null usa o padrão glassmorphism
+    String registerCardColor,
+    // Cor de fundo dos inputs de cadastro — null usa o padrão semitransparente
+    String inputColor,
+    // Cor de fundo dos cards do ranking/pódio — null usa o padrão glassmorphism
+    String rankingCardColor,
+    // Cor do botão principal — null usa primaryColor como fallback
+    String buttonColor,
+    // Cor do texto dos botões — null usa #fff como fallback
+    String buttonTextColor,
+    // Texto editável da tela "Tudo pronto!" — null usa padrão do frontend
+    String readyTitle,
+    String readyMessage
 ) {}

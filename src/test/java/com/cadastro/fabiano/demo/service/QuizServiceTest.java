@@ -76,7 +76,7 @@ class QuizServiceTest {
                 new QuizQuestionRequest("P1?", null, 0, opts)
         );
         return new QuizConfigRequest(name, null, 30, 1000, questions,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     // ── listAll ───────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ class QuizServiceTest {
     @DisplayName("createQuiz: usa slug informado se presente")
     void createQuiz_withExplicitSlug() {
         QuizConfigRequest req = new QuizConfigRequest("Meu Quiz", "meu-slug-custom", 30, 1000, List.of(),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Meu Quiz", "meu-slug-custom");
 
         when(quizConfigRepository.existsBySlug("meu-slug-custom")).thenReturn(false);
@@ -164,7 +164,7 @@ class QuizServiceTest {
     void updateQuiz_slugConflict_throws() {
         QuizConfig existing = buildQuiz(1L, "Quiz", "slug-atual");
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "outro-slug", 30, 1000, List.of(),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(quizConfigRepository.existsBySlug("outro-slug")).thenReturn(true);
@@ -179,7 +179,7 @@ class QuizServiceTest {
     void updateQuiz_sameSlug_noConflict() {
         QuizConfig existing = buildQuiz(1L, "Quiz", "meu-slug");
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "meu-slug", 30, 1000, List.of(),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Quiz", "meu-slug");
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
