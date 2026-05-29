@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/form-submissions/**").permitAll()
                         .requestMatchers("/forms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/form-templates/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/form-templates/view/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/clients/*/templates").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots").permitAll()
@@ -99,6 +100,7 @@ public class SecurityConfig {
 
         // Rotas consumidas pelos links públicos dos formulários
         source.registerCorsConfiguration("/form-templates/slug/**", publicConfig);
+        source.registerCorsConfiguration("/form-templates/view/**", publicConfig);
         source.registerCorsConfiguration("/form-submissions/**",    publicConfig);
         source.registerCorsConfiguration("/appointments/**",        publicConfig);
         source.registerCorsConfiguration("/attendance/**",          publicConfig);

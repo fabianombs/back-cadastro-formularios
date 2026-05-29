@@ -7,6 +7,13 @@ public record UpdateFormTemplateRequest(
         List<UpdateFormFieldRequest> fields,
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        // Toggles do link de visualização do cliente (null = não alterar)
+        Boolean viewAllowExport,
+        Boolean viewShowSubmissions,
+        Boolean viewShowAttendance,
+        Boolean viewShowAppointments,
+        // Slug personalizado do link do cliente (null = não alterar, ex: "coca-cola")
+        String viewSlug
 ) {
 }

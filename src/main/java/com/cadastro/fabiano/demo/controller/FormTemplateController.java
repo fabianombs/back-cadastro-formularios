@@ -3,6 +3,7 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.ViewConfigRequest;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
 import com.cadastro.fabiano.demo.service.FormTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,6 +64,17 @@ public class FormTemplateController {
         return ResponseEntity.ok(templateService.findBySlug(slug));
     }
 
+    // Endpoint público para a view do cliente — autentica pelo viewToken, sem JWT
+    @GetMapping("/view/{viewToken}")
+    @SecurityRequirements
+    @Operation(summary = "Buscar template por token de visualização do cliente",
+               description = "Endpoint público — retorna configuração e toggles do template para a tela de visualização do cliente")
+    @ApiResponse(responseCode = "200", description = "Template encontrado")
+    @ApiResponse(responseCode = "404", description = "Token inválido")
+    public ResponseEntity<FormTemplateResponse> getByViewToken(@PathVariable String viewToken) {
+        return ResponseEntity.ok(templateService.findByViewToken(viewToken));
+    }
+
     @PatchMapping("/{id}/schedule-config")
     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     @Operation(summary = "Atualizar configuração de agenda", description = "Define ou atualiza os parâmetros de agendamento (horários, duração, capacidade, deduplicação)")
@@ -71,6 +83,16 @@ public class FormTemplateController {
             @RequestBody ScheduleConfigRequest request) {
 
         return ResponseEntity.ok(templateService.updateScheduleConfig(id, request));
+    }
+
+    @PatchMapping("/{id}/view-config")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
+    @Operation(summary = "Atualizar permissões de visualização", description = "Altera os toggles de exportação e visibilidade da tela do cliente")
+    public ResponseEntity<FormTemplateResponse> updateViewConfig(
+            @PathVariable Long id,
+            @RequestBody ViewConfigRequest request) {
+
+        return ResponseEntity.ok(templateService.updateViewConfig(id, request));
     }
 
     @PutMapping("/{id}")
