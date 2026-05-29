@@ -13,6 +13,7 @@ import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.entity.QuizConfig;
 import com.cadastro.fabiano.demo.entity.User;
+import java.util.UUID;
 import com.cadastro.fabiano.demo.repository.AppointmentRepository;
 import com.cadastro.fabiano.demo.repository.AttendanceRecordRepository;
 import com.cadastro.fabiano.demo.repository.ClientRepository;
@@ -151,6 +152,19 @@ public class FormTemplateService {
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
 
+        // Slug do link de visualização — definido pelo admin; obrigatório
+        if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
+            String slug = request.viewSlug().trim().toLowerCase();
+            if (!slug.matches("[a-z0-9-]+")) {
+                throw new IllegalArgumentException("O slug deve conter apenas letras minúsculas, números e hífens.");
+            }
+            if (templateRepository.findByViewToken(slug).isPresent()) {
+                throw new IllegalStateException("Este slug já está em uso por outro formulário.");
+            }
+            template.setViewToken(slug);
+        }
+        // Se não informado, deixa null — o admin define via edição
+
         List<FormField> fields = request.fields().stream()
                 .map(f -> {
                     FormField field = new FormField();
@@ -227,6 +241,26 @@ public class FormTemplateService {
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
 
+        // Aplica toggles de visualização do cliente enviados pelo frontend
+        if (request.viewAllowExport() != null)      template.setViewAllowExport(request.viewAllowExport());
+        if (request.viewShowSubmissions() != null)  template.setViewShowSubmissions(request.viewShowSubmissions());
+        if (request.viewShowAttendance() != null)   template.setViewShowAttendance(request.viewShowAttendance());
+        if (request.viewShowAppointments() != null) template.setViewShowAppointments(request.viewShowAppointments());
+
+        // Slug personalizado do link do cliente (ex: "coca-cola")
+        if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
+            String slug = request.viewSlug().trim().toLowerCase();
+            // Só permite letras, números e hífens — URL-safe e sem ambiguidade
+            if (!slug.matches("[a-z0-9-]+")) {
+                throw new IllegalArgumentException("O slug deve conter apenas letras minúsculas, números e hífens.");
+            }
+            // Verifica unicidade excluindo o próprio template
+            templateRepository.findByViewToken(slug)
+                    .filter(existing -> !existing.getId().equals(template.getId()))
+                    .ifPresent(existing -> { throw new IllegalStateException("Este slug já está em uso por outro formulário."); });
+            template.setViewToken(slug);
+        }
+
         FormTemplate saved = templateRepository.save(template);
 
         // Remove arquivos órfãos do disco (após o save, a contagem já não inclui este template)
@@ -256,6 +290,22 @@ public class FormTemplateService {
         template.setDedupFields(request.dedupFields() != null
                 ? new java.util.HashSet<>(request.dedupFields())
                 : new java.util.HashSet<>());
+
+        return toResponse(templateRepository.save(template));
+    }
+
+    // ==========================
+    // ATUALIZAR VIEW CONFIG
+    // ==========================
+    @Transactional
+    public FormTemplateResponse updateViewConfig(Long templateId, com.cadastro.fabiano.demo.dto.request.ViewConfigRequest request) {
+        FormTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+
+        if (request.viewAllowExport() != null)      template.setViewAllowExport(request.viewAllowExport());
+        if (request.viewShowSubmissions() != null)  template.setViewShowSubmissions(request.viewShowSubmissions());
+        if (request.viewShowAttendance() != null)   template.setViewShowAttendance(request.viewShowAttendance());
+        if (request.viewShowAppointments() != null) template.setViewShowAppointments(request.viewShowAppointments());
 
         return toResponse(templateRepository.save(template));
     }
@@ -293,6 +343,20 @@ public class FormTemplateService {
         FormTemplate template = templateRepository.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
+        return toResponse(template);
+    }
+
+    // ==========================
+    // BUSCAR POR VIEW TOKEN (cliente)
+    // ==========================
+
+    /**
+     * Retorna o template pelo token de visualização do cliente.
+     * Usado pela tela pública read-only — não exige autenticação.
+     */
+    public FormTemplateResponse findByViewToken(String viewToken) {
+        FormTemplate template = templateRepository.findByViewToken(viewToken)
+                .orElseThrow(() -> new RuntimeException("Link de visualização inválido ou expirado"));
         return toResponse(template);
     }
 
@@ -472,7 +536,13 @@ public class FormTemplateService {
                 hasQuiz,
                 quizId,
                 quizLink,
-                rankingLink
+                rankingLink,
+                // Configurações do link de visualização do cliente
+                template.getViewToken(),
+                template.isViewAllowExport(),
+                template.isViewShowSubmissions(),
+                template.isViewShowAttendance(),
+                template.isViewShowAppointments()
         );
     }
 }

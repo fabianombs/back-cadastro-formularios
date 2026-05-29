@@ -20,5 +20,11 @@ public record FormTemplateResponse(
         boolean hasQuiz,
         Long quizId,
         String quizLink,
-        String rankingLink
+        String rankingLink,
+        // Configurações do link de visualização do cliente
+        String viewToken,
+        boolean viewAllowExport,
+        boolean viewShowSubmissions,
+        boolean viewShowAttendance,
+        boolean viewShowAppointments
 ) {}

@@ -19,6 +19,8 @@ public interface FormTemplateRepository extends JpaRepository<FormTemplate, Long
 
     Optional<FormTemplate> findBySlug(String slug);
 
+    Optional<FormTemplate> findByViewToken(String viewToken);
+
     /**
      * Busca o template com PESSIMISTIC_WRITE lock para serializar bookings concorrentes.
      * Garante que apenas um agendamento por slot seja processado por vez.

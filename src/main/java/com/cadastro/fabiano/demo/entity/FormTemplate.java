@@ -145,6 +145,34 @@ public class FormTemplate {
     private String buttonFontSize;
 
     // =====================
+    // LINK DE VISUALIZAÇÃO DO CLIENTE
+    // =====================
+
+    /** Token UUID único que identifica o link público de visualização do cliente */
+    @Column(name = "view_token", unique = true)
+    private String viewToken;
+
+    /** Permite ao cliente exportar Excel na view pública */
+    @Column(name = "view_allow_export", nullable = false)
+    @Builder.Default
+    private boolean viewAllowExport = false;
+
+    /** Exibe a aba de respostas para o cliente */
+    @Column(name = "view_show_submissions", nullable = false)
+    @Builder.Default
+    private boolean viewShowSubmissions = true;
+
+    /** Exibe a aba de presença para o cliente */
+    @Column(name = "view_show_attendance", nullable = false)
+    @Builder.Default
+    private boolean viewShowAttendance = true;
+
+    /** Exibe a aba de agendamentos para o cliente */
+    @Column(name = "view_show_appointments", nullable = false)
+    @Builder.Default
+    private boolean viewShowAppointments = true;
+
+    // =====================
     // LGPD
     // =====================
 

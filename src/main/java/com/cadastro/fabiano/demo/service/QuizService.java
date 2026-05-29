@@ -297,6 +297,13 @@ public class QuizService {
         quiz.setPrimaryColor(request.primaryColor());
         quiz.setTextColor(request.textColor());
         quiz.setCardColor(request.cardColor());
+        quiz.setRegisterCardColor(request.registerCardColor());
+        quiz.setInputColor(request.inputColor());
+        quiz.setRankingCardColor(request.rankingCardColor());
+        quiz.setButtonColor(request.buttonColor());
+        quiz.setButtonTextColor(request.buttonTextColor());
+        quiz.setReadyTitle(request.readyTitle());
+        quiz.setReadyMessage(request.readyMessage());
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -349,7 +356,14 @@ public class QuizService {
                 quiz.getBackgroundImageUrl(),
                 quiz.getPrimaryColor(),
                 quiz.getTextColor(),
-                quiz.getCardColor()
+                quiz.getCardColor(),
+                quiz.getRegisterCardColor(),
+                quiz.getInputColor(),
+                quiz.getRankingCardColor(),
+                quiz.getButtonColor(),
+                quiz.getButtonTextColor(),
+                quiz.getReadyTitle(),
+                quiz.getReadyMessage()
         );
     }
 
