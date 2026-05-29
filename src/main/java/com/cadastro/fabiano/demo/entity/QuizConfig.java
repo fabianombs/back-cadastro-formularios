@@ -57,6 +57,33 @@ public class QuizConfig {
     @Column(name = "card_color")
     private String cardColor;
 
+    // Cor de fundo dos cards de cadastro/ready — independente dos cards de resposta
+    @Column(name = "register_card_color")
+    private String registerCardColor;
+
+    // Cor de fundo dos inputs de cadastro
+    @Column(name = "input_color")
+    private String inputColor;
+
+    // Cor de fundo dos cards do ranking/pódio
+    @Column(name = "ranking_card_color")
+    private String rankingCardColor;
+
+    // Cor do botão principal — null usa primaryColor como fallback
+    @Column(name = "button_color")
+    private String buttonColor;
+
+    // Cor do texto dentro dos botões — null usa #fff como fallback
+    @Column(name = "button_text_color")
+    private String buttonTextColor;
+
+    // Texto editável da tela "Tudo pronto!" — null usa os valores padrão no frontend
+    @Column(name = "ready_title", length = 120)
+    private String readyTitle;
+
+    @Column(name = "ready_message", length = 255)
+    private String readyMessage;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

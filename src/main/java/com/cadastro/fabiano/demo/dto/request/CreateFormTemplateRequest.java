@@ -11,6 +11,8 @@ public record CreateFormTemplateRequest(
         boolean lgpdEnabled,
         String lgpdText,
         // Quiz a vincular imediatamente após criar o template (opcional)
-        Long quizId
+        Long quizId,
+        // Slug personalizado do link de visualização do cliente (ex: "coca-cola")
+        String viewSlug
 ) {
 }

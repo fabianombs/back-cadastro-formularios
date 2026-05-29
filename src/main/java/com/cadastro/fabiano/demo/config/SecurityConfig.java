@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/form-submissions/**").permitAll()
                         .requestMatchers("/forms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/form-templates/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/form-templates/view/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/clients/*/templates").permitAll()
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots").permitAll()
@@ -62,6 +64,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/complete").permitAll()
                         .requestMatchers("/dashboard/**").authenticated()
                         .anyRequest().authenticated()
+                )
+                // Retorna 401 para requests sem token — Spring Security 6 padrão é 403, o que
+                // impede o interceptor Angular de detectar sessão expirada e redirecionar para login
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((req, res, authEx) ->
+                                res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -92,6 +100,7 @@ public class SecurityConfig {
 
         // Rotas consumidas pelos links públicos dos formulários
         source.registerCorsConfiguration("/form-templates/slug/**", publicConfig);
+        source.registerCorsConfiguration("/form-templates/view/**", publicConfig);
         source.registerCorsConfiguration("/form-submissions/**",    publicConfig);
         source.registerCorsConfiguration("/appointments/**",        publicConfig);
         source.registerCorsConfiguration("/attendance/**",          publicConfig);
