@@ -1,0 +1,9 @@
+ALTER TABLE survey_configs ADD COLUMN background_color      VARCHAR(50);
+ALTER TABLE survey_configs ADD COLUMN background_gradient   TEXT;
+ALTER TABLE survey_configs ADD COLUMN background_image_url  TEXT;
+ALTER TABLE survey_configs ADD COLUMN primary_color         VARCHAR(50);
+ALTER TABLE survey_configs ADD COLUMN text_color            VARCHAR(50);
+ALTER TABLE survey_configs ADD COLUMN card_color            VARCHAR(100);
+ALTER TABLE survey_configs ADD COLUMN button_color          VARCHAR(50);
+ALTER TABLE survey_configs ADD COLUMN button_text_color     VARCHAR(50);
+ALTER TABLE survey_configs ADD COLUMN logo_border_radius    VARCHAR(20);

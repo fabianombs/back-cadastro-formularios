@@ -13,6 +13,8 @@ public record CreateFormTemplateRequest(
         // Quiz a vincular imediatamente após criar o template (opcional)
         Long quizId,
         // Slug personalizado do link de visualização do cliente (ex: "coca-cola")
-        String viewSlug
+        String viewSlug,
+        // Pesquisa de satisfação a vincular imediatamente após criar o template (opcional)
+        Long surveyConfigId
 ) {
 }
