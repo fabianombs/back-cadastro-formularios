@@ -26,5 +26,10 @@ public record FormTemplateResponse(
         boolean viewAllowExport,
         boolean viewShowSubmissions,
         boolean viewShowAttendance,
-        boolean viewShowAppointments
+        boolean viewShowAppointments,
+        // Pesquisa de satisfação vinculada
+        boolean hasSurvey,
+        Long surveyId,
+        String surveySlug,
+        String surveyPublicLink
 ) {}

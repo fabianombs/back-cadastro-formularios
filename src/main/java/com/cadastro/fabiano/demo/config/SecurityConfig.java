@@ -62,6 +62,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/quizzes/slug/*/sessions").permitAll()
                         .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/answers").permitAll()
                         .requestMatchers(HttpMethod.POST, "/quizzes/sessions/*/complete").permitAll()
+                        // Endpoints públicos da pesquisa de satisfação
+                        .requestMatchers(HttpMethod.GET,  "/surveys/slug/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/surveys/slug/*/responses").permitAll()
                         .requestMatchers("/dashboard/**").authenticated()
                         .anyRequest().authenticated()
                 )
@@ -107,6 +110,7 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/files/**",               publicConfig);
         source.registerCorsConfiguration("/quizzes/slug/**",        publicConfig);
         source.registerCorsConfiguration("/quizzes/sessions/**",    publicConfig);
+        source.registerCorsConfiguration("/surveys/slug/**",        publicConfig);
 
         // Tudo mais: painel admin, autenticação, criação/edição de templates
         source.registerCorsConfiguration("/**", privateConfig);

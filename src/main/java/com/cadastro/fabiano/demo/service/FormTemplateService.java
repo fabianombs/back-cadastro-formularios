@@ -12,6 +12,7 @@ import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.entity.QuizConfig;
+import com.cadastro.fabiano.demo.entity.SurveyConfig;
 import com.cadastro.fabiano.demo.entity.User;
 import java.util.UUID;
 import com.cadastro.fabiano.demo.repository.AppointmentRepository;
@@ -20,6 +21,7 @@ import com.cadastro.fabiano.demo.repository.ClientRepository;
 import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
 import com.cadastro.fabiano.demo.repository.FormTemplateRepository;
 import com.cadastro.fabiano.demo.repository.QuizConfigRepository;
+import com.cadastro.fabiano.demo.repository.SurveyConfigRepository;
 import com.cadastro.fabiano.demo.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -41,6 +43,7 @@ public class FormTemplateService {
     private final ClientRepository clientRepository;
     private final ImageStorageService imageStorageService;
     private final QuizConfigRepository quizConfigRepository;
+    private final SurveyConfigRepository surveyConfigRepository;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -56,7 +59,8 @@ public class FormTemplateService {
                                UserRepository userRepository,
                                ClientRepository clientRepository,
                                ImageStorageService imageStorageService,
-                               QuizConfigRepository quizConfigRepository) {
+                               QuizConfigRepository quizConfigRepository,
+                               SurveyConfigRepository surveyConfigRepository) {
         this.templateRepository = templateRepository;
         this.submissionRepository = submissionRepository;
         this.appointmentRepository = appointmentRepository;
@@ -65,6 +69,7 @@ public class FormTemplateService {
         this.clientRepository = clientRepository;
         this.imageStorageService = imageStorageService;
         this.quizConfigRepository = quizConfigRepository;
+        this.surveyConfigRepository = surveyConfigRepository;
     }
 
     // ==========================
@@ -193,6 +198,14 @@ public class FormTemplateService {
             });
         }
 
+        // Vincula pesquisa de satisfação imediatamente se selecionada antes de salvar
+        if (request.surveyConfigId() != null) {
+            surveyConfigRepository.findById(request.surveyConfigId()).ifPresent(survey -> {
+                saved.setSurvey(survey);
+                templateRepository.save(saved);
+            });
+        }
+
         return toResponse(saved);
     }
 
@@ -246,6 +259,16 @@ public class FormTemplateService {
         if (request.viewShowSubmissions() != null)  template.setViewShowSubmissions(request.viewShowSubmissions());
         if (request.viewShowAttendance() != null)   template.setViewShowAttendance(request.viewShowAttendance());
         if (request.viewShowAppointments() != null) template.setViewShowAppointments(request.viewShowAppointments());
+
+        // Vinculação de pesquisa de satisfação: 0 = desvincular, >0 = vincular pelo ID
+        if (request.surveyConfigId() != null) {
+            if (request.surveyConfigId() == 0) {
+                template.setSurvey(null);
+            } else {
+                surveyConfigRepository.findById(request.surveyConfigId())
+                        .ifPresent(template::setSurvey);
+            }
+        }
 
         // Slug personalizado do link do cliente (ex: "coca-cola")
         if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
@@ -519,6 +542,13 @@ public class FormTemplateService {
         String quizLink    = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() : null;
         String rankingLink = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() + "/ranking" : null;
 
+        // Pesquisa de satisfação vinculada
+        SurveyConfig survey = template.getSurvey();
+        boolean hasSurvey    = survey != null && survey.getActive();
+        Long surveyId        = survey != null ? survey.getId() : null;
+        String surveySlug    = survey != null ? survey.getSlug() : null;
+        String surveyPublicLink = hasSurvey ? frontendUrl + "/survey/" + survey.getSlug() : null;
+
         return new FormTemplateResponse(
                 template.getId(),
                 template.getName(),
@@ -542,7 +572,12 @@ public class FormTemplateService {
                 template.isViewAllowExport(),
                 template.isViewShowSubmissions(),
                 template.isViewShowAttendance(),
-                template.isViewShowAppointments()
+                template.isViewShowAppointments(),
+                // Pesquisa de satisfação
+                hasSurvey,
+                surveyId,
+                surveySlug,
+                surveyPublicLink
         );
     }
 }
