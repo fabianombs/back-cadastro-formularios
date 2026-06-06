@@ -192,4 +192,9 @@ public class FormTemplate {
     @JoinColumn(name = "quiz_config_id")
     private QuizConfig quiz;
 
+    // Pesquisa de satisfação exibida ao final do fluxo — null quando não vinculada
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "survey_config_id")
+    private SurveyConfig survey;
+
 }

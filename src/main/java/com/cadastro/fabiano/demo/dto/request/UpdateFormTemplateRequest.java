@@ -14,6 +14,8 @@ public record UpdateFormTemplateRequest(
         Boolean viewShowAttendance,
         Boolean viewShowAppointments,
         // Slug personalizado do link do cliente (null = não alterar, ex: "coca-cola")
-        String viewSlug
+        String viewSlug,
+        // ID da pesquisa de satisfação a vincular (null = não alterar, 0 = desvincular)
+        Long surveyConfigId
 ) {
 }
