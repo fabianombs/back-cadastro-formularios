@@ -329,6 +329,7 @@ public class FormTemplateService {
         if (request.viewShowSubmissions() != null)  template.setViewShowSubmissions(request.viewShowSubmissions());
         if (request.viewShowAttendance() != null)   template.setViewShowAttendance(request.viewShowAttendance());
         if (request.viewShowAppointments() != null) template.setViewShowAppointments(request.viewShowAppointments());
+        if (request.viewAllowAttendanceCheck() != null) template.setViewAllowAttendanceCheck(request.viewAllowAttendanceCheck());
 
         return toResponse(templateRepository.save(template));
     }
@@ -573,6 +574,7 @@ public class FormTemplateService {
                 template.isViewShowSubmissions(),
                 template.isViewShowAttendance(),
                 template.isViewShowAppointments(),
+                template.isViewAllowAttendanceCheck(),
                 // Pesquisa de satisfação
                 hasSurvey,
                 surveyId,

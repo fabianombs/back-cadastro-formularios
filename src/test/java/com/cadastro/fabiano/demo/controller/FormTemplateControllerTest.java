@@ -55,7 +55,7 @@ class FormTemplateControllerTest {
                 List.of(), false, false, null, null, null, false, null,
                 false, null, null, null,
                 // view config
-                null, false, true, true, true,
+                null, false, true, true, true, false,
                 // survey
                 false, null, null, null);
     }

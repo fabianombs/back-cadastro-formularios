@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -81,6 +82,14 @@ public class AttendanceService {
         }
 
         template.setHasAttendance(true);
+
+        // Lista de presença é pública por natureza: garante um link de visualização
+        // (/view/:token) sem login. Só gera se ainda não houver token, preservando
+        // slugs personalizados. Escopado aqui para NÃO afetar quiz/formulário/agendamento.
+        if (template.getViewToken() == null || template.getViewToken().isBlank()) {
+            template.setViewToken(UUID.randomUUID().toString());
+        }
+
         templateRepository.save(template);
 
         return attendanceRepository.saveAll(records)

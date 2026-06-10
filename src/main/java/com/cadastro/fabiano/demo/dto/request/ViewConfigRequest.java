@@ -4,5 +4,6 @@ public record ViewConfigRequest(
         Boolean viewAllowExport,
         Boolean viewShowSubmissions,
         Boolean viewShowAttendance,
-        Boolean viewShowAppointments
+        Boolean viewShowAppointments,
+        Boolean viewAllowAttendanceCheck
 ) {}

@@ -172,6 +172,11 @@ public class FormTemplate {
     @Builder.Default
     private boolean viewShowAppointments = true;
 
+    /** Permite ao cliente MARCAR presença na view pública (sem login). Padrão: somente leitura */
+    @Column(name = "view_allow_attendance_check", nullable = false)
+    @Builder.Default
+    private boolean viewAllowAttendanceCheck = false;
+
     // =====================
     // LGPD
     // =====================
