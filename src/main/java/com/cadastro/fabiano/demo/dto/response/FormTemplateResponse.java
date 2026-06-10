@@ -27,6 +27,7 @@ public record FormTemplateResponse(
         boolean viewShowSubmissions,
         boolean viewShowAttendance,
         boolean viewShowAppointments,
+        boolean viewAllowAttendanceCheck,
         // Pesquisa de satisfação vinculada
         boolean hasSurvey,
         Long surveyId,
