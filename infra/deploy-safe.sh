@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-#
 # deploy-safe.sh <jar-novo> <versao>
-#   Ex: sudo ./deploy-safe.sh /home/ec2-user/app.jar 1.0.1
-#
-# Deploy seguro: se o backup nao for possivel, ABORTA antes de tocar no servico
-# (prod fica intacto). Se a nova versao nao subir, faz ROLLBACK automatico.
+# Deploy seguro: falha-segura (aborta antes de tocar no servico se o backup nao for possivel)
+# + health-gate + rollback automatico. Compatível com systemd antigo (sem --value).
 set -uo pipefail
 
 INCOMING_JAR="${1:?Use: deploy-safe.sh <jar-novo> <versao>}"
-VERSION="${2:?informe a versao, ex: 1.0.1}"
+VERSION="${2:?informe a versao, ex: 20260612-1200-abc1234}"
 
 SERVICE="poc-fabiano"
 APP_JAR="/app/app.jar"
@@ -20,19 +17,27 @@ KEEP=8
 
 mkdir -p "$RELEASES"
 
-# Credenciais do banco a partir do ambiente do servico systemd
-genv() { systemctl show "$SERVICE" -p Environment --value | tr ' ' '\n' | grep "^$1=" | head -1 | cut -d= -f2-; }
-DB_URL=$(genv DB_URL); DB_USER=$(genv DB_USER); DB_PASSWORD=$(genv DB_PASSWORD)
+# --- Credenciais do banco do ambiente REAL do processo (cobre Environment= e EnvironmentFile=) ---
+# Prod usa DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD. Sem 'systemctl --value' (systemd antigo).
+PID=$(systemctl show -p MainPID "$SERVICE" 2>/dev/null | cut -d= -f2)
+get() {
+  local key="$1" v=""
+  if [ -n "$PID" ] && [ "$PID" != "0" ] && [ -e "/proc/$PID/environ" ]; then
+    v=$(sudo cat "/proc/$PID/environ" 2>/dev/null | tr '\0' '\n' | grep "^$key=" | head -1 | cut -d= -f2-)
+  fi
+  if [ -z "$v" ]; then
+    v=$(systemctl show -p Environment "$SERVICE" 2>/dev/null | sed -n 's/^Environment=//p' | tr ' ' '\n' | grep "^$key=" | head -1 | cut -d= -f2-)
+  fi
+  echo "$v"
+}
+DB_HOST=$(get DB_HOST); DB_PORT=$(get DB_PORT); [ -z "$DB_PORT" ] && DB_PORT=3306
+DB_NAME=$(get DB_NAME); DB_USER=$(get DB_USER); DB_PASSWORD=$(get DB_PASSWORD)
 
 # GUARDA 1: sem credenciais nao da pra fazer backup -> aborta SEM mexer no servico
-if [ -z "$DB_URL" ] || [ -z "$DB_USER" ]; then
-  echo "ERRO: nao consegui ler DB_URL/DB_USER do servico $SERVICE. Deploy abortado, PROD INTACTO."
-  echo "      (ajuste como o deploy-safe.sh le as credenciais antes de usar no CI)"
+if [ -z "$DB_HOST" ] || [ -z "$DB_NAME" ] || [ -z "$DB_USER" ]; then
+  echo "ERRO: nao consegui ler DB_HOST/DB_NAME/DB_USER do servico $SERVICE. Deploy abortado, PROD INTACTO."
   exit 1
 fi
-DB_HOST=$(echo "$DB_URL" | sed -E 's#jdbc:mysql://([^:/]+).*#\1#')
-DB_PORT=$(echo "$DB_URL" | sed -E 's#jdbc:mysql://[^:/]+:([0-9]+)/.*#\1#'); [ "$DB_PORT" = "$DB_URL" ] && DB_PORT=3306
-DB_NAME=$(echo "$DB_URL" | sed -E 's#.*/([^?]+).*#\1#')
 
 PREV=$(cat /app/CURRENT_VERSION 2>/dev/null || echo "")
 
@@ -42,8 +47,8 @@ mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
 
 # GUARDA 2: backup vazio/falho -> aborta SEM mexer no servico
 if [ ! -s "$RELEASES/db_before_${VERSION}.sql.gz" ]; then
-  echo "ERRO: backup do banco falhou (arquivo vazio). Deploy abortado, PROD INTACTO."
-  cat /tmp/dump.err 2>/dev/null | tail -5
+  echo "ERRO: backup do banco falhou. Deploy abortado, PROD INTACTO."
+  tail -5 /tmp/dump.err 2>/dev/null
   rm -f "$RELEASES/db_before_${VERSION}.sql.gz"
   exit 1
 fi

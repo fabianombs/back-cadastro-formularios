@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-#
-# rollback.sh <versao> [--with-db]   -> volta o app para uma versao ja publicada.
-#   sudo ./rollback.sh 1.0.0             # so o APP (seguro, mantem os dados)
-#   sudo ./rollback.sh 1.0.0 --with-db   # tambem restaura o banco daquela epoca (PERDE dados novos)
+# rollback.sh <versao> [--with-db]
 set -uo pipefail
-
 VERSION="${1:?Use: rollback.sh <versao> [--with-db]}"
 WITH_DB="${2:-}"
 
-SERVICE="poc-fabiano"
-APP_JAR="/app/app.jar"
-APP_USER="appuser"
-RELEASES="/app/releases"
-HEALTH_URL="http://localhost:8080/actuator/health"
+SERVICE="poc-fabiano"; APP_JAR="/app/app.jar"; APP_USER="appuser"
+RELEASES="/app/releases"; HEALTH_URL="http://localhost:8080/actuator/health"
 
 JAR="$RELEASES/app_${VERSION}.jar"
 if [ ! -f "$JAR" ]; then
@@ -30,11 +23,17 @@ if [ "$WITH_DB" = "--with-db" ]; then
   DUMP="$RELEASES/db_before_${VERSION}.sql.gz"
   [ -f "$DUMP" ] || { echo "Dump da $VERSION nao encontrado: $DUMP"; exit 1; }
   echo "!! ATENCAO: restaurando o banco de $VERSION — dados criados depois serao PERDIDOS."
-  genv() { systemctl show "$SERVICE" -p Environment --value | tr ' ' '\n' | grep "^$1=" | head -1 | cut -d= -f2-; }
-  DB_URL=$(genv DB_URL); DB_USER=$(genv DB_USER); DB_PASSWORD=$(genv DB_PASSWORD)
-  DB_HOST=$(echo "$DB_URL" | sed -E 's#jdbc:mysql://([^:/]+).*#\1#')
-  DB_PORT=$(echo "$DB_URL" | sed -E 's#jdbc:mysql://[^:/]+:([0-9]+)/.*#\1#'); [ "$DB_PORT" = "$DB_URL" ] && DB_PORT=3306
-  DB_NAME=$(echo "$DB_URL" | sed -E 's#.*/([^?]+).*#\1#')
+  PID=$(systemctl show -p MainPID "$SERVICE" 2>/dev/null | cut -d= -f2)
+  get() {
+    local key="$1" v=""
+    if [ -n "$PID" ] && [ "$PID" != "0" ] && [ -e "/proc/$PID/environ" ]; then
+      v=$(sudo cat "/proc/$PID/environ" 2>/dev/null | tr '\0' '\n' | grep "^$key=" | head -1 | cut -d= -f2-)
+    fi
+    [ -z "$v" ] && v=$(systemctl show -p Environment "$SERVICE" 2>/dev/null | sed -n 's/^Environment=//p' | tr ' ' '\n' | grep "^$key=" | head -1 | cut -d= -f2-)
+    echo "$v"
+  }
+  DB_HOST=$(get DB_HOST); DB_PORT=$(get DB_PORT); [ -z "$DB_PORT" ] && DB_PORT=3306
+  DB_NAME=$(get DB_NAME); DB_USER=$(get DB_USER); DB_PASSWORD=$(get DB_PASSWORD)
   mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction "$DB_NAME" \
     | gzip > "$RELEASES/db_safety_$(date +%Y%m%d_%H%M%S).sql.gz"
   gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
