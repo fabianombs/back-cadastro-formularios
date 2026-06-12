@@ -177,6 +177,23 @@ public class FormTemplate {
     @Builder.Default
     private boolean viewAllowAttendanceCheck = false;
 
+    // Visibilidade das colunas internas da lista de presenca
+    @Column(name = "attendance_show_companions", nullable = false)
+    @Builder.Default
+    private boolean attendanceShowCompanions = true;
+
+    @Column(name = "attendance_show_presence", nullable = false)
+    @Builder.Default
+    private boolean attendanceShowPresence = true;
+
+    @Column(name = "attendance_show_notes", nullable = false)
+    @Builder.Default
+    private boolean attendanceShowNotes = true;
+
+    @Column(name = "attendance_show_marked_at", nullable = false)
+    @Builder.Default
+    private boolean attendanceShowMarkedAt = true;
+
     // =====================
     // LGPD
     // =====================
