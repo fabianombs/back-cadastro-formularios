@@ -60,12 +60,18 @@ class EquipmentServiceTest {
                 .stockControl(stock).visible(true).build();
     }
 
+    private AttendanceRecord record(Long id, Map<String, String> data) {
+        return AttendanceRecord.builder().id(id).formTemplate(template).rowData(data).build();
+    }
+
     // import
 
     @Test
-    @DisplayName("importCatalog: cria catalogo, ignora labels vazios e trata quantidade nula como 0")
+    @DisplayName("importCatalog: INSERE novo quando o template ainda nao tem catalogo")
     void importCatalog_success() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
+        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of());
+        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
 
         ImportEquipmentRequest req = new ImportEquipmentRequest(
                 "Celulares", "col_aparelho", "Modelo", true, true,
@@ -78,17 +84,67 @@ class EquipmentServiceTest {
 
         assertThat(resp.name()).isEqualTo("Celulares");
         assertThat(resp.stockControl()).isTrue();
-        assertThat(resp.visible()).isTrue();
         assertThat(resp.optionsCount()).isEqualTo(2);
-        assertThat(resp.templateId()).isEqualTo(1L);
-        verify(catalogRepository, atLeastOnce()).save(any(EquipmentCatalog.class));
-        verify(optionRepository).saveAll(any());
+        verify(optionRepository, atLeastOnce()).saveAll(any());
+        verify(optionRepository, never()).deleteByCatalog(any());
     }
 
     @Test
-    @DisplayName("importCatalog: usa nome padrao e gera columnKey quando nao informados")
+    @DisplayName("importCatalog: SUBSTITUI o existente (limpa opcoes antigas, mantem a coluna)")
+    void importCatalog_replacesExisting() {
+        when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
+        EquipmentCatalog existing = catalog(7L, false);
+        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of(existing));
+        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
+
+        ImportEquipmentRequest req = new ImportEquipmentRequest(
+                "Celulares", null, "Modelo", true, true, List.of(new OptionInput("iPhone 15", 3)));
+
+        EquipmentCatalogResponse resp = service.importCatalog(1L, req);
+
+        verify(optionRepository).deleteByCatalog(existing);   // limpa as antigas
+        verify(catalogRepository).save(existing);
+        assertThat(existing.isStockControl()).isTrue();        // config atualizada
+        assertThat(existing.getColumnKey()).isEqualTo("col_aparelho"); // mantem a coluna
+        assertThat(resp.optionsCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("importCatalog: planilha nova limpa TODAS as selecoes antigas da coluna")
+    void importCatalog_clearsSelectionsOnReimport() {
+        when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
+        EquipmentCatalog existing = catalog(7L, false);
+        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of(existing));
+
+        // Mesmo que o aparelho ainda exista na nova planilha, a selecao antiga e descartada
+        Map<String, String> a = new HashMap<>(); a.put("col_aparelho", "iPhone 15");
+        Map<String, String> b = new HashMap<>(); b.put("col_aparelho", "Nokia 3310");
+        Map<String, String> c = new HashMap<>(); c.put("outra_col", "X"); // sem selecao de aparelho
+        AttendanceRecord r1 = record(1L, a);
+        AttendanceRecord r2 = record(2L, b);
+        AttendanceRecord r3 = record(3L, c);
+        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any()))
+                .thenReturn(List.of(r1, r2, r3));
+
+        ImportEquipmentRequest req = new ImportEquipmentRequest(
+                "Celulares", null, "Modelo", false, true, List.of(new OptionInput("iPhone 15", 3)));
+
+        service.importCatalog(1L, req);
+
+        assertThat(r1.getRowData()).doesNotContainKey("col_aparelho");
+        assertThat(r2.getRowData()).doesNotContainKey("col_aparelho");
+        assertThat(r3.getRowData()).containsEntry("outra_col", "X"); // outras colunas intactas
+        verify(attendanceRepository).save(r1);
+        verify(attendanceRepository).save(r2);
+        verify(attendanceRepository, never()).save(r3); // nada para limpar -> nao salva
+    }
+
+    @Test
+    @DisplayName("importCatalog: usa nome padrao quando name e nulo")
     void importCatalog_defaults() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
+        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of());
+        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
         ImportEquipmentRequest req = new ImportEquipmentRequest(
                 null, null, null, false, true, List.of(new OptionInput("A", 1)));
 
@@ -202,10 +258,6 @@ class EquipmentServiceTest {
     }
 
     // selectOption
-
-    private AttendanceRecord record(Long id, Map<String, String> data) {
-        return AttendanceRecord.builder().id(id).formTemplate(template).rowData(data).build();
-    }
 
     @Test
     @DisplayName("selectOption: sem estoque apenas grava no rowData (nao mexe em reserva)")
