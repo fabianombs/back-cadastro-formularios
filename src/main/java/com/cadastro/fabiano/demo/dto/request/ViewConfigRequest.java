@@ -5,5 +5,10 @@ public record ViewConfigRequest(
         Boolean viewShowSubmissions,
         Boolean viewShowAttendance,
         Boolean viewShowAppointments,
-        Boolean viewAllowAttendanceCheck
+        Boolean viewAllowAttendanceCheck,
+        // Visibilidade das colunas internas da lista de presenca
+        Boolean attendanceShowCompanions,
+        Boolean attendanceShowPresence,
+        Boolean attendanceShowNotes,
+        Boolean attendanceShowMarkedAt
 ) {}

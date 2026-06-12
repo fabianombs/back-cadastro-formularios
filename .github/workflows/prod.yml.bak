@@ -71,46 +71,53 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to EC2 (safe)
+    name: Deploy to EC2
     needs: build-and-test
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Gerar versao automatica (data + commit)
-        id: ver
-        run: |
-          VER="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "Versao deste deploy: $VER"
-
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
           name: app-jar
           path: target/
 
-      - name: Enviar JAR + scripts via SCP
+      - name: Deploy JAR via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          source:   "target/*.jar,infra/deploy-safe.sh,infra/rollback.sh"
-          target:   "/home/ec2-user/deploy/"
-          strip_components: 0
+          source: "target/*.jar"
+          target:   "/home/ec2-user/"
+          strip_components: 1
 
-      - name: Deploy seguro (backup + health-gate + rollback)
+      - name: Move JAR, restart service via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e
-            sudo mkdir -p /app
-            sudo cp /home/ec2-user/deploy/infra/deploy-safe.sh /app/deploy-safe.sh
-            sudo cp /home/ec2-user/deploy/infra/rollback.sh   /app/rollback.sh
-            sudo chmod +x /app/deploy-safe.sh /app/rollback.sh
-            JAR=$(ls -t /home/ec2-user/deploy/target/*.jar | head -1)
-            sudo /app/deploy-safe.sh "$JAR" "${{ steps.ver.outputs.version }}"
+            # Pega o JAR enviado (qualquer nome)
+            JAR_FILE=$(ls /home/ec2-user/*.jar | head -n 1)
+
+            if [ -z "$JAR_FILE" ]; then
+              echo "ERRO: Nenhum JAR encontrado em /home/ec2-user/"
+              exit 1
+            fi
+
+            echo "JAR encontrado: $JAR_FILE"
+
+            sudo systemctl stop poc-fabiano || true
+
+            # Move e padroniza nome
+            sudo mv $JAR_FILE /app/app.jar
+
+            sudo chown appuser:appuser /app/app.jar
+
+            sudo systemctl start poc-fabiano
+
+            sleep 8
+
+            systemctl is-active poc-fabiano && echo "Deploy OK" || (sudo journalctl -u poc-fabiano -n 50; exit 1)
