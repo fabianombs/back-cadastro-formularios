@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/appointments/template/*/slots/range").permitAll()
                         .requestMatchers(HttpMethod.POST, "/appointments/book").permitAll()
                         .requestMatchers("/attendance/**").permitAll()
+                        .requestMatchers("/equipment/**").permitAll()
                         .requestMatchers("/appointments/**").permitAll()
                         // Endpoints públicos do quiz (jogador + ranking)
                         .requestMatchers(HttpMethod.GET,  "/quizzes/slug/**").permitAll()
@@ -107,6 +108,7 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/form-submissions/**",    publicConfig);
         source.registerCorsConfiguration("/appointments/**",        publicConfig);
         source.registerCorsConfiguration("/attendance/**",          publicConfig);
+        source.registerCorsConfiguration("/equipment/**",           publicConfig);
         source.registerCorsConfiguration("/files/**",               publicConfig);
         source.registerCorsConfiguration("/quizzes/slug/**",        publicConfig);
         source.registerCorsConfiguration("/quizzes/sessions/**",    publicConfig);

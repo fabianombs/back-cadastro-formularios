@@ -56,6 +56,8 @@ class FormTemplateControllerTest {
                 false, null, null, null,
                 // view config
                 null, false, true, true, true, false,
+                // colunas da lista de presenca (4 flags)
+                true, true, true, true,
                 // survey
                 false, null, null, null);
     }

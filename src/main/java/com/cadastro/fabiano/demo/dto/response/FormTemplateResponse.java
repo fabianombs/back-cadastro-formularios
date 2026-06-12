@@ -28,6 +28,11 @@ public record FormTemplateResponse(
         boolean viewShowAttendance,
         boolean viewShowAppointments,
         boolean viewAllowAttendanceCheck,
+        // Visibilidade das colunas internas da lista de presenca
+        boolean attendanceShowCompanions,
+        boolean attendanceShowPresence,
+        boolean attendanceShowNotes,
+        boolean attendanceShowMarkedAt,
         // Pesquisa de satisfação vinculada
         boolean hasSurvey,
         Long surveyId,
