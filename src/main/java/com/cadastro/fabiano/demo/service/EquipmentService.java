@@ -41,34 +41,62 @@ public class EquipmentService {
     }
 
     /**
-     * Importa o catalogo de equipamentos (2a planilha) ja agregado pelo frontend
-     * em valores distintos (label + quantidade). Cada importacao cria um catalogo novo,
-     * que ja define a coluna de select da lista (columnKey + visible).
+     * Importa o catalogo de equipamentos (2a planilha). SUBSTITUI a planilha:
+     * trocar a planilha equivale a uma planilha nova — reaproveita o catalogo
+     * existente do template (so para manter a mesma coluna), troca nome/config e
+     * as opcoes pelas da nova planilha, remove qualquer catalogo extra e LIMPA
+     * todas as selecoes ja feitas naquela coluna (cadastros antigos sao perdidos).
      */
     @Transactional
     public EquipmentCatalogResponse importCatalog(Long templateId, ImportEquipmentRequest request) {
         FormTemplate template = findTemplate(templateId);
+        String name = request.name() != null ? request.name().trim() : "Equipamentos";
 
-        EquipmentCatalog catalog = EquipmentCatalog.builder()
-                .formTemplate(template)
-                .name(request.name() != null ? request.name().trim() : "Equipamentos")
-                .columnKey(request.columnKey() != null ? request.columnKey().trim() : null)
-                .sourceColumn(request.sourceColumn())
-                .stockControl(request.stockControl())
-                .visible(request.visible())
-                .build();
+        List<EquipmentCatalog> existing = catalogRepository.findByFormTemplateOrderByCreatedAtAsc(template);
+        EquipmentCatalog catalog;
+
+        if (!existing.isEmpty()) {
+            // Reaproveita o primeiro e descarta os demais (consolida em um so)
+            catalog = existing.get(0);
+            for (int i = 1; i < existing.size(); i++) {
+                optionRepository.deleteByCatalog(existing.get(i));
+                catalogRepository.delete(existing.get(i));
+            }
+            optionRepository.deleteByCatalog(catalog); // limpa as opcoes antigas
+            catalog.setName(name);
+            catalog.setSourceColumn(request.sourceColumn());
+            catalog.setStockControl(request.stockControl());
+            catalog.setVisible(request.visible());
+            // mantem a columnKey atual (continuidade da coluna); so troca se vier explicita
+            if (request.columnKey() != null && !request.columnKey().isBlank()) {
+                catalog.setColumnKey(request.columnKey().trim());
+            }
+        } else {
+            catalog = EquipmentCatalog.builder()
+                    .formTemplate(template)
+                    .name(name)
+                    .columnKey(request.columnKey() != null ? request.columnKey().trim() : null)
+                    .sourceColumn(request.sourceColumn())
+                    .stockControl(request.stockControl())
+                    .visible(request.visible())
+                    .build();
+        }
         catalogRepository.save(catalog);
 
-        // columnKey estavel: se o front nao mandar, gera a partir do id (evita colisao no rowData)
+        // columnKey estavel: se ainda nao tem, gera a partir do id (evita colisao no rowData)
         if (catalog.getColumnKey() == null || catalog.getColumnKey().isBlank()) {
             catalog.setColumnKey("equip_" + catalog.getId());
             catalogRepository.save(catalog);
         }
 
+        // Planilha nova = comeca zerado: apaga as selecoes antigas dessa coluna
+        clearSelections(template, catalog.getColumnKey());
+
+        final EquipmentCatalog saved = catalog;
         List<EquipmentOption> options = request.options().stream()
                 .filter(o -> o.label() != null && !o.label().isBlank())
                 .map(o -> EquipmentOption.builder()
-                        .catalog(catalog)
+                        .catalog(saved)
                         .label(o.label().trim())
                         // sem quantidade informada -> 0 (estoque ilimitado quando controle desligado)
                         .totalQty(o.quantity() == null ? 0 : Math.max(0, o.quantity()))
@@ -77,7 +105,25 @@ public class EquipmentService {
                 .toList();
         optionRepository.saveAll(options);
 
-        return EquipmentCatalogResponse.from(catalog, options.size());
+        return EquipmentCatalogResponse.from(saved, options.size());
+    }
+
+    /**
+     * Remove a selecao de equipamento (coluna colKey) de todas as linhas da lista
+     * de presenca do template. Usado ao re-importar a planilha: como e uma planilha
+     * nova, os cadastros antigos daquela coluna sao descartados.
+     */
+    private void clearSelections(FormTemplate template, String colKey) {
+        if (colKey == null || colKey.isBlank()) {
+            return;
+        }
+        for (AttendanceRecord rec : attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template)) {
+            Map<String, String> data = rec.getRowData();
+            if (data != null && data.remove(colKey) != null) {
+                rec.setRowData(data);
+                attendanceRepository.save(rec);
+            }
+        }
     }
 
     // readOnly garante a sessao aberta para ler options (lazy) sem LazyInitializationException
