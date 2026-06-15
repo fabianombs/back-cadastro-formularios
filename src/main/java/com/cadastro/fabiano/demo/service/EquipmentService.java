@@ -41,56 +41,32 @@ public class EquipmentService {
     }
 
     /**
-     * Importa o catalogo de equipamentos (2a planilha). SUBSTITUI a planilha:
-     * trocar a planilha equivale a uma planilha nova — reaproveita o catalogo
-     * existente do template (so para manter a mesma coluna), troca nome/config e
-     * as opcoes pelas da nova planilha, remove qualquer catalogo extra e LIMPA
-     * todas as selecoes ja feitas naquela coluna (cadastros antigos sao perdidos).
+     * Importa uma planilha de equipamentos como uma NOVA coluna de select na lista
+     * de presenca. Cada import cria seu proprio catalogo: varias planilhas convivem
+     * (ex. uma de celulares, outra de notebooks) e um novo import nunca sobrescreve
+     * os anteriores. A columnKey e derivada do id para nao colidir no rowData.
      */
     @Transactional
     public EquipmentCatalogResponse importCatalog(Long templateId, ImportEquipmentRequest request) {
         FormTemplate template = findTemplate(templateId);
         String name = request.name() != null ? request.name().trim() : "Equipamentos";
 
-        List<EquipmentCatalog> existing = catalogRepository.findByFormTemplateOrderByCreatedAtAsc(template);
-        EquipmentCatalog catalog;
-
-        if (!existing.isEmpty()) {
-            // Reaproveita o primeiro e descarta os demais (consolida em um so)
-            catalog = existing.get(0);
-            for (int i = 1; i < existing.size(); i++) {
-                optionRepository.deleteByCatalog(existing.get(i));
-                catalogRepository.delete(existing.get(i));
-            }
-            optionRepository.deleteByCatalog(catalog); // limpa as opcoes antigas
-            catalog.setName(name);
-            catalog.setSourceColumn(request.sourceColumn());
-            catalog.setStockControl(request.stockControl());
-            catalog.setVisible(request.visible());
-            // mantem a columnKey atual (continuidade da coluna); so troca se vier explicita
-            if (request.columnKey() != null && !request.columnKey().isBlank()) {
-                catalog.setColumnKey(request.columnKey().trim());
-            }
-        } else {
-            catalog = EquipmentCatalog.builder()
-                    .formTemplate(template)
-                    .name(name)
-                    .columnKey(request.columnKey() != null ? request.columnKey().trim() : null)
-                    .sourceColumn(request.sourceColumn())
-                    .stockControl(request.stockControl())
-                    .visible(request.visible())
-                    .build();
-        }
+        EquipmentCatalog catalog = EquipmentCatalog.builder()
+                .formTemplate(template)
+                .name(name)
+                .columnKey(request.columnKey() != null && !request.columnKey().isBlank()
+                        ? request.columnKey().trim() : null)
+                .sourceColumn(request.sourceColumn())
+                .stockControl(request.stockControl())
+                .visible(request.visible())
+                .build();
         catalogRepository.save(catalog);
 
-        // columnKey estavel: se ainda nao tem, gera a partir do id (evita colisao no rowData)
+        // columnKey estavel: se nao veio explicita, gera a partir do id (evita colisao no rowData)
         if (catalog.getColumnKey() == null || catalog.getColumnKey().isBlank()) {
             catalog.setColumnKey("equip_" + catalog.getId());
             catalogRepository.save(catalog);
         }
-
-        // Planilha nova = comeca zerado: apaga as selecoes antigas dessa coluna
-        clearSelections(template, catalog.getColumnKey());
 
         final EquipmentCatalog saved = catalog;
         List<EquipmentOption> options = request.options().stream()
@@ -110,8 +86,8 @@ public class EquipmentService {
 
     /**
      * Remove a selecao de equipamento (coluna colKey) de todas as linhas da lista
-     * de presenca do template. Usado ao re-importar a planilha: como e uma planilha
-     * nova, os cadastros antigos daquela coluna sao descartados.
+     * de presenca do template. Usado ao remover (X) o catalogo: a coluna some junto
+     * com os valores ja escolhidos pelos clientes.
      */
     private void clearSelections(FormTemplate template, String colKey) {
         if (colKey == null || colKey.isBlank()) {
@@ -165,7 +141,9 @@ public class EquipmentService {
 
     @Transactional
     public void deleteCatalog(Long catalogId) {
-        findCatalog(catalogId);
+        EquipmentCatalog catalog = findCatalog(catalogId);
+        // X da planilha: remove a coluna e os valores ja escolhidos dessa lista de presenca
+        clearSelections(catalog.getFormTemplate(), catalog.getColumnKey());
         catalogRepository.deleteById(catalogId);
     }
 
