@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -70,8 +71,6 @@ class EquipmentServiceTest {
     @DisplayName("importCatalog: INSERE novo quando o template ainda nao tem catalogo")
     void importCatalog_success() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
-        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of());
-        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
 
         ImportEquipmentRequest req = new ImportEquipmentRequest(
                 "Celulares", "col_aparelho", "Modelo", true, true,
@@ -90,61 +89,43 @@ class EquipmentServiceTest {
     }
 
     @Test
-    @DisplayName("importCatalog: SUBSTITUI o existente (limpa opcoes antigas, mantem a coluna)")
-    void importCatalog_replacesExisting() {
+    @DisplayName("importCatalog: cria catalogo NOVO mesmo quando ja existe um (nao sobrescreve)")
+    void importCatalog_createsNewEvenWhenExists() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
-        EquipmentCatalog existing = catalog(7L, false);
-        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of(existing));
-        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
 
         ImportEquipmentRequest req = new ImportEquipmentRequest(
-                "Celulares", null, "Modelo", true, true, List.of(new OptionInput("iPhone 15", 3)));
+                "Notebooks", null, "Modelo", true, true, List.of(new OptionInput("Dell XPS", 3)));
 
         EquipmentCatalogResponse resp = service.importCatalog(1L, req);
 
-        verify(optionRepository).deleteByCatalog(existing);   // limpa as antigas
-        verify(catalogRepository).save(existing);
-        assertThat(existing.isStockControl()).isTrue();        // config atualizada
-        assertThat(existing.getColumnKey()).isEqualTo("col_aparelho"); // mantem a coluna
+        // Cada import e uma coluna propria: nunca reaproveita nem apaga catalogos existentes
+        ArgumentCaptor<EquipmentCatalog> captor = ArgumentCaptor.forClass(EquipmentCatalog.class);
+        verify(catalogRepository, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Notebooks");
+        verify(optionRepository, never()).deleteByCatalog(any());
+        verify(catalogRepository, never()).delete(any());
         assertThat(resp.optionsCount()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("importCatalog: planilha nova limpa TODAS as selecoes antigas da coluna")
-    void importCatalog_clearsSelectionsOnReimport() {
+    @DisplayName("importCatalog: NAO mexe nas selecoes ja feitas (planilha nova = coluna nova)")
+    void importCatalog_doesNotTouchSelections() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
-        EquipmentCatalog existing = catalog(7L, false);
-        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of(existing));
-
-        // Mesmo que o aparelho ainda exista na nova planilha, a selecao antiga e descartada
-        Map<String, String> a = new HashMap<>(); a.put("col_aparelho", "iPhone 15");
-        Map<String, String> b = new HashMap<>(); b.put("col_aparelho", "Nokia 3310");
-        Map<String, String> c = new HashMap<>(); c.put("outra_col", "X"); // sem selecao de aparelho
-        AttendanceRecord r1 = record(1L, a);
-        AttendanceRecord r2 = record(2L, b);
-        AttendanceRecord r3 = record(3L, c);
-        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any()))
-                .thenReturn(List.of(r1, r2, r3));
 
         ImportEquipmentRequest req = new ImportEquipmentRequest(
                 "Celulares", null, "Modelo", false, true, List.of(new OptionInput("iPhone 15", 3)));
 
         service.importCatalog(1L, req);
 
-        assertThat(r1.getRowData()).doesNotContainKey("col_aparelho");
-        assertThat(r2.getRowData()).doesNotContainKey("col_aparelho");
-        assertThat(r3.getRowData()).containsEntry("outra_col", "X"); // outras colunas intactas
-        verify(attendanceRepository).save(r1);
-        verify(attendanceRepository).save(r2);
-        verify(attendanceRepository, never()).save(r3); // nada para limpar -> nao salva
+        // import nao percorre nem salva registros de presenca
+        verify(attendanceRepository, never()).findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any());
+        verify(attendanceRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("importCatalog: usa nome padrao quando name e nulo")
     void importCatalog_defaults() {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
-        when(catalogRepository.findByFormTemplateOrderByCreatedAtAsc(any())).thenReturn(List.of());
-        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any())).thenReturn(List.of());
         ImportEquipmentRequest req = new ImportEquipmentRequest(
                 null, null, null, false, true, List.of(new OptionInput("A", 1)));
 
@@ -242,10 +223,22 @@ class EquipmentServiceTest {
     }
 
     @Test
-    @DisplayName("deleteCatalog: remove quando existe")
+    @DisplayName("deleteCatalog: remove o catalogo e limpa a coluna das linhas de presenca")
     void deleteCatalog_success() {
         when(catalogRepository.findById(10L)).thenReturn(Optional.of(catalog(10L, false)));
+        Map<String, String> a = new HashMap<>(); a.put("col_aparelho", "iPhone 15");
+        Map<String, String> b = new HashMap<>(); b.put("outra_col", "X");
+        AttendanceRecord r1 = record(1L, a);
+        AttendanceRecord r2 = record(2L, b);
+        when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(any()))
+                .thenReturn(List.of(r1, r2));
+
         service.deleteCatalog(10L);
+
+        assertThat(r1.getRowData()).doesNotContainKey("col_aparelho"); // coluna some
+        assertThat(r2.getRowData()).containsEntry("outra_col", "X");    // outras intactas
+        verify(attendanceRepository).save(r1);
+        verify(attendanceRepository, never()).save(r2);
         verify(catalogRepository).deleteById(10L);
     }
 
