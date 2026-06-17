@@ -60,7 +60,8 @@ class FormTemplateControllerTest {
                 // colunas da lista de presenca (4 flags)
                 true, true, true, true,
                 // survey
-                false, null, null, null);
+                false, null, null, null,
+                "MEDIUM");
     }
 
     @Test
