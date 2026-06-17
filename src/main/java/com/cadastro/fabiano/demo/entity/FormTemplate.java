@@ -177,6 +177,11 @@ public class FormTemplate {
     @Builder.Default
     private boolean viewAllowAttendanceCheck = false;
 
+    /** Permite ao cliente ADICIONAR convidado na view pública (botão "+ Convidado"). Padrão: oculto */
+    @Column(name = "view_allow_add_guest", nullable = false)
+    @Builder.Default
+    private boolean viewAllowAddGuest = false;
+
     // Visibilidade das colunas internas da lista de presenca
     @Column(name = "attendance_show_companions", nullable = false)
     @Builder.Default
