@@ -28,6 +28,7 @@ public record FormTemplateResponse(
         boolean viewShowAttendance,
         boolean viewShowAppointments,
         boolean viewAllowAttendanceCheck,
+        boolean viewAllowAddGuest,
         // Visibilidade das colunas internas da lista de presenca
         boolean attendanceShowCompanions,
         boolean attendanceShowPresence,
