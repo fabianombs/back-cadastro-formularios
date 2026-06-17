@@ -335,6 +335,7 @@ public class FormTemplateService {
         if (request.attendanceShowMarkedAt() != null)   template.setAttendanceShowMarkedAt(request.attendanceShowMarkedAt());
         if (request.viewAllowAttendanceCheck() != null) template.setViewAllowAttendanceCheck(request.viewAllowAttendanceCheck());
         if (request.viewAllowAddGuest() != null)        template.setViewAllowAddGuest(request.viewAllowAddGuest());
+        if (request.attendanceFontScale() != null)      template.setAttendanceFontScale(request.attendanceFontScale());
 
         return toResponse(templateRepository.save(template));
     }
@@ -589,7 +590,8 @@ public class FormTemplateService {
                 hasSurvey,
                 surveyId,
                 surveySlug,
-                surveyPublicLink
+                surveyPublicLink,
+                template.getAttendanceFontScale()
         );
     }
 }

@@ -7,6 +7,7 @@ public record ViewConfigRequest(
         Boolean viewShowAppointments,
         Boolean viewAllowAttendanceCheck,
         Boolean viewAllowAddGuest,
+        String attendanceFontScale,
         // Visibilidade das colunas internas da lista de presenca
         Boolean attendanceShowCompanions,
         Boolean attendanceShowPresence,

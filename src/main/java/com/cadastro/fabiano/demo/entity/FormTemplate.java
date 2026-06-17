@@ -182,6 +182,11 @@ public class FormTemplate {
     @Builder.Default
     private boolean viewAllowAddGuest = false;
 
+    /** Tamanho base da fonte da lista de presença (preset: SMALL/MEDIUM/LARGE/XLARGE). A view ajusta por dispositivo. */
+    @Column(name = "attendance_font_scale", nullable = false, length = 16)
+    @Builder.Default
+    private String attendanceFontScale = "MEDIUM";
+
     // Visibilidade das colunas internas da lista de presenca
     @Column(name = "attendance_show_companions", nullable = false)
     @Builder.Default

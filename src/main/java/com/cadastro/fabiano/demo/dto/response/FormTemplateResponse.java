@@ -38,5 +38,6 @@ public record FormTemplateResponse(
         boolean hasSurvey,
         Long surveyId,
         String surveySlug,
-        String surveyPublicLink
+        String surveyPublicLink,
+        String attendanceFontScale
 ) {}
