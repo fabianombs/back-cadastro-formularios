@@ -56,6 +56,7 @@ class FormTemplateControllerTest {
                 false, null, null, null,
                 // view config
                 null, false, true, true, true, false,
+                false, // viewAllowAddGuest
                 // colunas da lista de presenca (4 flags)
                 true, true, true, true,
                 // survey

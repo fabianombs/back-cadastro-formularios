@@ -334,6 +334,7 @@ public class FormTemplateService {
         if (request.attendanceShowNotes() != null)      template.setAttendanceShowNotes(request.attendanceShowNotes());
         if (request.attendanceShowMarkedAt() != null)   template.setAttendanceShowMarkedAt(request.attendanceShowMarkedAt());
         if (request.viewAllowAttendanceCheck() != null) template.setViewAllowAttendanceCheck(request.viewAllowAttendanceCheck());
+        if (request.viewAllowAddGuest() != null)        template.setViewAllowAddGuest(request.viewAllowAddGuest());
 
         return toResponse(templateRepository.save(template));
     }
@@ -579,6 +580,7 @@ public class FormTemplateService {
                 template.isViewShowAttendance(),
                 template.isViewShowAppointments(),
                 template.isViewAllowAttendanceCheck(),
+                template.isViewAllowAddGuest(),
                 template.isAttendanceShowCompanions(),
                 template.isAttendanceShowPresence(),
                 template.isAttendanceShowNotes(),
