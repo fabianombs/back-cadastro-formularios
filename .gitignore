@@ -41,6 +41,7 @@ infra/terraform/*.tfvars
 infra/terraform/.terraform.lock.hcl
 *.tfstate
 *.tfstate.backup
+*.bak
 
 ### Segredos ###
 .env
