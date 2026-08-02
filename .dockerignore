@@ -1,0 +1,32 @@
+# Reduz o contexto enviado ao daemon do Docker e evita vazar segredo na imagem
+target/
+.git/
+.github/
+.mvn/wrapper/maven-wrapper.jar
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+
+# Uploads locais nao entram na imagem (em prod as imagens vao para o S3)
+uploads/
+
+# Infra e documentacao nao fazem parte do runtime
+infra/
+*.md
+!README.md
+
+# NUNCA copiar segredo para dentro da imagem
+.env
+*.env
+*.pem
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Artefatos de logs e testes
+logs/
+*.log
+diagnostico-aws.txt
+blindagem-aws.txt

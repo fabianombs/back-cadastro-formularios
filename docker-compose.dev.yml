@@ -1,0 +1,74 @@
+# =============================================================================
+# Ambiente de desenvolvimento local (FABIANO-19)
+# =============================================================================
+# Sobe MySQL 8.4 (a versao alvo da migracao) + Dozzle para ver logs.
+# Nao toca em nada de producao.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down          # para
+#   docker compose -f docker-compose.dev.yml down -v       # para e apaga o banco
+# =============================================================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: fabiano-mysql-dev
+    restart: unless-stopped
+    # 3307 no host para nao brigar com um MySQL instalado direto no Windows.
+    # Licao do back-resulta: perfil dev apontando para 3306 enquanto o compose
+    # expoe 3307 faz a IDE nunca conectar, e o erro nao e obvio.
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: teste_fabiano_cadastro2
+    command:
+      # utf8mb4 explicito para bater com o charset de producao
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql84_dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Banco descartavel so para o teste de migracao do Flyway.
+  # Separado do de cima para poder derrubar e recriar do zero sem perder o
+  # banco de trabalho do dia a dia.
+  mysql-migracao:
+    image: mysql:8.4
+    container_name: fabiano-mysql84-migracao
+    profiles: ["migracao"]        # so sobe com --profile migracao
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fabiano_migracao_check
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    # Sem volume: cada 'up' comeca com o banco vazio, que e exatamente o que o
+    # teste de migracao precisa.
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: fabiano-dozzle
+    restart: unless-stopped
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+
+volumes:
+  mysql84_dev:

@@ -57,7 +57,7 @@ class AttendanceControllerTest {
                 id, 1L, Map.of("Nome", "João"),
                 false, null, null,
                 0, List.of(),
-                1, LocalDateTime.now());
+                1, LocalDateTime.now(), LocalDateTime.now());
     }
 
     @Test

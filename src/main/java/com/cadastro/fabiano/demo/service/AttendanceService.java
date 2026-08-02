@@ -140,6 +140,8 @@ public class AttendanceService {
         AttendanceRecord record = attendanceRepository.findById(recordId)
                 .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
         record.setRowData(rowData);
+        // Marca quando a linha foi preenchida/editada na tabela (coluna "Preenchido em")
+        record.setFilledAt(LocalDateTime.now());
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -237,6 +239,7 @@ public class AttendanceService {
                 .attended(false)
                 .companionsCount(0)
                 .rowOrder((int) nextOrder)
+                .filledAt(LocalDateTime.now()) // convidado público preencheu a linha ao se cadastrar
                 .build();
 
         return toResponse(attendanceRepository.save(record));
@@ -291,7 +294,8 @@ public class AttendanceService {
                 companions.size(),
                 companions,
                 r.getRowOrder(),
-                r.getCreatedAt()
+                r.getCreatedAt(),
+                r.getFilledAt()
         );
     }
 }
