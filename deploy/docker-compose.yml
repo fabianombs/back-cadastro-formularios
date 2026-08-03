@@ -1,0 +1,129 @@
+# =============================================================================
+# Stack de producao — backend + nginx (FABIANO-14)
+#
+# Roda na EC2, em /home/ec2-user/fabiano/deploy/.
+# Substitui o par systemd + JAR solto que existe hoje (poc-fabiano.service).
+#
+# Uso:
+#   docker compose config      # valida sem subir nada
+#   docker compose up -d       # sobe; nginx so entra depois do backend healthy
+#   docker compose ps          # confere o estado de saude
+#
+# O arquivo .env fica ao lado deste, com permissao 600, e NUNCA entra no Git.
+# Use o .env.example como molde.
+# =============================================================================
+
+# Nome do projeto fixo. Sem esta linha o Compose usa o nome do DIRETORIO, e
+# rodar o comando de outro lugar criaria uma segunda stack paralela, com rede e
+# containers duplicados apontando para o mesmo banco.
+name: fabiano
+
+services:
+
+  backend:
+    # A tag vem do .env para que o rollback seja so trocar BACKEND_TAG e subir
+    # de novo — sem rebuild, sem depender do que 'latest' aponta no momento.
+    image: ghcr.io/${GHCR_OWNER}/fabiano-back:${BACKEND_TAG:-latest}
+    container_name: fabiano-backend
+    restart: unless-stopped
+    # 'always' garante que um deploy que reusa a mesma tag ainda assim busque a
+    # imagem nova do registry, em vez de subir a copia local antiga.
+    pull_policy: always
+
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+    # Sem 'ports:' de proposito. O backend so e alcancavel pela rede interna do
+    # compose — quem fala com a internet e o nginx, que termina o TLS. Publicar
+    # 8080 no host deixaria a aplicacao acessivel em HTTP puro pelo IP da EC2,
+    # contornando o certificado.
+    expose:
+      - "8080"
+
+    volumes:
+      # Os anexos gravados antes da migracao para o S3 ainda estao neste
+      # diretorio da EC2. Bind mount, e nao volume nomeado, porque os arquivos
+      # ja existem la e precisam continuar sendo os mesmos.
+      # O container roda como uid 100 / gid 101 — o diretorio no host precisa
+      # pertencer a esse par, senao qualquer upload novo falha por permissao.
+      - ${UPLOAD_HOST_DIR:-/app/uploads}:/app/uploads
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # 90s porque o Spring Boot leva 8-15s para subir e o Flyway pode demorar
+      # bem mais numa migration nova. Sem essa folga o container e declarado
+      # unhealthy antes de terminar o boot e o deploy dispara rollback a toa.
+      start_period: 90s
+
+    # Teto de memoria do container. A JVM le esse teto (MaxRAMPercentage=70 no
+    # Dockerfile) e dimensiona o heap por ele. Sem o teto a JVM enxerga a RAM do
+    # host inteiro e o OOM killer aparece quando Prometheus, Loki e Grafana
+    # estiverem dividindo a mesma maquina.
+    mem_limit: ${BACKEND_MEM_LIMIT:-700m}
+
+    # Sem isto o json-file cresce sem limite e enche o disco da instancia — que
+    # e pequeno. Ja aconteceu de o volume de WARN ser o maior consumidor.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+    networks: [internal]
+
+  nginx:
+    # 1.28 e nao 1.27 (que o esqueleto do card pedia): o nginx do host da EC2 e
+    # 1.28.2. Rebaixar versao numa migracao ja arriscada seria risco de graca.
+    image: nginx:1.28-alpine
+    container_name: fabiano-nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Fora do conf.d de proposito: o nginx carrega todo *.conf de la como
+      # bloco de servidor, e este arquivo tem so cabecalhos de proxy.
+      - ./nginx/proxy-common.conf:/etc/nginx/proxy-common.conf:ro
+      # Traz cert, chave, options-ssl-nginx.conf e ssl-dhparams.pem de uma vez.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Webroot do desafio HTTP-01. Mesmo caminho absoluto dentro e fora do
+      # container de proposito: o certbot continua rodando no HOST e escrevendo
+      # aqui, entao a migracao para container nao mexeu em nada do certbot.
+      # Read-only porque o nginx so le — quem escreve e o certbot, no host.
+      - /var/www/certbot:/var/www/certbot:ro
+
+    # O nginx so sobe depois que o backend responde UP. Isso evita a janela em
+    # que o site esta no ar devolvendo 502 para todo mundo.
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+    networks: [internal]
+
+networks:
+  # Rede propria e nomeada: a stack de observabilidade (FABIANO-21 em diante)
+  # entra nela como 'external' para conseguir raspar o /actuator/prometheus do
+  # backend sem que nada disso precise ser publicado no host.
+  internal:
+    name: fabiano-internal
+    driver: bridge
