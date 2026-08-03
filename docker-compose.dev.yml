@@ -176,6 +176,25 @@ services:
       # depende de internet.
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Envio de alerta por e-mail (FABIANO-28). Nenhum segredo mora aqui:
+      # tudo vem do ambiente. Com SMTP_ENABLED em false - o padrao - o Grafana
+      # nao envia nada e os alertas ficam visiveis apenas na tela de Alerting.
+      # Esse e o comportamento seguro para desenvolvimento: melhor nao enviar
+      # do que enviar para o lugar errado enquanto se testa.
+      GF_SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${SMTP_HOST:-}
+      GF_SMTP_USER: ${SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_FROM:-alertas@nexventa.com.br}
+      GF_SMTP_FROM_NAME: Nexventa - Alertas
+      # Destinatario dos alertas, lido pelo contact-points.yaml.
+      # PRECISA de um valor: o Grafana valida que endereco de e-mail nao pode
+      # ser vazio e, se for, REJEITA O ARQUIVO INTEIRO de contatos - o que
+      # derruba junto as 8 regras de alerta. O padrao abaixo e proposital e
+      # inofensivo: com GF_SMTP_ENABLED em false nada e enviado, e os alertas
+      # ficam visiveis na tela de Alerting. Troque pelo endereco real junto
+      # com as variaveis de SMTP.
+      ALERTA_EMAIL: ${ALERTA_EMAIL:-alertas@localhost}
     depends_on:
       prometheus:
         condition: service_healthy

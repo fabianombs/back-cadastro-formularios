@@ -216,26 +216,70 @@ class AuthServiceTest {
         assertThat(contagemLogin("falha_credenciais")).isZero();
     }
 
+    // ─── usuário inativo (FABIANO-35) ─────────────────────────────────────────
+
     @Test
-    @DisplayName("métricas: login de usuário inativo é contado como sucesso_usuario_inativo")
-    void metrica_loginUsuarioInativo() {
-        // O login nao verifica a flag active - a autenticacao e feita a mao e
-        // nunca passa pelo isEnabled() do UserDetails. Este teste trava o
-        // comportamento ATUAL e torna a falha visivel na metrica. Quando a
-        // verificacao for implementada, este teste deve ser trocado por um que
-        // exija a recusa.
+    @DisplayName("login: usuário inativo é recusado mesmo com a senha correta")
+    void login_usuarioInativo_recusado() {
+        // A senha esta CERTA de proposito: e o unico jeito de provar que a
+        // recusa veio da flag active e nao da credencial.
         User inativo = User.builder()
                 .id(9L).username("desligado").password("hash").active(false)
                 .role(Role.ROLE_ADMIN).build();
 
         when(userRepository.findByUsername("desligado")).thenReturn(Optional.of(inativo));
         when(passwordEncoder.matches("senha", "hash")).thenReturn(true);
-        when(jwtService.generateToken(any(), eq(9L))).thenReturn("jwt-token");
 
-        AuthResponse resposta = authService.login(new LoginRequest("desligado", "senha"));
+        assertThatThrownBy(() -> authService.login(new LoginRequest("desligado", "senha")))
+                .isInstanceOf(RuntimeException.class)
+                // Mesma mensagem da senha errada: de fora nao da para descobrir
+                // que o usuario existe e esta desligado.
+                .hasMessage("Invalid credentials");
 
-        assertThat(resposta.token()).isEqualTo("jwt-token");
-        assertThat(contagemLogin("sucesso_usuario_inativo")).isEqualTo(1d);
+        // Nenhum token pode ter sido emitido.
+        verifyNoInteractions(jwtService);
+
+        assertThat(contagemLogin("falha_usuario_inativo")).isEqualTo(1d);
         assertThat(contagemLogin("sucesso")).isZero();
+        assertThat(contagemLogin("sucesso_usuario_inativo")).isZero();
+    }
+
+    @Test
+    @DisplayName("login: usuário ativo continua entrando normalmente")
+    void login_usuarioAtivo_entra() {
+        User ativo = User.builder()
+                .id(1L).username("fabiano").password("hash").active(true)
+                .role(Role.ROLE_ADMIN).build();
+
+        when(userRepository.findByUsername("fabiano")).thenReturn(Optional.of(ativo));
+        when(passwordEncoder.matches("senha123", "hash")).thenReturn(true);
+        when(jwtService.generateToken(any(), eq(1L))).thenReturn("jwt-token");
+
+        assertThat(authService.login(new LoginRequest("fabiano", "senha123")).token())
+                .isEqualTo("jwt-token");
+
+        assertThat(contagemLogin("sucesso")).isEqualTo(1d);
+        assertThat(contagemLogin("falha_usuario_inativo")).isZero();
+    }
+
+    @Test
+    @DisplayName("login: active nulo (linha antiga do banco) é tratado como ativo")
+    void login_activeNulo_entra() {
+        // A coluna nasceu como "active BOOLEAN DEFAULT TRUE" (V1), aceitando
+        // nulo. Se nulo fosse lido como inativo, a correcao derrubaria usuarios
+        // antigos que nunca foram desligados por ninguem.
+        User semFlag = User.builder()
+                .id(7L).username("antigo").password("hash").active(null)
+                .role(Role.ROLE_FUNCIONARIO).build();
+
+        when(userRepository.findByUsername("antigo")).thenReturn(Optional.of(semFlag));
+        when(passwordEncoder.matches("senha", "hash")).thenReturn(true);
+        when(jwtService.generateToken(any(), eq(7L))).thenReturn("jwt-token");
+
+        assertThat(authService.login(new LoginRequest("antigo", "senha")).token())
+                .isEqualTo("jwt-token");
+
+        assertThat(contagemLogin("sucesso")).isEqualTo(1d);
+        assertThat(contagemLogin("falha_usuario_inativo")).isZero();
     }
 }

@@ -96,7 +96,7 @@ jobs:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          source:   "target/*.jar,infra/deploy-safe.sh,infra/rollback.sh"
+          source:   "target/*.jar,infra/deploy-safe.sh,infra/rollback.sh,infra/backup-db.sh,infra/enviar-backup-email.py"
           target:   "/home/ec2-user/deploy/"
           strip_components: 0
 
@@ -109,8 +109,26 @@ jobs:
           script: |
             set -e
             sudo mkdir -p /app
-            sudo cp /home/ec2-user/deploy/infra/deploy-safe.sh /app/deploy-safe.sh
-            sudo cp /home/ec2-user/deploy/infra/rollback.sh   /app/rollback.sh
-            sudo chmod +x /app/deploy-safe.sh /app/rollback.sh
+
+            # Os scripts sao editados no Windows: CRLF quebra o shebang no
+            # Linux com o erro enganoso "bad interpreter: /usr/bin/env bash^M".
+            sed -i 's/\r$//' /home/ec2-user/deploy/infra/*.sh /home/ec2-user/deploy/infra/*.py
+
+            sudo cp /home/ec2-user/deploy/infra/deploy-safe.sh         /app/deploy-safe.sh
+            sudo cp /home/ec2-user/deploy/infra/rollback.sh            /app/rollback.sh
+            sudo cp /home/ec2-user/deploy/infra/backup-db.sh           /app/backup-db.sh
+            sudo cp /home/ec2-user/deploy/infra/enviar-backup-email.py /app/enviar-backup-email.py
+            sudo chmod +x /app/deploy-safe.sh /app/rollback.sh /app/backup-db.sh /app/enviar-backup-email.py
+
+            sudo touch /var/log/backup-db.log
+            sudo chown ec2-user /var/log/backup-db.log
+
+            # Cron do backup diario as 03:30 de Brasilia (06:30 UTC).
+            # Idempotente: apaga a linha antiga antes de gravar, entao rodar o
+            # deploy 50 vezes nao cria 50 entradas no crontab.
+            ( sudo crontab -l 2>/dev/null | grep -v 'backup-db.sh' ; \
+              echo "30 6 * * * /app/backup-db.sh >> /var/log/backup-db.log 2>&1" ) \
+              | sudo crontab -
+
             JAR=$(ls -t /home/ec2-user/deploy/target/*.jar | head -1)
             sudo /app/deploy-safe.sh "$JAR" "${{ steps.ver.outputs.version }}"

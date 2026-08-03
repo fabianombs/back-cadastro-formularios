@@ -1,0 +1,493 @@
+# =============================================================================
+# Alertas do Grafana (FABIANO-28)
+# =============================================================================
+# Provisionado por arquivo: alerta criado pela tela some quando o volume
+# some, e nao passa por revisao de codigo.
+#
+# ATENCAO ao job: o card FABIANO-28 escreveu job="fabiano-backend", mas o
+# job real no prometheus.yml e "fabiano-back". Regra com job errado nunca
+# dispara - e nunca avisa que nao esta disparando.
+#
+# Alertas do card que ainda NAO da para escrever, e o motivo:
+#   - Certificado SSL expirando: nao ha coletor de certificado; precisa do blackbox_exporter ou de um monitor externo
+#   - Backup atrasado: nao existe metrica de idade do backup; depende do FABIANO-20
+#   - Disco enchendo: precisa do node-exporter, que nao foi subido (FABIANO-23)
+#   - RDS com CPU alta: precisa do CloudWatch, bloqueado por falta de credencial AWS
+#
+# Alerta apoiado em metrica inexistente fica eternamente em No Data. Como
+# No Data dispara nas regras criticas, ele viraria alarme falso perpetuo -
+# o jeito mais rapido de fazer todo mundo ignorar os alertas.
+# =============================================================================
+apiVersion: 1
+groups:
+- orgId: 1
+  name: fabiano-critico
+  folder: Fabiano
+  interval: 1m
+  rules:
+  - uid: fabiano-aplicacao-fora
+    title: Aplicacao fora do ar
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: max(up{job="fabiano-back"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 2m
+    annotations:
+      summary: A aplicacao parou de responder a coleta de metricas.
+      description: 'A metrica up esta em 0 ha mais de 2 minutos. Isso significa UMA de duas coisas: a
+        aplicacao caiu, ou o Prometheus perdeu acesso a ela (token, rede, timeout). Comece por http://localhost:9091/targets,
+        que diz o motivo exato. Sem dado nenhum tambem dispara - de proposito, porque silencio aqui e
+        indistinguivel de queda.'
+      runbook_url: http://localhost:3000/d/fabiano-overview
+    labels:
+      severidade: critico
+    isPaused: false
+- orgId: 1
+  name: fabiano-alto
+  folder: Fabiano
+  interval: 1m
+  rules:
+  - uid: fabiano-erro-5xx
+    title: Taxa de erro 5xx acima de 5%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * sum(rate(http_server_requests_seconds_count{job="fabiano-back",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count{job="fabiano-back"}[5m])), 0.001)
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: Mais de 5% das requisicoes estao falhando por erro do sistema.
+      description: Erro 5xx e falha que o sistema nao tratou. Abra a tela Tecnico e veja a tabela 'Rotas
+        com mais erro' para saber onde. Depois use a tela Logs filtrando por ERROR no mesmo intervalo
+        - o rastro completo esta la.
+      runbook_url: http://localhost:3000/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-latencia
+    title: Latencia p95 acima de 3 segundos
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="fabiano-back",uri!~"/actuator.*"}[5m])))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 3
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: 95% das requisicoes estao levando mais de 3 segundos.
+      description: 'Sem o /actuator na conta, entao mede o que o usuario sente. Cheque nesta ordem: ''Conexoes
+        do HikariCP'' (fila de espera acima de zero indica banco), ''Threads do Tomcat'' (pool cheio trava
+        tudo) e ''Pausa de GC'' (memoria).'
+      runbook_url: http://localhost:3000/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-heap
+    title: Memoria da aplicacao acima de 85%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * sum(jvm_memory_used_bytes{job="fabiano-back",area="heap"}) / clamp_min(sum(jvm_memory_max_bytes{job="fabiano-back",area="heap"}),
+          1)
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 85
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: A memoria da aplicacao esta perto do limite.
+      description: A instancia e uma t2.micro com 1 GB e swap, e ja tem historico de OOM killer semanal.
+        Heap encostando no teto por tempo prolongado e o quadro que antecede a queda. Se acontecer junto
+        com pausa de GC subindo, e vazamento de memoria, nao pico de uso.
+      runbook_url: http://localhost:3000/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-pool-banco
+    title: Requisicoes esperando conexao com o banco
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: max(hikaricp_connections_pending{job="fabiano-back"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: Ha requisicoes paradas na fila esperando conexao com o RDS.
+      description: Fila acima de zero por 5 minutos significa que o pool nao esta dando conta. Ou o pool
+        e pequeno demais, ou existe consulta lenta segurando conexao. O painel 'Tempo para obter conexao'
+        separa os dois casos.
+      runbook_url: http://localhost:3000/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-forca-bruta
+    title: Muitas falhas de login em pouco tempo
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: sum(increase(auth_login_total{job="fabiano-back",resultado=~"falha.*"}[5m]))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 20
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: Mais de 20 tentativas de login recusadas em 5 minutos.
+      description: 'Pode ser forca bruta. Abra a tela Logs, escolha AuthService em Origem, e veja os nomes
+        de usuario tentados: se forem nomes que nao existem (admin, root, teste), e varredura automatizada.
+        Se for sempre o mesmo usuario real, provavelmente e alguem que esqueceu a senha.'
+      runbook_url: http://localhost:3000/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-erro-no-log
+    title: Erros aparecendo no log
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: loki-fabiano
+      model:
+        refId: A
+        expr: sum(count_over_time({application="fabiano-back", nivel="ERROR"}[5m]))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: loki
+          uid: loki-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: A aplicacao registrou erro no log.
+      description: ERROR e o unico nivel que deveria ficar permanentemente em zero. Diferente do alerta
+        de 5xx, este pega tambem erro que nao virou resposta HTTP - falha em tarefa de fundo, por exemplo.
+        A tela Logs mostra a linha completa com o rastro.
+      runbook_url: http://localhost:3000/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
+- orgId: 1
+  name: fabiano-medio
+  folder: Fabiano
+  interval: 1m
+  rules:
+  - uid: fabiano-sem-submissao
+    title: Nenhum formulario enviado em horario comercial
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: sum(increase(formulario_submissao_total{job="fabiano-back",resultado="sucesso"}[2h]))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: Duas horas sem nenhum envio de formulario, em horario util.
+      description: 'O alerta mais sutil e um dos mais valiosos: detecta o fracasso silencioso, quando
+        o sistema responde 200 em tudo mas ninguem consegue mais enviar. Confirme na tela Produto, no
+        painel ''Funil: aberturas x envios'' - se as aberturas continuam e os envios estao em zero, o
+        formulario quebrou. Se os dois estao em zero, foi so um periodo parado.'
+      runbook_url: http://localhost:3000/d/fabiano-produto
+    labels:
+      severidade: medio
+    isPaused: false
+    notification_settings:
+      receiver: email-equipe
+      mute_time_intervals:
+      - fora-do-horario-comercial

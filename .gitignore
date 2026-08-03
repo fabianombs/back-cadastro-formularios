@@ -53,6 +53,11 @@ credentials
 
 ### Docker / deploy ###
 logs/
+
+# Pasta de descarte: a ponte com a maquina do usuario nao consegue
+# apagar arquivo, entao o que sai do projeto e movido para ca ate ser
+# removido a mao. Nunca deve entrar em commit.
+_to_delete/
 uploads/
 backups/
 

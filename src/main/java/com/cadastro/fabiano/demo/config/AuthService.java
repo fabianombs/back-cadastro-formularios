@@ -97,7 +97,7 @@ public class AuthService {
      * @param request credenciais (username e password)
      * @return {@link AuthResponse} contendo o token JWT gerado
      * @throws NoSuchElementException se o usuário não existir
-     * @throws RuntimeException se a senha estiver incorreta
+     * @throws RuntimeException se a senha estiver incorreta ou o usuário estiver inativo
      */
     public AuthResponse login(LoginRequest request) {
 
@@ -127,20 +127,26 @@ public class AuthService {
 
         }
 
-        // ACHADO: este login nao verifica a flag active. Como a autenticacao e
-        // feita a mao e nao pelo AuthenticationManager, o isEnabled() do
-        // UserDetails nunca e consultado - usuario desativado entra normalmente.
-        // Aqui o comportamento NAO foi alterado de proposito; a metrica torna o
-        // problema visivel para que a correcao seja uma decisao deliberada.
-        boolean inativo = Boolean.FALSE.equals(user.getActive());
+        // A autenticacao aqui e feita a mao e nao pelo AuthenticationManager,
+        // entao o isEnabled() do UserDetails nunca e consultado - a flag active
+        // precisa ser conferida explicitamente, senao usuario desligado entra.
+        //
+        // active == null e tratado como ATIVO de proposito: a coluna nasceu como
+        // "active BOOLEAN DEFAULT TRUE" (V1), aceitando nulo, e linhas antigas
+        // podem estar assim. Tratar nulo como inativo derrubaria esses usuarios.
+        if (Boolean.FALSE.equals(user.getActive())) {
 
-        if (inativo) {
-            contar(METRICA_LOGIN, "sucesso_usuario_inativo");
-            log.warn("Login concedido a usuario INATIVO - a flag active nao e verificada. username={}",
-                    request.username());
-        } else {
-            contar(METRICA_LOGIN, "sucesso");
+            contar(METRICA_LOGIN, "falha_usuario_inativo");
+            log.warn("Login recusado: usuario inativo. username={}", request.username());
+
+            // Mesma excecao e mesma mensagem da senha errada. Responder "usuario
+            // inativo" confirmaria para quem esta de fora que aquele usuario
+            // existe; a distincao fica so no log e na metrica, que sao internos.
+            throw new RuntimeException("Invalid credentials");
+
         }
+
+        contar(METRICA_LOGIN, "sucesso");
 
         String token = jwtService.generateToken(user, user.getId());
 

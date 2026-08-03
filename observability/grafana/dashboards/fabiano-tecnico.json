@@ -977,7 +977,7 @@
       "type": "timeseries",
       "id": 15,
       "title": "Logins por minuto, por resultado",
-      "description": "Rotulos vindos do AuthService: sucesso, sucesso_usuario_inativo, falha_credenciais e falha_usuario_inexistente.",
+      "description": "Rotulos vindos do AuthService: sucesso, falha_credenciais, falha_usuario_inexistente e falha_usuario_inativo. Tudo que comeca com falha_ conta como falha nos paineis de proporcao.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-fabiano"

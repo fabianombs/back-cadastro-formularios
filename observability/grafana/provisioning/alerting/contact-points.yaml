@@ -1,0 +1,22 @@
+# =============================================================================
+# Destino das notificacoes (FABIANO-28)
+# =============================================================================
+# O endereco vem da variavel de ambiente ALERTA_EMAIL e nao entra no
+# repositorio. Sem ela definida, o Grafana provisiona o contato com
+# destinatario vazio e nenhum e-mail sai - o alerta continua visivel na
+# tela de Alerting, mas ninguem e avisado.
+#
+# O envio depende do SMTP configurado no proprio Grafana (GF_SMTP_*).
+# =============================================================================
+apiVersion: 1
+contactPoints:
+- orgId: 1
+  name: email-equipe
+  receivers:
+  - uid: email-equipe
+    type: email
+    settings:
+      addresses: $ALERTA_EMAIL
+      singleEmail: false
+      subject: '[Nexventa] {{ .CommonLabels.severidade | toUpper }} - {{ .CommonAnnotations.summary }}'
+    disableResolveMessage: false
