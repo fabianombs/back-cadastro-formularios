@@ -101,7 +101,7 @@ A API estará disponível em `http://localhost:8080`.
 | `SPRING_DATASOURCE_URL` | URL JDBC do MySQL | — (ver `application-dev.properties`) |
 | `SPRING_DATASOURCE_USERNAME` | Usuário do banco | — |
 | `SPRING_DATASOURCE_PASSWORD` | Senha do banco | — |
-| `JWT_SECRET` | Chave HMAC-256 para assinar tokens | `MinhaChaveSuperSecretaMuitoForte123456` |
+| `JWT_SECRET` | Chave HMAC-256 para assinar tokens. **Obrigatória fora do perfil `dev`** | só no perfil `dev` |
 | `JWT_EXPIRATION` | Validade do token em ms | `86400000` (24h) |
 | `CORS_ALLOWED_ORIGINS` | Origens permitidas para o painel admin | `http://localhost:4200` |
 | `UPLOAD_DIR` | Diretório de upload de imagens | `uploads` |
