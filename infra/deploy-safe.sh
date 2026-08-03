@@ -171,7 +171,7 @@ FLYWAY_ANTES=$($MYSQL_Q -e "SELECT COALESCE(MAX(installed_rank),0) FROM flyway_s
 # PIPESTATUS[0] captura o exit code do mysqldump, nao o do gzip.
 # Sem isso, um mysqldump que falha some atras de um gzip que "deu certo".
 mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
-  --single-transaction --routines --triggers "$DB_NAME" 2>/tmp/dump.err | gzip -9 > "$DB_BACKUP"
+  --single-transaction --set-gtid-purged=OFF --routines --triggers "$DB_NAME" 2>/tmp/dump.err | gzip -9 > "$DB_BACKUP"
 DUMP_RC=${PIPESTATUS[0]}
 
 # GUARDA 2a: o mysqldump reclamou?

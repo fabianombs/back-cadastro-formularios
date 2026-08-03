@@ -78,7 +78,7 @@ log "iniciando backup -> $ARQ"
 # PIPESTATUS[0] pega o codigo do mysqldump, nao o do gzip.
 # Sem isso um mysqldump que falha some atras de um gzip bem-sucedido.
 mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" \
-  --single-transaction --routines --triggers "$DB_NAME" 2>/tmp/backup-dump.err \
+  --single-transaction --set-gtid-purged=OFF --routines --triggers "$DB_NAME" 2>/tmp/backup-dump.err \
   | gzip -9 > "$ARQ"
 RC=${PIPESTATUS[0]}
 
