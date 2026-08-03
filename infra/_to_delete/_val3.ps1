@@ -532,16 +532,13 @@ Testar "Identificador enviado pelo cliente e reaproveitado" {
 Testar "Identificador malformado do cliente e descartado" {
     # O valor vem de fora: sem filtro, daria para injetar conteudo forjado no
     # log ou mandar um valor gigante em toda requisicao.
-    # Sem quebra de linha no valor: o proprio cliente HTTP recusaria antes de
-    # sair da maquina, e o teste nao provaria nada sobre o filtro. O que se
-    # testa aqui e espaco, simbolo e comprimento.
-    $sujo = "valor invalido com espacos, (parenteses) e comprimento " + ("x" * 200)
+    $sujo = "quebra`nde-linha e 200 caracteres " + ("x" * 200)
     $r = Invoke-WebRequest "$API/actuator/health" -UseBasicParsing `
             -Headers @{ "X-Request-Id" = $sujo }
     $id = CabecalhoDaResposta $r "X-Request-Id"
     if ($id -eq $sujo) { throw "o valor sujo do cliente foi aceito" }
     if ($id.Length -gt 64) { throw "identificador com $($id.Length) caracteres" }
-    if ($id -notmatch '^[A-Za-z0-9_-]+$') { throw "identificador com caractere fora do permitido: '$id'" }
+    if ($id -notmatch "^[A-Za-z0-9_-]+$") { throw "identificador com caractere fora do permitido: '$id'" }
 }
 
 # -----------------------------------------------------------------------------

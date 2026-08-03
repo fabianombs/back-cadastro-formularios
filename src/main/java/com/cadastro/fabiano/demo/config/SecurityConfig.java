@@ -93,7 +93,10 @@ public class SecurityConfig {
         publicConfig.setAllowedOriginPatterns(List.of("*"));
         // DELETE necessário para remover acompanhantes via painel (endpoint público)
         publicConfig.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
-        publicConfig.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        publicConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
+        // Sem expor, o navegador esconde o header da resposta e o front nao
+        // consegue mostrar o identificador para o usuario relatar um erro.
+        publicConfig.setExposedHeaders(List.of("X-Request-Id"));
         publicConfig.setAllowCredentials(false);
 
         // ── Endpoints privados (admin, criação de templates, etc.) ────────────
@@ -101,7 +104,10 @@ public class SecurityConfig {
         CorsConfiguration privateConfig = new CorsConfiguration();
         privateConfig.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
         privateConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        privateConfig.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        privateConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id"));
+        // Sem expor, o navegador esconde o header da resposta e o front nao
+        // consegue mostrar o identificador para o usuario relatar um erro.
+        privateConfig.setExposedHeaders(List.of("X-Request-Id"));
         privateConfig.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

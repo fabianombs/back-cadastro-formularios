@@ -454,33 +454,6 @@ Testar "Tags application e environment em todas as metricas" {
     }
 }
 
-Testar "Contadores de login expostos (FABIANO-24)" {
-    if (-not $script:metricas) { return "AVISO" }
-    # A secao [2] ja exercitou login com senha certa e com senha errada, entao
-    # os dois resultados tem que estar registrados. Se o contador nao aparecer,
-    # a instrumentacao do AuthService nao chegou ao registry.
-    if ($script:metricas -notmatch "auth_login_total") {
-        throw "auth_login_total ausente - AuthService nao instrumentado?"
-    }
-    foreach ($r in @("sucesso", "falha_credenciais")) {
-        if ($script:metricas -notmatch ('resultado="' + $r + '"')) {
-            throw "sem amostra com resultado=$r"
-        }
-    }
-}
-
-Testar "Nenhum dado pessoal virou rotulo de metrica" {
-    if (-not $script:metricas) { return "AVISO" }
-    # Identificador de pessoa como rotulo e dado pessoal no monitoramento e
-    # cardinalidade sem teto: mil usuarios virariam mil series temporais.
-    $linhasAuth = ($script:metricas -split "`n") | Where-Object { $_ -match "^auth_" }
-    foreach ($proibido in @("username=", "email=", "cpf=", "usuario=")) {
-        $vazou = $linhasAuth | Where-Object { $_ -match [regex]::Escape($proibido) }
-        if ($vazou) { throw "rotulo proibido nas metricas de auth: $proibido" }
-    }
-    Write-Host ("`n      {0} linhas auth_* conferidas" -f $linhasAuth.Count) -ForegroundColor DarkGray -NoNewline
-}
-
 Testar "Histograma de latencia habilitado (buckets p95/p99)" {
     if (-not $script:metricas) { return "AVISO" }
     # O bucket so existe com percentiles-histogram ligado. Se a propriedade
@@ -492,56 +465,6 @@ Testar "Histograma de latencia habilitado (buckets p95/p99)" {
     $les = @($achados | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
     Write-Host ("`n      {0} limites de bucket" -f $les.Count) -ForegroundColor DarkGray -NoNewline
     if ($les.Count -lt 5) { throw "so $($les.Count) limites - esperava os SLOs configurados" }
-}
-
-# -----------------------------------------------------------------------------
-Secao "[13] Correlacao de requisicao (FABIANO-26)"
-# -----------------------------------------------------------------------------
-# Invoke-WebRequest, e nao Invoke-RestMethod: so ele expoe os cabecalhos da
-# resposta. -UseBasicParsing evita a dependencia do motor do Internet Explorer
-# no PowerShell 5.1.
-
-function CabecalhoDaResposta($resp, $nome) {
-    if (-not $resp.Headers.ContainsKey($nome)) { return $null }
-    return (@($resp.Headers[$nome]) -join "")
-}
-
-Testar "Resposta traz o header X-Request-Id" {
-    $r = Invoke-WebRequest "$API/actuator/health" -UseBasicParsing -TimeoutSec 10
-    $id = CabecalhoDaResposta $r "X-Request-Id"
-    if (-not $id) { throw "header ausente - o RequestIdFilter nao esta na cadeia" }
-    if ($id.Length -lt 8) { throw "identificador suspeito: '$id'" }
-    Write-Host ("`n      {0}" -f $id) -ForegroundColor DarkGray -NoNewline
-}
-
-Testar "Cada requisicao recebe um identificador diferente" {
-    $a = CabecalhoDaResposta (Invoke-WebRequest "$API/actuator/health" -UseBasicParsing) "X-Request-Id"
-    $b = CabecalhoDaResposta (Invoke-WebRequest "$API/actuator/health" -UseBasicParsing) "X-Request-Id"
-    if ($a -eq $b) { throw "duas requisicoes com o mesmo id: $a" }
-}
-
-Testar "Identificador enviado pelo cliente e reaproveitado" {
-    # Permite rastrear a mesma chamada atravessando sistemas.
-    $meu = "teste-correlacao-12345"
-    $r = Invoke-WebRequest "$API/actuator/health" -UseBasicParsing `
-            -Headers @{ "X-Request-Id" = $meu }
-    $id = CabecalhoDaResposta $r "X-Request-Id"
-    if ($id -ne $meu) { throw "esperava '$meu', veio '$id'" }
-}
-
-Testar "Identificador malformado do cliente e descartado" {
-    # O valor vem de fora: sem filtro, daria para injetar conteudo forjado no
-    # log ou mandar um valor gigante em toda requisicao.
-    # Sem quebra de linha no valor: o proprio cliente HTTP recusaria antes de
-    # sair da maquina, e o teste nao provaria nada sobre o filtro. O que se
-    # testa aqui e espaco, simbolo e comprimento.
-    $sujo = "valor invalido com espacos, (parenteses) e comprimento " + ("x" * 200)
-    $r = Invoke-WebRequest "$API/actuator/health" -UseBasicParsing `
-            -Headers @{ "X-Request-Id" = $sujo }
-    $id = CabecalhoDaResposta $r "X-Request-Id"
-    if ($id -eq $sujo) { throw "o valor sujo do cliente foi aceito" }
-    if ($id.Length -gt 64) { throw "identificador com $($id.Length) caracteres" }
-    if ($id -notmatch '^[A-Za-z0-9_-]+$') { throw "identificador com caractere fora do permitido: '$id'" }
 }
 
 # -----------------------------------------------------------------------------
