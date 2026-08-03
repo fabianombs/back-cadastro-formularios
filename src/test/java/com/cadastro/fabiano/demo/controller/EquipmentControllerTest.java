@@ -5,6 +5,7 @@ import com.cadastro.fabiano.demo.dto.request.SelectEquipmentRequest;
 import com.cadastro.fabiano.demo.dto.response.EquipmentCatalogResponse;
 import com.cadastro.fabiano.demo.dto.response.EquipmentOptionResponse;
 import com.cadastro.fabiano.demo.dto.response.EquipmentSelectionResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.EquipmentService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,10 +54,13 @@ class EquipmentControllerTest {
                 new EquipmentOptionResponse(1L, "iPhone 14", 150, 10, 140)));
         when(service.searchOptions(eq(10L), eq("ip"), eq(true), any())).thenReturn(page);
 
-        ResponseEntity<Page<EquipmentOptionResponse>> r =
+        ResponseEntity<PaginaResponse<EquipmentOptionResponse>> r =
                 controller.searchOptions(10L, "ip", true, PageRequest.of(0, 20));
 
-        assertThat(r.getBody().getContent()).hasSize(1);
+        assertThat(r.getBody().content()).hasSize(1);
+        // O envelope precisa carregar os metadados, nao so o conteudo: sem isso
+        // o autocomplete do front nao sabe que existe proxima pagina.
+        assertThat(r.getBody().totalElements()).isEqualTo(1);
     }
 
     @Test

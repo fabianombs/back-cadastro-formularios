@@ -2,12 +2,12 @@ package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormSubmissionRequest;
 import com.cadastro.fabiano.demo.dto.response.FormSubmissionResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.FormSubmissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,18 +34,18 @@ public class FormSubmissionController {
 
     @GetMapping("/template/{templateId}")
     @Operation(summary = "Listar submissões por template ID")
-    public Page<FormSubmissionResponse> getByTemplate(
+    public PaginaResponse<FormSubmissionResponse> getByTemplate(
             @PathVariable Long templateId,
             Pageable pageable) {
-        return submissionService.getSubmissionsByTemplate(templateId, pageable);
+        return PaginaResponse.de(submissionService.getSubmissionsByTemplate(templateId, pageable));
     }
 
     @GetMapping("/slug/{slug}")
     @Operation(summary = "Listar submissões por slug do template")
-    public Page<FormSubmissionResponse> getBySlug(
+    public PaginaResponse<FormSubmissionResponse> getBySlug(
             @PathVariable String slug,
             Pageable pageable) {
-        return submissionService.getSubmissionsBySlug(slug, pageable);
+        return PaginaResponse.de(submissionService.getSubmissionsBySlug(slug, pageable));
     }
 
     @DeleteMapping("/{id}")

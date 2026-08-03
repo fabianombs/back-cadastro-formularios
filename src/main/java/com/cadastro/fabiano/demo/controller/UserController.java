@@ -1,12 +1,12 @@
 package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.UpdateUserRequest;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.dto.response.UserResponse;
 import com.cadastro.fabiano.demo.entity.Role;
 import com.cadastro.fabiano.demo.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,14 +24,14 @@ public class UserController {
 
     @GetMapping
     @Operation(summary = "Listar todos os usuários")
-    public Page<UserResponse> findAll(Pageable pageable) {
-        return service.findAll(pageable);
+    public PaginaResponse<UserResponse> findAll(Pageable pageable) {
+        return PaginaResponse.de(service.findAll(pageable));
     }
 
     @GetMapping("/clients")
     @Operation(summary = "Listar usuários com role CLIENT")
-    public Page<UserResponse> findClients(Pageable pageable) {
-        return service.findByRole(Role.ROLE_CLIENT, pageable);
+    public PaginaResponse<UserResponse> findClients(Pageable pageable) {
+        return PaginaResponse.de(service.findByRole(Role.ROLE_CLIENT, pageable));
     }
 
     @PutMapping("/{id}")

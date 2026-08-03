@@ -3,6 +3,7 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.dto.request.ClientRequest;
 import com.cadastro.fabiano.demo.dto.response.ClientResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.ClientService;
 import com.cadastro.fabiano.demo.service.FormTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,7 +11,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,8 +34,8 @@ public class ClientController {
 
     @GetMapping
     @Operation(summary = "Listar clientes", description = "Retorna todos os clientes ativos paginados")
-    public Page<ClientResponse> findAll(Pageable pageable) {
-        return service.findAll(pageable);
+    public PaginaResponse<ClientResponse> findAll(Pageable pageable) {
+        return PaginaResponse.de(service.findAll(pageable));
     }
 
     @GetMapping("/{id}")
@@ -56,7 +56,7 @@ public class ClientController {
     @GetMapping("/{id}/templates")
     @SecurityRequirements
     @Operation(summary = "Listar templates do cliente", description = "Endpoint público — retorna os formulários ativos de um cliente pelo ID")
-    public Page<FormTemplateResponse> getTemplatesByClient(@PathVariable Long id, Pageable pageable) {
-        return formTemplateService.findTemplatesByClientId(id, pageable);
+    public PaginaResponse<FormTemplateResponse> getTemplatesByClient(@PathVariable Long id, Pageable pageable) {
+        return PaginaResponse.de(formTemplateService.findTemplatesByClientId(id, pageable));
     }
 }
