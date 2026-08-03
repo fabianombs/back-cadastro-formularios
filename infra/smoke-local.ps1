@@ -233,12 +233,13 @@ Secao "[8] Seguranca"
 # -----------------------------------------------------------------------------
 Testar "GET /form-templates SEM token e RECUSADO" {
     $recusou = $false
-    try { Invoke-RestMethod "$API/form-templates" | Out-Null } catch { $recusou = $true }
-    if (-not $recusou) { throw "endpoint protegido respondeu sem token" }
-}
-
-Testar "GET /actuator/prometheus ainda nao existe (ate FABIANO-22)" {
-    try { Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 5 | Out-Null; return "AVISO" } catch { }
+    $status = 0
+    try { Invoke-RestMethod "$API/form-templates" | Out-Null } catch { $status = StatusDoErro $_ }
+    if ($status -eq 0) { throw "endpoint protegido respondeu sem token" }
+    # 401 exato, nao so "deu erro": o projeto tem authenticationEntryPoint
+    # proprio porque o padrao do Spring Security 6 e 403, e o interceptor do
+    # Angular so redireciona para o login quando recebe 401.
+    if ($status -ne 401) { throw "esperava 401, veio $status - o interceptor do front nao trataria" }
 }
 
 
@@ -393,6 +394,77 @@ Testar "Contadores da lista batem com o total" {
     $r = Invoke-RestMethod "$API/attendance/template/$tplPresencaId`?page=0&size=1"
     if ($r.totalElements -lt 1) { throw "totalElements=$($r.totalElements)" }
     Write-Host ("`n      total na lista: {0}" -f $r.totalElements) -ForegroundColor DarkGray -NoNewline
+}
+
+# -----------------------------------------------------------------------------
+Secao "[12] Observabilidade - metricas do Micrometer (FABIANO-22)"
+# -----------------------------------------------------------------------------
+# Propriedade do Spring escrita errado e IGNORADA EM SILENCIO: nada falha, a
+# metrica simplesmente nao aparece, e a gente so descobre no dia que precisar
+# do p95. Por isso cada item aqui confere o conteudo da resposta, nao so o 200.
+
+Testar "GET /actuator/prometheus exige autenticacao" {
+    try {
+        Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 15 | Out-Null
+        throw "endpoint respondeu SEM token - deveria exigir autenticacao"
+    } catch {
+        $st = StatusDoErro $_
+        if ($st -ne 401 -and $st -ne 403) { throw "esperava 401/403, veio $st" }
+    }
+}
+
+Testar "GET /actuator/health continua publico" {
+    $r = Invoke-RestMethod "$API/actuator/health" -TimeoutSec 10
+    if ($r.status -ne "UP") { throw "status=$($r.status)" }
+}
+
+# Gera trafego antes de ler as metricas: sem requisicao registrada o medidor
+# http_server_requests nem existe, e o teste passaria por engano.
+Testar "Metricas expostas no formato Prometheus" {
+    1..3 | ForEach-Object { Invoke-RestMethod "$API/actuator/health" -TimeoutSec 10 | Out-Null }
+    $script:metricas = Invoke-RestMethod "$API/actuator/prometheus" -Headers $H -TimeoutSec 20
+    $linhas = ($script:metricas -split "`n").Count
+    if ($linhas -lt 50) { throw "so $linhas linhas de metrica - esperava centenas" }
+    Write-Host ("`n      {0} linhas de metrica" -f $linhas) -ForegroundColor DarkGray -NoNewline
+}
+
+Testar "Metricas de JVM, HTTP, Hikari e Tomcat presentes" {
+    if (-not $script:metricas) { return "AVISO" }
+    $faltando = @()
+    foreach ($m in @("jvm_memory_used_bytes", "http_server_requests_seconds",
+                     "hikaricp_connections", "process_uptime_seconds")) {
+        if ($script:metricas -notmatch [regex]::Escape($m)) { $faltando += $m }
+    }
+    if ($faltando.Count -gt 0) { throw "ausentes: $($faltando -join ', ')" }
+}
+
+Testar "Tags application e environment em todas as metricas" {
+    if (-not $script:metricas) { return "AVISO" }
+    if ($script:metricas -notmatch 'application="fabiano-back"') {
+        throw "tag application ausente - o MeterRegistryCustomizer nao aplicou"
+    }
+    if ($script:metricas -notmatch 'environment="dev"') {
+        throw "tag environment ausente ou diferente de dev"
+    }
+    # Uma metrica de JVM tem que carregar a tag tambem: e justamente o que a
+    # propriedade management.observations.key-values NAO alcancaria.
+    $jvm = ($script:metricas -split "`n") | Where-Object { $_ -match "^jvm_memory_used_bytes" } | Select-Object -First 1
+    if ($jvm -and $jvm -notmatch 'application="fabiano-back"') {
+        throw "metrica de JVM sem a tag application"
+    }
+}
+
+Testar "Histograma de latencia habilitado (buckets p95/p99)" {
+    if (-not $script:metricas) { return "AVISO" }
+    # O bucket so existe com percentiles-histogram ligado. Se a propriedade
+    # tivesse sido ignorada, viriam apenas _count e _sum.
+    if ($script:metricas -notmatch "http_server_requests_seconds_bucket") {
+        throw "sem _bucket - percentiles-histogram nao pegou (propriedade ignorada?)"
+    }
+    $achados = [regex]::Matches($script:metricas, 'http_server_requests_seconds_bucket\{[^}]*le="([^"]+)"')
+    $les = @($achados | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    Write-Host ("`n      {0} limites de bucket" -f $les.Count) -ForegroundColor DarkGray -NoNewline
+    if ($les.Count -lt 5) { throw "so $($les.Count) limites - esperava os SLOs configurados" }
 }
 
 # -----------------------------------------------------------------------------

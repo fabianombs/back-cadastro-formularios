@@ -44,6 +44,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/files/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // Todo o resto do actuator exige autenticacao. /actuator/prometheus
+                        // entrega nomes de endpoint, versao de JVM e volume de trafego -
+                        // mapa da aplicacao para quem estiver olhando.
+                        .requestMatchers("/actuator/**").authenticated()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/form-submissions/**").permitAll()
