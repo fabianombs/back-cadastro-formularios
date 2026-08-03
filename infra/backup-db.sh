@@ -70,7 +70,10 @@ DB_PASS=$(sudo grep '^DB_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
   || falhar "nao consegui ler credenciais de $ENV_FILE"
 
 # --- Dump --------------------------------------------------------------------
-STAMP=$(date +%Y%m%d-%H%M%S)
+# Horario de Brasilia, nao UTC: o nome do arquivo precisa bater com a hora que
+# o e-mail informa ao cliente, senao ele le "gerado as 18:43" e recebe um
+# arquivo carimbado com 21:43.
+STAMP=$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M%S)
 ARQ="$BACKUP_ROOT/diario/fabiano-${STAMP}.sql.gz"
 
 log "iniciando backup -> $ARQ"

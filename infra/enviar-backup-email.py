@@ -20,11 +20,17 @@ import os
 import smtplib
 import ssl
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
 ENV_FILE = "/etc/fabiano-backup.env"
+
+# A EC2 roda em UTC, mas quem le o e-mail esta no Brasil. Sem isso, um backup
+# feito as 21h de Brasilia chega carimbado com a data do dia seguinte.
+# Offset fixo de -3 e nao zoneinfo: o Brasil nao tem mais horario de verao
+# desde 2019, e zoneinfo exige Python 3.9 - a EC2 pode estar no 3.7.
+BRASILIA = timezone(timedelta(hours=-3))
 # Gmail recusa anexo acima de 25 MB. O banco hoje tem ~120 KB, mas o script
 # precisa avisar em vez de falhar silenciosamente quando isso mudar.
 LIMITE_ANEXO = 24 * 1024 * 1024
@@ -76,8 +82,9 @@ def main():
         return 1
 
     tamanho = arquivo.stat().st_size
-    hoje = datetime.now().strftime("%d/%m/%Y")
-    hora = datetime.now().strftime("%H:%M")
+    agora = datetime.now(BRASILIA)
+    hoje = agora.strftime("%d/%m/%Y")
+    hora = agora.strftime("%H:%M")
 
     msg = EmailMessage()
     msg["Subject"] = f"Backup do sistema — {hoje}"
