@@ -173,6 +173,18 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off</argLine>
+					<systemPropertyVariables>
+						<!--
+						  Os testes rodam com o perfil dev, que grava em logs/app.json -
+						  o MESMO arquivo que o Promtail entrega ao Loki. Sem isto, cada
+						  'mvnw test' despeja centenas de linhas de teste no painel do
+						  Grafana como se fossem da aplicacao, e a tela passa a mostrar
+						  erro que nunca aconteceu em execucao real.
+						  Propriedade de sistema tem precedencia sobre o arquivo de
+						  configuracao, entao basta redirecionar aqui.
+						-->
+						<logging.file.name>target/logs/testes.json</logging.file.name>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 

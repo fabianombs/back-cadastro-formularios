@@ -1,0 +1,29 @@
+# =============================================================================
+# Fontes de dados do Grafana, provisionadas automaticamente (FABIANO-23)
+# =============================================================================
+# Provisionar por arquivo em vez de configurar pela tela: o ambiente sobe
+# pronto e a configuracao fica versionada no repositorio.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # uid fixo de proposito: o JSON do dashboard referencia a fonte por uid.
+    # Deixando o Grafana sortear, cada maquina gera um uid diferente e o
+    # dashboard provisionado sobe com "datasource not found" em todo painel.
+    uid: prometheus-fabiano
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    uid: loki-fabiano
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      # Liga a linha de log a metrica do mesmo intervalo: clicando num pico do
+      # grafico, o Grafana leva aos logs daquele momento.
+      maxLines: 1000

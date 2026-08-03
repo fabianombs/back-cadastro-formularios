@@ -23,6 +23,12 @@ public class ObservabilityConfig {
     /** Teto de valores distintos de uri antes de agrupar o excedente. */
     private static final int MAX_URIS = 100;
 
+    // Teto para o rotulo "tipo" de erro.tratado (FABIANO-25). O conjunto e
+    // fechado pelas classes de excecao que existem no projeto, entao 50 sobra;
+    // esta aqui como rede de seguranca caso alguem passe a lancar excecao com
+    // nome dinamico, que transformaria cada erro numa serie temporal nova.
+    private static final int MAX_TIPOS_DE_ERRO = 50;
+
     /**
      * Tags aplicadas a TODA metrica registrada.
      *
@@ -57,5 +63,11 @@ public class ObservabilityConfig {
     MeterFilter limiteDeCardinalidadeDeUri() {
         return MeterFilter.maximumAllowableTags(
                 "http.server.requests", "uri", MAX_URIS, MeterFilter.deny());
+    }
+
+    @Bean
+    MeterFilter limiteDeCardinalidadeDeTipoDeErro() {
+        return MeterFilter.maximumAllowableTags(
+                "erro.tratado", "tipo", MAX_TIPOS_DE_ERRO, MeterFilter.deny());
     }
 }

@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.CreateFormSubmissionRequest;
 import com.cadastro.fabiano.demo.dto.response.FormSubmissionResponse;
 import com.cadastro.fabiano.demo.entity.Client;
@@ -37,6 +38,9 @@ class FormSubmissionServiceTest {
 
     @Mock
     private FormTemplateRepository templateRepository;
+
+    @Mock
+    private MetricasDeNegocio metricas;
 
     @InjectMocks
     private FormSubmissionService service;

@@ -17,6 +17,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 
@@ -29,6 +31,11 @@ public class SecurityConfig {
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
+
+    // Token de coleta de metricas. Vazio (o padrao) mantem /actuator/prometheus
+    // exigindo autenticacao normal - so quem define a variavel habilita a coleta.
+    @Value("${metrics.scrape-token:}")
+    private String metricsScrapeToken;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
@@ -44,6 +51,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/files/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // Excecao unica: o Prometheus apresentando o token de coleta.
+                        // JWT nao serve para isso porque expira em 24h e ninguem vai
+                        // renovar token de um coletor a cada dia.
+                        .requestMatchers(this::coletorAutorizado).permitAll()
                         // Todo o resto do actuator exige autenticacao. /actuator/prometheus
                         // entrega nomes de endpoint, versao de JVM e volume de trafego -
                         // mapa da aplicacao para quem estiver olhando.
@@ -82,6 +93,46 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Libera /actuator/prometheus para quem apresentar o token de coleta.
+     *
+     * Alternativas descartadas: mover o actuator para uma porta propria levaria o
+     * /actuator/health junto e quebraria o health-gate do deploy-safe.sh; e deixar
+     * o endpoint aberto so com bloqueio no nginx nao protege enquanto a porta 8080
+     * estiver exposta no security group.
+     */
+    private boolean coletorAutorizado(jakarta.servlet.http.HttpServletRequest request) {
+        if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
+            return false;
+        }
+        if (!"/actuator/prometheus".equals(request.getRequestURI())) {
+            return false;
+        }
+        // Duas formas aceitas. O header proprio e o mais simples de testar com
+        // curl; o Authorization com tipo "Metrics-Token" e o que o Prometheus
+        // consegue enviar nativamente, sem depender de versao que suporte
+        // header arbitrario. O tipo NAO e "Bearer" de proposito: assim o
+        // JwtAuthenticationFilter, que so reage a "Bearer ", ignora este header.
+        String enviado = request.getHeader("X-Metrics-Token");
+
+        if (enviado == null) {
+            String autorizacao = request.getHeader("Authorization");
+            if (autorizacao != null && autorizacao.startsWith("Metrics-Token ")) {
+                enviado = autorizacao.substring("Metrics-Token ".length());
+            }
+        }
+
+        if (enviado == null) {
+            return false;
+        }
+        // MessageDigest.isEqual compara em tempo constante. Um equals() comum
+        // retorna mais rapido quanto antes os bytes divergem, e isso permite
+        // descobrir o token caractere a caractere medindo o tempo de resposta.
+        return MessageDigest.isEqual(
+                enviado.getBytes(StandardCharsets.UTF_8),
+                metricsScrapeToken.getBytes(StandardCharsets.UTF_8));
     }
 
     @Bean

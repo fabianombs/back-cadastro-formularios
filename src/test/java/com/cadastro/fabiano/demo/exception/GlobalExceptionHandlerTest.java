@@ -1,6 +1,8 @@
 package com.cadastro.fabiano.demo.exception;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.response.ErrorResponse;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -10,7 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class GlobalExceptionHandlerTest {
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+    private final SimpleMeterRegistry registro = new SimpleMeterRegistry();
+    private final MetricasDeNegocio metricas = new MetricasDeNegocio(registro);
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(metricas);
 
     @Test
     @DisplayName("handleDuplicate: retorna 409 para DuplicateBookingException")
@@ -60,5 +64,50 @@ class GlobalExceptionHandlerTest {
     void slotFullException_message() {
         SlotFullException ex = new SlotFullException("Slot cheio");
         assertThat(ex.getMessage()).isEqualTo("Slot cheio");
+    }
+
+    // ------------------------------------------------------------------
+    // Metricas de erro tratado (FABIANO-25)
+    //
+    // Usa SimpleMeterRegistry de verdade, e nao mock: se o nome ou os rotulos
+    // da metrica estiverem errados, a busca abaixo nao encontra o contador e o
+    // teste falha. Com mock, passaria sem verificar coisa alguma.
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("erro_tratado_total: separa o tipo de excecao e o status")
+    void erroTratado_registraTipoEStatus() {
+        handler.handleDuplicate(new DuplicateBookingException("dup"));
+        handler.handleSlotFull(new SlotFullException("cheio"));
+        handler.handleSlotFull(new SlotFullException("cheio de novo"));
+        handler.handleRuntime(new RuntimeException("generico"));
+
+        assertThat(contador("DuplicateBookingException", 409)).isEqualTo(1.0);
+        assertThat(contador("SlotFullException", 409)).isEqualTo(2.0);
+        assertThat(contador("RuntimeException", 400)).isEqualTo(1.0);
+
+        // Quatro chamadas, tres combinacoes distintas de tipo e status.
+        assertThat(registro.find("erro.tratado").counters()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("erro_tratado_total: nenhum rotulo carrega a mensagem do erro")
+    void erroTratado_naoVazaMensagem() {
+        // A mensagem pode conter dado do usuario - CPF numa mensagem de
+        // duplicidade, por exemplo. Como rotulo seria PII no Prometheus e
+        // cardinalidade ilimitada ao mesmo tempo.
+        handler.handleDuplicate(new DuplicateBookingException("CPF 123.456.789-00 duplicado"));
+
+        registro.find("erro.tratado").counters().forEach(c ->
+                c.getId().getTags().forEach(tag ->
+                        assertThat(tag.getValue()).doesNotContain("123.456.789")));
+    }
+
+    private double contador(String tipo, int status) {
+        var c = registro.find("erro.tratado")
+                .tag("tipo", tipo)
+                .tag("status", String.valueOf(status))
+                .counter();
+        return c == null ? -1 : c.count();
     }
 }

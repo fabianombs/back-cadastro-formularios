@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.controller;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceCompanionResponse;
@@ -35,6 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class}
 )
 class AttendanceControllerTest {
+
+    // O GlobalExceptionHandler e @RestControllerAdvice e entra na fatia
+    // do @WebMvcTest. Desde o FABIANO-25 ele depende de MetricasDeNegocio:
+    // sem este bean o contexto do teste nem sobe.
+    @MockitoBean
+    private MetricasDeNegocio metricasDeNegocio;
 
     @Autowired
     private MockMvc mockMvc;

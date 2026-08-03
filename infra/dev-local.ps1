@@ -158,6 +158,41 @@ if ($SomenteInfra) {
 }
 
 # -----------------------------------------------------------------------------
+# Porta 8080 ocupada e o tropeco mais comum aqui. O Spring so falha DEPOIS de
+# subir o contexto inteiro - Flyway, Hibernate, pool de conexao - e a causa
+# real fica soterrada em dezenas de linhas de log. Checar antes evita o ciclo.
+# -----------------------------------------------------------------------------
+$pidOcupando = $null
+try {
+    # Get-NetTCPConnection LANCA erro quando nao encontra nada, em vez de
+    # devolver lista vazia - por isso try/catch, e nao checagem de contagem.
+    $pidOcupando = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction Stop |
+        Select-Object -First 1 -ExpandProperty OwningProcess
+} catch {
+    $pidOcupando = $null
+}
+
+if ($pidOcupando) {
+    $nomeProc = "desconhecido"
+    $proc = Get-Process -Id $pidOcupando -ErrorAction SilentlyContinue
+    if ($proc) { $nomeProc = $proc.ProcessName }
+
+    Write-Host ""
+    Write-Host "  A porta 8080 ja esta ocupada pelo PID $pidOcupando ($nomeProc)." -ForegroundColor Yellow
+    Write-Host "  Quase sempre e uma execucao anterior desta mesma aplicacao." -ForegroundColor Yellow
+    $resposta = Read-Host "  Encerrar esse processo e continuar? (s/N)"
+    if ($resposta -eq "s") {
+        Stop-Process -Id $pidOcupando -Force
+        # A porta nao e liberada no mesmo instante em que o processo morre.
+        Start-Sleep -Seconds 2
+        Write-Host "  PID $pidOcupando encerrado." -ForegroundColor Green
+    } else {
+        Write-Host "  Cancelado. Libere a porta 8080 e rode de novo." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# -----------------------------------------------------------------------------
 Titulo "[4/4] Subindo a aplicacao (Flyway vai aplicar a V60)..."
 # -----------------------------------------------------------------------------
 Write-Host "  (quando aparecer 'Started CadastroFabianoApplication', esta no ar)" -ForegroundColor DarkGray

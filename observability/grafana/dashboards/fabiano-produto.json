@@ -1,0 +1,1773 @@
+{
+  "uid": "fabiano-produto",
+  "title": "Fabiano - Produto",
+  "description": "O produto esta funcionando? Uso pelo cliente, administracao e as metricas de negocio instrumentadas nos servicos (FABIANO-25).",
+  "tags": [
+    "fabiano"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Fabiano",
+      "tags": [
+        "fabiano"
+      ],
+      "asDropdown": false,
+      "targetBlank": false,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "external link",
+      "url": "",
+      "tooltip": ""
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Uso pelo cliente",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 2,
+      "title": "Acoes do cliente por minuto",
+      "description": "O que a ponta esta fazendo. Cada serie e um grupo de rotas, nao uma rota. So conta resposta 2xx - POST que falhou nao criou nada.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 16,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/form-templates/slug/{slug}\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "Formulario aberto"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-submissions\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "Formulario enviado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-templates/view/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "Painel publico aberto"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/appointments/template/.*slots.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "D",
+          "editorMode": "code",
+          "legendFormat": "Horarios consultados"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/appointments/book\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "E",
+          "editorMode": "code",
+          "legendFormat": "Agendamento feito"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=\"/appointments/{id}/cancel\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "F",
+          "editorMode": "code",
+          "legendFormat": "Agendamento cancelado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/slug/.*sessions\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "G",
+          "editorMode": "code",
+          "legendFormat": "Quiz iniciado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/sessions/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "H",
+          "editorMode": "code",
+          "legendFormat": "Quiz respondido"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/surveys/slug/.*responses\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "I",
+          "editorMode": "code",
+          "legendFormat": "Enquete respondida"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=~\"/attendance/.*mark\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "J",
+          "editorMode": "code",
+          "legendFormat": "Presenca marcada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=\"/attendance/{recordId}/data\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "K",
+          "editorMode": "code",
+          "legendFormat": "Presenca editada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/template/slug/.*guest\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "L",
+          "editorMode": "code",
+          "legendFormat": "Convidado incluido"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/.*companions\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "M",
+          "editorMode": "code",
+          "legendFormat": "Acompanhante incluido"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/quizzes/slug.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "N",
+          "editorMode": "code",
+          "legendFormat": "Quiz aberto"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/surveys/slug.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "O",
+          "editorMode": "code",
+          "legendFormat": "Enquete aberta"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true,
+          "width": 250
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 3,
+      "title": "Funil: aberturas x envios",
+      "description": "O painel mais importante do produto: separa 'quebrou' de 'ninguem acessou'.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/form-templates/slug/{slug}\",status=~\"2..\"}[$__rate_interval]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "form aberto"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-submissions\",status=~\"2..\"}[$__rate_interval]))",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "form enviado"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 4,
+      "title": "Total por acao do cliente no periodo",
+      "description": "Barra zerada tambem informa: ou a funcao nao foi usada, ou o filtro do grupo nao casa com rota nenhuma - o Mapa de endpoints, na tela Tecnico, tira a duvida.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/form-templates/slug/{slug}\",status=~\"2..\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "Formulario aberto",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-submissions\",status=~\"2..\"}[$__range]))",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "Formulario enviado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-templates/view/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "Painel publico aberto",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/appointments/template/.*slots.*\",status=~\"2..\"}[$__range]))",
+          "refId": "D",
+          "editorMode": "code",
+          "legendFormat": "Horarios consultados",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/appointments/book\",status=~\"2..\"}[$__range]))",
+          "refId": "E",
+          "editorMode": "code",
+          "legendFormat": "Agendamento feito",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=\"/appointments/{id}/cancel\",status=~\"2..\"}[$__range]))",
+          "refId": "F",
+          "editorMode": "code",
+          "legendFormat": "Agendamento cancelado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/slug/.*sessions\",status=~\"2..\"}[$__range]))",
+          "refId": "G",
+          "editorMode": "code",
+          "legendFormat": "Quiz iniciado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/sessions/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "H",
+          "editorMode": "code",
+          "legendFormat": "Quiz respondido",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/surveys/slug/.*responses\",status=~\"2..\"}[$__range]))",
+          "refId": "I",
+          "editorMode": "code",
+          "legendFormat": "Enquete respondida",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=~\"/attendance/.*mark\",status=~\"2..\"}[$__range]))",
+          "refId": "J",
+          "editorMode": "code",
+          "legendFormat": "Presenca marcada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=\"/attendance/{recordId}/data\",status=~\"2..\"}[$__range]))",
+          "refId": "K",
+          "editorMode": "code",
+          "legendFormat": "Presenca editada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/template/slug/.*guest\",status=~\"2..\"}[$__range]))",
+          "refId": "L",
+          "editorMode": "code",
+          "legendFormat": "Convidado incluido",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/.*companions\",status=~\"2..\"}[$__range]))",
+          "refId": "M",
+          "editorMode": "code",
+          "legendFormat": "Acompanhante incluido",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/quizzes/slug.*\",status=~\"2..\"}[$__range]))",
+          "refId": "N",
+          "editorMode": "code",
+          "legendFormat": "Quiz aberto",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/surveys/slug.*\",status=~\"2..\"}[$__range]))",
+          "refId": "O",
+          "editorMode": "code",
+          "legendFormat": "Enquete aberta",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "minVizWidth": 8,
+        "minVizHeight": 10,
+        "sizing": "auto"
+      }
+    },
+    {
+      "type": "row",
+      "id": 5,
+      "title": "Negocio (metricas dos servicos)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 6,
+      "title": "Recusas de agendamento, por motivo",
+      "description": "O painel mais valioso da tela. 'slot_lotado' recorrente no mesmo horario nao e problema tecnico: significa que o cliente precisa de mais capacidade. Ja 'horario_invalido' em volume aponta para o front mandando o que a regra recusa. De fora, todos sao o mesmo 400 ou 409.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (motivo) (rate(agendamento_recusado_total{job=\"fabiano-back\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{motivo}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 7,
+      "title": "Agendamentos: criados x cancelados",
+      "description": "Cancelamento subindo junto com criacao pode ser uso normal; cancelamento subindo sozinho e sintoma.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(agendamento_total{job=\"fabiano-back\",evento=\"criado\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "criados"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(agendamento_total{job=\"fabiano-back\",evento=\"cancelado\"}[$__rate_interval])) * 60",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "cancelados"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 8,
+      "title": "Submissoes de formulario",
+      "description": "Contado dentro do servico, nao pelo HTTP: aqui 'erro' quer dizer que a submissao nao foi gravada.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (resultado) (rate(formulario_submissao_total{job=\"fabiano-back\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{resultado}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "Presenca",
+      "description": "Tamanho medio da importacao entra junto: vinte importacoes de 5 linhas e uma de 9000 sao situacoes bem diferentes para o banco.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (tipo) (rate(presenca_marcacao_total{job=\"fabiano-back\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "marcacao {{tipo}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(presenca_importacao_linhas_sum{job=\"fabiano-back\"}[$__rate_interval])) / clamp_min(sum(rate(presenca_importacao_linhas_count{job=\"fabiano-back\"}[$__rate_interval])), 0.001)",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "linhas por importacao"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 10,
+      "title": "Upload de imagem",
+      "description": "Duracao sem tamanho e ambigua: pode ser armazenamento degradado ou apenas arquivo maior. O tamanho esta em upload_imagem_bytes, consultavel no Explore.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(upload_imagem_duracao_seconds_sum{job=\"fabiano-back\"}[$__rate_interval])) / clamp_min(sum(rate(upload_imagem_duracao_seconds_count{job=\"fabiano-back\"}[$__rate_interval])), 0.001)",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "duracao media"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(upload_imagem_total{job=\"fabiano-back\",resultado=\"erro\"}[$__rate_interval])) * 60",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "falhas por minuto"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 11,
+      "title": "Espera pelo lock do template",
+      "description": "Contencao do PESSIMISTIC_WRITE. Subida aqui com latencia HTTP normal significa disputa pelo mesmo evento, nao sistema lento - diagnostico diferente.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(agendamento_lock_espera_seconds_sum{job=\"fabiano-back\"}[$__rate_interval])) / clamp_min(sum(rate(agendamento_lock_espera_seconds_count{job=\"fabiano-back\"}[$__rate_interval])), 0.001)",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "media"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "max(agendamento_lock_espera_seconds_max{job=\"fabiano-back\"})",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "maior espera"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 12,
+      "title": "Administracao",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 13,
+      "title": "Acoes administrativas por minuto",
+      "description": "Separado do uso do cliente de proposito: misturar os dois esconde a queda de um atras do movimento do outro.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-templates/create/{clientId}\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "Formulario criado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"PUT|PATCH\",uri=~\"/form-templates/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "Formulario editado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"DELETE\",uri=\"/form-templates/{id}\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "Formulario excluido"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-templates|/form-templates/my-templates\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "D",
+          "editorMode": "code",
+          "legendFormat": "Formularios listados"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/quizzes\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "E",
+          "editorMode": "code",
+          "legendFormat": "Quiz criado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/surveys\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "F",
+          "editorMode": "code",
+          "legendFormat": "Enquete criada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/clients\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "G",
+          "editorMode": "code",
+          "legendFormat": "Cliente cadastrado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/template/.*import\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "H",
+          "editorMode": "code",
+          "legendFormat": "Presenca importada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/equipment/template/.*import\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "I",
+          "editorMode": "code",
+          "legendFormat": "Equipamento importado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/equipment/select\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "J",
+          "editorMode": "code",
+          "legendFormat": "Equipamento escolhido"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/uploads/image\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "K",
+          "editorMode": "code",
+          "legendFormat": "Imagem enviada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/dashboard\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "L",
+          "editorMode": "code",
+          "legendFormat": "Painel do dono aberto"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-submissions/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "M",
+          "editorMode": "code",
+          "legendFormat": "Respostas consultadas"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/appointments/template/{templateId}\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "N",
+          "editorMode": "code",
+          "legendFormat": "Agenda consultada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/attendance/template/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "O",
+          "editorMode": "code",
+          "legendFormat": "Presenca consultada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/equipment/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "P",
+          "editorMode": "code",
+          "legendFormat": "Equipamento consultado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/clients.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "Q",
+          "editorMode": "code",
+          "legendFormat": "Clientes consultados"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT|PATCH\",uri=~\"/quizzes.*\",uri!~\"/quizzes/slug.*|/quizzes/sessions.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "R",
+          "editorMode": "code",
+          "legendFormat": "Quiz gerenciado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/.*assign.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "S",
+          "editorMode": "code",
+          "legendFormat": "Quiz vinculado ao form"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT|PATCH\",uri=~\"/surveys.*\",uri!~\"/surveys/slug.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "T",
+          "editorMode": "code",
+          "legendFormat": "Enquete gerenciada"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=~\"/equipment/.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "U",
+          "editorMode": "code",
+          "legendFormat": "Equipamento ajustado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT\",uri=~\"/users.*\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "V",
+          "editorMode": "code",
+          "legendFormat": "Usuarios"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"DELETE\",status=~\"2..\"}[$__rate_interval])) * 60",
+          "refId": "W",
+          "editorMode": "code",
+          "legendFormat": "Exclusoes"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true,
+          "width": 250
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 14,
+      "title": "Total administrativo no periodo",
+      "description": "Somado no intervalo do topo da tela.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-templates/create/{clientId}\",status=~\"2..\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "Formulario criado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"PUT|PATCH\",uri=~\"/form-templates/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "Formulario editado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"DELETE\",uri=\"/form-templates/{id}\",status=~\"2..\"}[$__range]))",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "Formulario excluido",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-templates|/form-templates/my-templates\",status=~\"2..\"}[$__range]))",
+          "refId": "D",
+          "editorMode": "code",
+          "legendFormat": "Formularios listados",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/quizzes\",status=~\"2..\"}[$__range]))",
+          "refId": "E",
+          "editorMode": "code",
+          "legendFormat": "Quiz criado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/surveys\",status=~\"2..\"}[$__range]))",
+          "refId": "F",
+          "editorMode": "code",
+          "legendFormat": "Enquete criada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/clients\",status=~\"2..\"}[$__range]))",
+          "refId": "G",
+          "editorMode": "code",
+          "legendFormat": "Cliente cadastrado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/attendance/template/.*import\",status=~\"2..\"}[$__range]))",
+          "refId": "H",
+          "editorMode": "code",
+          "legendFormat": "Presenca importada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/equipment/template/.*import\",status=~\"2..\"}[$__range]))",
+          "refId": "I",
+          "editorMode": "code",
+          "legendFormat": "Equipamento importado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/equipment/select\",status=~\"2..\"}[$__range]))",
+          "refId": "J",
+          "editorMode": "code",
+          "legendFormat": "Equipamento escolhido",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/uploads/image\",status=~\"2..\"}[$__range]))",
+          "refId": "K",
+          "editorMode": "code",
+          "legendFormat": "Imagem enviada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/dashboard\",status=~\"2..\"}[$__range]))",
+          "refId": "L",
+          "editorMode": "code",
+          "legendFormat": "Painel do dono aberto",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/form-submissions/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "M",
+          "editorMode": "code",
+          "legendFormat": "Respostas consultadas",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/appointments/template/{templateId}\",status=~\"2..\"}[$__range]))",
+          "refId": "N",
+          "editorMode": "code",
+          "legendFormat": "Agenda consultada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/attendance/template/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "O",
+          "editorMode": "code",
+          "legendFormat": "Presenca consultada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/equipment/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "P",
+          "editorMode": "code",
+          "legendFormat": "Equipamento consultado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=~\"/clients.*\",status=~\"2..\"}[$__range]))",
+          "refId": "Q",
+          "editorMode": "code",
+          "legendFormat": "Clientes consultados",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT|PATCH\",uri=~\"/quizzes.*\",uri!~\"/quizzes/slug.*|/quizzes/sessions.*\",status=~\"2..\"}[$__range]))",
+          "refId": "R",
+          "editorMode": "code",
+          "legendFormat": "Quiz gerenciado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/.*assign.*\",status=~\"2..\"}[$__range]))",
+          "refId": "S",
+          "editorMode": "code",
+          "legendFormat": "Quiz vinculado ao form",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT|PATCH\",uri=~\"/surveys.*\",uri!~\"/surveys/slug.*\",status=~\"2..\"}[$__range]))",
+          "refId": "T",
+          "editorMode": "code",
+          "legendFormat": "Enquete gerenciada",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=~\"/equipment/.*\",status=~\"2..\"}[$__range]))",
+          "refId": "U",
+          "editorMode": "code",
+          "legendFormat": "Equipamento ajustado",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=~\"GET|PUT\",uri=~\"/users.*\",status=~\"2..\"}[$__range]))",
+          "refId": "V",
+          "editorMode": "code",
+          "legendFormat": "Usuarios",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"DELETE\",status=~\"2..\"}[$__range]))",
+          "refId": "W",
+          "editorMode": "code",
+          "legendFormat": "Exclusoes",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "minVizWidth": 8,
+        "minVizHeight": 10,
+        "sizing": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "Formularios: criados, editados, excluidos",
+      "description": "Exclusao fora do padrao merece olhada: e a unica operacao desta tela que nao tem volta.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 51
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (evento) (increase(formulario_template_total{job=\"fabiano-back\"}[$__rate_interval]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{evento}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "id": 16,
+      "title": "Erros tratados no periodo",
+      "description": "Erro tratado nao aparece como 5xx e nao entra na taxa de erro - mas continua sendo erro. Pico de 409 significa que algo mudou no comportamento dos usuarios.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 51
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (tipo, status) (increase(erro_tratado_total{job=\"fabiano-back\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "align": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "application": true,
+              "environment": true,
+              "outcome": true,
+              "exception": true,
+              "error": true
+            },
+            "renameByName": {
+              "Value": "ocorrencias",
+              "tipo": "excecao",
+              "status": "codigo"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import com.cadastro.fabiano.demo.dto.request.MarkCompanionAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceCompanionResponse;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.entity.AttendanceCompanion;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.entity.AttendanceRecord;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.AttendanceCompanionRepository;
@@ -33,13 +34,16 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRepository;
     private final AttendanceCompanionRepository companionRepository;
     private final FormTemplateRepository templateRepository;
+    private final MetricasDeNegocio metricas;
 
     public AttendanceService(AttendanceRecordRepository attendanceRepository,
                              AttendanceCompanionRepository companionRepository,
-                             FormTemplateRepository templateRepository) {
+                             FormTemplateRepository templateRepository,
+                             MetricasDeNegocio metricas) {
         this.attendanceRepository = attendanceRepository;
         this.companionRepository = companionRepository;
         this.templateRepository = templateRepository;
+        this.metricas = metricas;
     }
 
     /**
@@ -92,10 +96,16 @@ public class AttendanceService {
 
         templateRepository.save(template);
 
-        return attendanceRepository.saveAll(records)
+        List<AttendanceRecordResponse> importados = attendanceRepository.saveAll(records)
                 .stream()
                 .map(this::toResponse)
                 .toList();
+
+        // O tamanho da importacao entra como distribuicao, nao como contador:
+        // vinte importacoes de 5 linhas e uma de 9000 sao situacoes bem
+        // diferentes para o banco, e um contador nao distingue as duas.
+        metricas.importacaoDePresenca(importados.size());
+        return importados;
     }
 
     public Page<AttendanceRecordResponse> getByTemplate(Long templateId, Pageable pageable) {
@@ -132,6 +142,7 @@ public class AttendanceService {
             record.setCompanionsCount(Math.max(0, request.companionsCount()));
         }
 
+        metricas.presencaMarcada();
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -200,6 +211,7 @@ public class AttendanceService {
         companion.setAttendedAt(request.attended() ? LocalDateTime.now() : null);
         companionRepository.save(companion);
 
+        metricas.presencaDeAcompanhanteMarcada();
         return toResponse(companion.getAttendanceRecord());
     }
 
@@ -242,6 +254,7 @@ public class AttendanceService {
                 .filledAt(LocalDateTime.now()) // convidado público preencheu a linha ao se cadastrar
                 .build();
 
+        metricas.convidadoIncluidoPeloPublico();
         return toResponse(attendanceRepository.save(record));
     }
 

@@ -3,6 +3,8 @@ package com.cadastro.fabiano.demo.service;
 import com.cadastro.fabiano.demo.dto.request.BookAppointmentRequest;
 import com.cadastro.fabiano.demo.dto.response.AppointmentResponse;
 import com.cadastro.fabiano.demo.dto.response.AvailableSlotsResponse;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio.MotivoDeRecusa;
 import com.cadastro.fabiano.demo.entity.Appointment;
 import com.cadastro.fabiano.demo.entity.AppointmentStatus;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
@@ -28,11 +30,14 @@ public class AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final FormTemplateRepository formTemplateRepository;
+    private final MetricasDeNegocio metricas;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
-                              FormTemplateRepository formTemplateRepository) {
+                              FormTemplateRepository formTemplateRepository,
+                              MetricasDeNegocio metricas) {
         this.appointmentRepository = appointmentRepository;
         this.formTemplateRepository = formTemplateRepository;
+        this.metricas = metricas;
     }
 
     // ==========================
@@ -99,11 +104,16 @@ public class AppointmentService {
      */
     @Transactional
     public AppointmentResponse book(BookAppointmentRequest request) {
-        // Lock pessimista no template para serializar bookings concorrentes no mesmo evento
+        // Lock pessimista no template para serializar bookings concorrentes no mesmo evento.
+        // O tempo de espera aqui separa "o sistema esta lento" de "duas pessoas
+        // tentaram o mesmo horario ao mesmo tempo" - problemas diferentes.
+        long inicioDoLock = System.nanoTime();
         FormTemplate template = formTemplateRepository.findByIdWithLock(request.templateId())
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+        metricas.esperaPeloLock(System.nanoTime() - inicioDoLock);
 
         if (!template.isHasSchedule()) {
+            metricas.agendamentoRecusado(MotivoDeRecusa.SEM_AGENDA);
             throw new RuntimeException("Este formulário não possui configuração de agenda");
         }
 
@@ -121,6 +131,7 @@ public class AppointmentService {
                     template, request.slotDate(), dedupKey, AppointmentStatus.AGENDADO);
             if (alreadyBooked) {
                 String fieldNames = dedupFields.stream().sorted().collect(Collectors.joining(" + "));
+                metricas.agendamentoRecusado(MotivoDeRecusa.DUPLICADO);
                 throw new DuplicateBookingException(
                         "Usuário já cadastrado na lista. " +
                         "Identificação por: " + fieldNames + ".");
@@ -133,6 +144,9 @@ public class AppointmentService {
 
         int effectiveCapacity = Math.max(1, template.getSlotCapacity());
         if (bookedCount >= effectiveCapacity) {
+            // Recusa recorrente no mesmo horario e conversa comercial, nao tecnica:
+            // significa que o cliente precisa de mais capacidade naquele slot.
+            metricas.agendamentoRecusado(MotivoDeRecusa.SLOT_LOTADO);
             throw new SlotFullException(
                     "Este horário está lotado (" + effectiveCapacity + " vaga(s) preenchida(s)). Escolha outro horário.");
         }
@@ -148,7 +162,9 @@ public class AppointmentService {
                 .extraValues(extraValues)
                 .build();
 
-        return toResponse(appointmentRepository.save(appointment));
+        AppointmentResponse criado = toResponse(appointmentRepository.save(appointment));
+        metricas.agendamentoCriado();
+        return criado;
     }
 
     // ==========================
@@ -167,7 +183,9 @@ public class AppointmentService {
         appointment.setCancelledBy(cancelledBy);
         appointment.setCancelledAt(java.time.LocalDateTime.now());
 
-        return toResponse(appointmentRepository.save(appointment));
+        AppointmentResponse cancelado = toResponse(appointmentRepository.save(appointment));
+        metricas.agendamentoCancelado();
+        return cancelado;
     }
 
     // ==========================
@@ -234,9 +252,11 @@ public class AppointmentService {
         LocalDate maxDate = today.plusDays(template.getMaxDaysAhead());
 
         if (date.isBefore(today)) {
+            metricas.agendamentoRecusado(MotivoDeRecusa.DATA_PASSADA);
             throw new RuntimeException("Não é possível agendar em datas passadas");
         }
         if (date.isAfter(maxDate)) {
+            metricas.agendamentoRecusado(MotivoDeRecusa.DATA_MUITO_DISTANTE);
             throw new RuntimeException("Agendamento disponível apenas para os próximos "
                     + template.getMaxDaysAhead() + " dias");
         }
@@ -249,6 +269,7 @@ public class AppointmentService {
                 template.getSlotDurationMinutes()
         );
         if (!validSlots.contains(time)) {
+            metricas.agendamentoRecusado(MotivoDeRecusa.HORARIO_INVALIDO);
             throw new RuntimeException("Horário inválido para este formulário");
         }
     }

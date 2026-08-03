@@ -8,6 +8,7 @@ import com.cadastro.fabiano.demo.dto.response.FormFieldResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
 import com.cadastro.fabiano.demo.dto.response.ScheduleConfigResponse;
 import com.cadastro.fabiano.demo.dto.response.TemplateAppearanceResponse;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormField;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
@@ -44,6 +45,7 @@ public class FormTemplateService {
     private final ImageStorageService imageStorageService;
     private final QuizConfigRepository quizConfigRepository;
     private final SurveyConfigRepository surveyConfigRepository;
+    private final MetricasDeNegocio metricas;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -60,7 +62,8 @@ public class FormTemplateService {
                                ClientRepository clientRepository,
                                ImageStorageService imageStorageService,
                                QuizConfigRepository quizConfigRepository,
-                               SurveyConfigRepository surveyConfigRepository) {
+                               SurveyConfigRepository surveyConfigRepository,
+                               MetricasDeNegocio metricas) {
         this.templateRepository = templateRepository;
         this.submissionRepository = submissionRepository;
         this.appointmentRepository = appointmentRepository;
@@ -70,6 +73,7 @@ public class FormTemplateService {
         this.imageStorageService = imageStorageService;
         this.quizConfigRepository = quizConfigRepository;
         this.surveyConfigRepository = surveyConfigRepository;
+        this.metricas = metricas;
     }
 
     // ==========================
@@ -206,6 +210,7 @@ public class FormTemplateService {
             });
         }
 
+        metricas.templateCriado();
         return toResponse(saved);
     }
 
@@ -293,6 +298,7 @@ public class FormTemplateService {
             tryDeleteOrphanedImage(oldBackground, request.appearance().backgroundImageUrl());
         }
 
+        metricas.templateEditado();
         return toResponse(saved);
     }
 
@@ -364,6 +370,10 @@ public class FormTemplateService {
         if (headerUrl     != null && !headerUrl.isBlank())     imageStorageService.delete(headerUrl);
         if (footerUrl     != null && !footerUrl.isBlank())     imageStorageService.delete(footerUrl);
         if (backgroundUrl != null && !backgroundUrl.isBlank()) imageStorageService.delete(backgroundUrl);
+
+        // Contado depois da exclusao efetiva, nao antes: se algo estourar no
+        // meio, o contador nao mente dizendo que apagou.
+        metricas.templateExcluido();
     }
 
     // ==========================

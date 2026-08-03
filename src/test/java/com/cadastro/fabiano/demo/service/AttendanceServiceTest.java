@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
@@ -44,6 +45,9 @@ class AttendanceServiceTest {
     // Necessário pois AttendanceService injeta este repositório para carregar companions
     @Mock
     private AttendanceCompanionRepository companionRepository;
+
+    @Mock
+    private MetricasDeNegocio metricas;
 
     @InjectMocks
     private AttendanceService service;
