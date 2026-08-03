@@ -35,9 +35,17 @@ Write-Host ""
 # -----------------------------------------------------------------------------
 Write-Host "[1/4] Subindo MySQL 8.4 descartavel na porta 3308..." -ForegroundColor Cyan
 # -----------------------------------------------------------------------------
-# 'down -v' antes garante banco vazio: o teste so vale se o Flyway aplicar
+# O container de migracao NAO tem volume (ver docker-compose.dev.yml), entao
+# remover o container ja garante banco vazio - que e o que o teste precisa.
+#
+# Aqui havia "--profile migracao down -v". O perfil filtra QUAIS SERVICOS entram
+# na conta, mas o -v nao e filtrado por perfil: ele remove os volumes nomeados do
+# projeto INTEIRO, e levava junto o mysql84_dev - o banco de desenvolvimento com o
+# dump de producao restaurado. Rodar o teste de migrations apagava a base de
+# trabalho, e obrigava a restaurar o dump de novo a cada teste.
+# Antes: o teste so vale se o Flyway aplicar
 # as migrations DO ZERO, como aconteceria numa base nova.
-docker compose -f docker-compose.dev.yml --profile migracao down -v 2>&1 | Out-Null
+docker compose -f docker-compose.dev.yml --profile migracao rm -sfv mysql-migracao 2>&1 | Out-Null
 docker compose -f docker-compose.dev.yml --profile migracao up -d mysql-migracao 2>&1 | Write-Host
 if ($LASTEXITCODE -ne 0) { Parar "Falha ao subir o container. O Docker Desktop esta rodando?" }
 
@@ -109,5 +117,5 @@ Write-Host "#  'Schema-validation: ...'              -> o schema gerado nao bate
 Write-Host "#     com as entidades JPA."
 Write-Host "#"
 Write-Host "# Para limpar o container de teste depois:"
-Write-Host "#   docker compose -f docker-compose.dev.yml --profile migracao down -v"
+Write-Host "#   docker compose -f docker-compose.dev.yml --profile migracao rm -sfv mysql-migracao"
 Write-Host "############################################################"
