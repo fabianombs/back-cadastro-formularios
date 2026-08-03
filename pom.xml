@@ -28,6 +28,17 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+
+		<!--
+			Sobrepoe a versao do BOM do Spring Boot 3.5.11, que traz o Flyway
+			11.7.2 (FABIANO-34). O 11.7.2 so declara suporte ate MySQL 8.1 e
+			avisa a cada inicializacao que o 8.4 - a LTS para onde estamos
+			migrando - nao foi testado. O suporte a 8.4 entrou no 11.15.0.
+
+			Mesma linha 11.x de proposito: subir de major tiraria o projeto da
+			combinacao que o Spring Boot testa, por um ganho que nao precisamos.
+		-->
+		<flyway.version>11.15.0</flyway.version>
 	</properties>
 
 	<dependencyManagement>
