@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 @Service
 public class FormSubmissionService {
 
@@ -91,7 +93,7 @@ public class FormSubmissionService {
         return new FormSubmissionResponse(
                 s.getId(),
                 s.getTemplate().getId(),
-                s.getValues(),
+                ColecaoDeSaida.mapa(s.getValues()),
                 s.getCreatedAt()
         );
     }

@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -108,6 +110,9 @@ public class AttendanceService {
         return importados;
     }
 
+    // Ver FABIANO-37: com open-in-view=false a sessao fecha ao voltar do
+    // repositorio, e o DTO e montado depois disso.
+    @Transactional(readOnly = true)
     public Page<AttendanceRecordResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = findTemplate(templateId);
         Pageable sorted = PageRequest.of(
@@ -300,7 +305,7 @@ public class AttendanceService {
         return new AttendanceRecordResponse(
                 r.getId(),
                 r.getFormTemplate().getId(),
-                r.getRowData(),
+                ColecaoDeSaida.mapa(r.getRowData()),
                 r.isAttended(),
                 r.getAttendedAt(),
                 r.getNotes(),

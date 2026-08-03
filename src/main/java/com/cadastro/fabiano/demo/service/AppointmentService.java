@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -201,6 +203,10 @@ public class AppointmentService {
     // ==========================
     // BUSCAR AGENDAMENTOS DO TEMPLATE
     // ==========================
+    // Leitura precisa de transacao propria desde que open-in-view foi desligado
+    // (FABIANO-37): sem ela a sessao do JPA fecha ao voltar do repositorio e o
+    // acesso a relacao LAZY na montagem do DTO estoura LazyInitializationException.
+    @Transactional(readOnly = true)
     public Page<AppointmentResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = formTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
@@ -305,7 +311,7 @@ public class AppointmentService {
                 a.getBookedByContact(),
                 a.getCancelledBy(),
                 a.getCancelledAt(),
-                a.getExtraValues(),
+                ColecaoDeSaida.mapa(a.getExtraValues()),
                 a.getCreatedAt()
         );
     }

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -37,6 +38,10 @@ public class DashboardService {
     private String frontendUrl;
 
     // Admin: vê todos os templates e todos os clientes
+    // O dashboard percorre os templates contando campos, quiz e survey - todos
+    // LAZY. Com open-in-view=false (FABIANO-37) isso precisa acontecer dentro da
+    // transacao, senao a contagem estoura LazyInitializationException.
+    @Transactional(readOnly = true)
     public DashboardResponse getSummary(Pageable pageable) {
         Page<FormTemplate> page = templateRepository.findAll(pageable);
         long totalClients = clientRepository.count();
@@ -45,6 +50,7 @@ public class DashboardService {
     }
 
     // Client: vê apenas os templates do seu cliente
+    @Transactional(readOnly = true)
     public DashboardResponse getSummaryForClient(String username, Pageable pageable) {
         Client client = clientRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));

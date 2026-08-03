@@ -30,6 +30,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -79,6 +81,9 @@ public class FormTemplateService {
     // ==========================
     // ADMIN - TODOS OS FORMS
     // ==========================
+    // toResponse le fields, quiz e survey, que sao LAZY. Com open-in-view=false
+    // (FABIANO-37) a leitura tem de ficar dentro da transacao do servico.
+    @Transactional(readOnly = true)
     public Page<FormTemplateResponse> findAllTemplates(Pageable pageable) {
         return templateRepository.findAll(pageable)
                 .map(this::toResponse);
@@ -87,6 +92,7 @@ public class FormTemplateService {
     // ==========================
     // CLIENTE - MEUS FORMS
     // ==========================
+    @Transactional(readOnly = true)
     public Page<FormTemplateResponse> findTemplatesByUsername(String username, Pageable pageable) {
 
         User user = userRepository.findByUsername(username)
@@ -102,6 +108,7 @@ public class FormTemplateService {
     // ==========================
     // TEMPLATES POR CLIENT ID (público)
     // ==========================
+    @Transactional(readOnly = true)
     public Page<FormTemplateResponse> findTemplatesByClientId(Long clientId, Pageable pageable) {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
@@ -379,6 +386,7 @@ public class FormTemplateService {
     // ==========================
     // BUSCAR POR SLUG
     // ==========================
+    @Transactional(readOnly = true)
     public FormTemplateResponse findBySlug(String slug) {
         FormTemplate template = templateRepository.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
@@ -394,6 +402,7 @@ public class FormTemplateService {
      * Retorna o template pelo token de visualização do cliente.
      * Usado pela tela pública read-only — não exige autenticação.
      */
+    @Transactional(readOnly = true)
     public FormTemplateResponse findByViewToken(String viewToken) {
         FormTemplate template = templateRepository.findByViewToken(viewToken)
                 .orElseThrow(() -> new RuntimeException("Link de visualização inválido ou expirado"));
@@ -530,7 +539,7 @@ public class FormTemplateService {
                         f.isRequired(),
                         f.getFieldColor(),
                         f.getColSpan(),
-                        f.getOptions() != null ? f.getOptions() : List.of()
+                        ColecaoDeSaida.lista(f.getOptions())
                 ))
                 .toList();
 
