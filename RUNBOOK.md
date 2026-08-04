@@ -4,7 +4,54 @@
 > comando nenhum. Tudo aqui é para copiar e colar. Onde houver valor a
 > preencher, a mesma linha diz onde encontrá-lo.
 
-**Atualizado em:** 03/08/2026
+**Atualizado em:** 04/08/2026
+
+---
+
+## 0. ONDE EU ESTOU? (migracao blue-green em andamento)
+
+> [!danger] Existem DUAS maquinas agora. Confira antes de digitar qualquer coisa.
+
+```bash
+# PRODUCAO — atende o cliente hoje. Elastic IP, Amazon Linux 2, JAR no systemd.
+ssh -i ~/.ssh/poc-fabiano ec2-user@100.30.35.83
+
+# NOVA — em construcao. Nao atende ninguem. AL2023, Docker. (FABIANO-13)
+ssh -i ~/.ssh/poc-fabiano ec2-user@44.193.5.38
+```
+
+No PowerShell, trocar `~` por `$HOME`:
+
+    ssh -i $HOME\.ssh\poc-fabiano ec2-user@100.30.35.83
+    ssh -i $HOME\.ssh\poc-fabiano ec2-user@44.193.5.38
+
+### Como saber em qual voce esta
+
+| | PRODUCAO (antiga) | NOVA (em construcao) |
+|---|---|---|
+| IP publico | `100.30.35.83` (Elastic IP) | `44.193.5.38` (temporario) |
+| Prompt | `ec2-user@ip-172-31-28-215` | `ec2-user@ip-172-31-12-104` |
+| Instancia | `i-0987e63c336e202b9` | `i-008f8d272588845ef` |
+| Tipo / AZ | `t2.micro` / `us-east-1c` | `t3.small` / `us-east-1a` |
+| SO | Amazon Linux 2 (**sem suporte** desde 30/06/2026) | Amazon Linux 2023 |
+| Runtime | JAR no systemd | Docker + Compose |
+| Marca infalivel | `/etc/poc-fabiano.env` **existe** | esse arquivo **nao existe** |
+
+> [!tip] A marca infalivel e a que vale
+> IP se digita errado e prompt se confunde. `[ -f /etc/poc-fabiano.env ]` nao.
+> Todo script perigoso deste runbook comeca com essa checagem — em produtos
+> diferentes, no sentido certo.
+
+> [!warning] Enquanto as duas existirem
+> A **antiga** e quem atende. A **nova** nao tem cron de backup nem de certbot
+> ativas de proposito: duas maquinas renovando o mesmo certificado disputariam
+> o mesmo webroot, e duas rodando o backup mandariam dois e-mails por dia.
+> Elas so sao ligadas na virada (FABIANO-47).
+
+A virada e uma reassociacao de Elastic IP, de segundos. O dominio
+`100-30-35-83.sslip.io` deriva do proprio IP, entao o certificado atravessa a
+troca sem ajuste. Rollback e o mesmo comando ao contrario. Detalhes no
+FABIANO-47.
 
 ---
 
