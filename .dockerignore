@@ -14,6 +14,7 @@ uploads/
 
 # Infra e documentacao nao fazem parte do runtime
 infra/
+deploy/
 *.md
 !README.md
 

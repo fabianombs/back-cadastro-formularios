@@ -63,6 +63,44 @@ jobs:
       - name: Verify JAR was generated
         run: ls -la target/*.jar
 
+  # Imagem da branch develop, para o ambiente de homologacao do FABIANO-33.
+  # Tag fixa 'develop': homologacao sempre roda o ultimo develop, sem precisar
+  # descobrir sha nenhum.
+  build-push-develop:
+    name: Publicar imagem develop no GHCR
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O GHCR recusa nome de imagem com maiuscula.
+      - name: Normalizar owner
+        id: nomes
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:develop
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   create-pr-to-master:
     name: Create PR to Master
     runs-on: ubuntu-latest
