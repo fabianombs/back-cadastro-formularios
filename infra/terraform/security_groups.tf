@@ -1,7 +1,11 @@
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
-  description = "Security group para EC2 - SSH, HTTP, HTTPS e porta 8080"
+  description = "Security group para EC2 - SSH, HTTP e HTTPS"
 
+  # ATENCAO: ssh_allowed_cidr tem default 0.0.0.0/0, e e assim que esta na AWS
+  # hoje. Com passwordauthentication=no na EC2 a forca bruta nao funciona, mas
+  # a superficie existe — ha 70 tentativas registradas em /var/log/secure.
+  # Restringir exige combinar quais IPs precisam entrar (FABIANO-45).
   ingress {
     description = "SSH restrito"
     from_port   = 22
@@ -26,13 +30,14 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "API Spring Boot (porta direta - usar apenas para debug)"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # A porta 8080 NAO e exposta. Existia uma regra liberando 8080 para
+  # 0.0.0.0/0 "apenas para debug" — ela deixava a aplicacao acessivel em HTTP
+  # puro pelo IP, contornando o nginx e o certificado: login trafegando em
+  # texto claro. Removida da AWS e daqui em 04/08/2026 (FABIANO-45).
+  #
+  # O nginx alcanca a aplicacao por localhost:8080, dentro da propria
+  # instancia, e security group nao filtra loopback — nada quebra sem esta
+  # regra.
 
   egress {
     from_port   = 0
