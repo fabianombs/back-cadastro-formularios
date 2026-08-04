@@ -1,0 +1,68 @@
+# .github/workflows/rollback-docker.yml
+#
+# Rollback pela interface do GitHub (Actions > este workflow > Run workflow),
+# para quando nao houver terminal com a chave SSH a mao. (FABIANO-18)
+#
+# CONVIVE com o rollback.yml antigo, que continua sendo o valido enquanto a
+# aplicacao rodar como JAR no systemd. Este aqui so passa a funcionar depois do
+# cutover para container (FABIANO-15). Como e workflow_dispatch, ele fica
+# inerte ate alguem clicar — adiciona-lo agora nao muda nada em producao.
+#
+# Depois do cutover, apagar o rollback.yml antigo para nao existirem dois
+# botoes com o mesmo nome numa hora em que ninguem quer escolher.
+
+name: Rollback Docker (usar apos o cutover)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da imagem (SHA curto do commit, ou 'previous')"
+        required: true
+      com_banco:
+        description: "Restaurar TAMBEM o banco? PERDE tudo gravado desde o dump"
+        type: boolean
+        default: false
+
+jobs:
+  rollback:
+    name: Rollback na EC2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Executar rollback via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          # Passada como variavel de ambiente, e nao como argumento, porque o
+          # script exige a palavra inteira para restaurar o banco. Marcar uma
+          # caixa por engano nao pode ser suficiente para apagar dado de
+          # cliente — a intencao precisa aparecer duas vezes.
+          CONFIRMA: ${{ inputs.com_banco && 'RESTAURAR' || '' }}
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: CONFIRMA
+          script: |
+            set -uo pipefail
+            cd ~/fabiano/deploy
+
+            # Login no GHCR: a tag alvo pode nao estar na maquina, e ai o
+            # script precisa puxa-la do registry.
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            FLAG=""
+            if [ "${{ inputs.com_banco }}" = "true" ]; then FLAG="--com-banco"; fi
+
+            export CONFIRMO_PERDA_DE_DADOS="$CONFIRMA"
+
+            # tee para arquivo porque a ssh-action trunca saida acima de ~64 KB,
+            # e e justamente no rollback que deu errado que a saida fica grande.
+            ./scripts/rollback.sh "${{ inputs.tag }}" $FLAG \
+              2>&1 | tee "/var/log/rollback-$(date +%s).log"
+
+            exit "${PIPESTATUS[0]}"
