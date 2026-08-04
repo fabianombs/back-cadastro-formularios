@@ -7,6 +7,8 @@ import com.cadastro.fabiano.demo.entity.FormTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -49,4 +51,30 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     long countByFormTemplate_ClientAndStatus(Client client, AppointmentStatus status);
 
     void deleteByFormTemplate(FormTemplate formTemplate);
+
+    /**
+     * Total, agendados e cancelados de varios templates numa consulta so.
+     * O dashboard fazia tres COUNT por template; agora sao tres somas dentro
+     * do mesmo GROUP BY (FABIANO-38).
+     *
+     * Os status vem por parametro em vez de literal no JPQL para o nome do
+     * enum nao ficar duplicado dentro de uma string.
+     */
+    @Query("SELECT a.formTemplate.id AS templateId, " +
+           "COUNT(a) AS total, " +
+           "SUM(CASE WHEN a.status = :agendado THEN 1L ELSE 0L END) AS confirmed, " +
+           "SUM(CASE WHEN a.status = :cancelado THEN 1L ELSE 0L END) AS cancelled " +
+           "FROM Appointment a WHERE a.formTemplate.id IN :templateIds " +
+           "GROUP BY a.formTemplate.id")
+    List<AppointmentCountByTemplate> countGroupedByTemplateIds(
+            @Param("templateIds") List<Long> templateIds,
+            @Param("agendado") AppointmentStatus agendado,
+            @Param("cancelado") AppointmentStatus cancelado);
+
+    interface AppointmentCountByTemplate {
+        Long getTemplateId();
+        Long getTotal();
+        Long getConfirmed();
+        Long getCancelled();
+    }
 }

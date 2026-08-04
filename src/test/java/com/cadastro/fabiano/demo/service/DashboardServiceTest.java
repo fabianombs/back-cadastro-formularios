@@ -74,6 +74,34 @@ class DashboardServiceTest {
 
     // ─── getSummary (Admin) ───────────────────────────────────────────────────
 
+    // As projecoes do Spring Data sao interfaces; num teste unitario basta uma
+    // implementacao anonima com os valores que a consulta agregada devolveria.
+    private FormSubmissionRepository.SubmissionCountByTemplate submissoes(Long templateId, Long total) {
+        return new FormSubmissionRepository.SubmissionCountByTemplate() {
+            @Override public Long getTemplateId() { return templateId; }
+            @Override public Long getTotal() { return total; }
+        };
+    }
+
+    private AppointmentRepository.AppointmentCountByTemplate agendamentos(
+            Long templateId, Long total, Long confirmed, Long cancelled) {
+        return new AppointmentRepository.AppointmentCountByTemplate() {
+            @Override public Long getTemplateId() { return templateId; }
+            @Override public Long getTotal() { return total; }
+            @Override public Long getConfirmed() { return confirmed; }
+            @Override public Long getCancelled() { return cancelled; }
+        };
+    }
+
+    private AttendanceRecordRepository.AttendanceStatsByTemplate presencas(
+            Long templateId, Long total, Long present) {
+        return new AttendanceRecordRepository.AttendanceStatsByTemplate() {
+            @Override public Long getTemplateId() { return templateId; }
+            @Override public Long getTotal() { return total; }
+            @Override public Long getPresent() { return present; }
+        };
+    }
+
     @Test
     @DisplayName("getSummary: retorna estatísticas globais para admin")
     void getSummary_admin_success() {
@@ -83,13 +111,15 @@ class DashboardServiceTest {
                 .thenReturn(new PageImpl<>(List.of(template)));
         when(clientRepository.count()).thenReturn(5L);
 
-        // Estatísticas por template
-        when(submissionRepository.countByTemplate_Id(10L)).thenReturn(3L);
-        when(appointmentRepository.countByFormTemplate(template)).thenReturn(2L);
-        when(appointmentRepository.countByFormTemplateAndStatus(template, AppointmentStatus.AGENDADO)).thenReturn(1L);
-        when(appointmentRepository.countByFormTemplateAndStatus(template, AppointmentStatus.CANCELADO)).thenReturn(1L);
-        when(attendanceRecordRepository.countByFormTemplate(template)).thenReturn(0L);
-        when(attendanceRecordRepository.countByFormTemplateAndAttended(template, true)).thenReturn(0L);
+        // Estatisticas por template: UMA consulta agregada por assunto, e nao mais
+        // seis por template (FABIANO-38).
+        when(submissionRepository.countGroupedByTemplateIds(List.of(10L)))
+                .thenReturn(List.of(submissoes(10L, 3L)));
+        when(appointmentRepository.countGroupedByTemplateIds(
+                List.of(10L), AppointmentStatus.AGENDADO, AppointmentStatus.CANCELADO))
+                .thenReturn(List.of(agendamentos(10L, 2L, 1L, 1L)));
+        when(attendanceRecordRepository.countGroupedByTemplateIds(List.of(10L)))
+                .thenReturn(List.of(presencas(10L, 0L, 0L)));
 
         // Contagens globais de tipo de template
         when(templateRepository.countByHasScheduleFalseAndHasAttendanceFalse()).thenReturn(1L);
@@ -111,6 +141,21 @@ class DashboardServiceTest {
         assertThat(response.globalTotalSubmissions()).isEqualTo(10);
         assertThat(response.globalTotalAppointments()).isEqualTo(5);
         assertThat(response.globalTotalAttendanceRecords()).isEqualTo(20);
+
+        // Os numeros do template continuam vindo certos, agora da consulta agregada
+        assertThat(response.templates()).hasSize(1);
+        assertThat(response.templates().get(0).submissionCount()).isEqualTo(3);
+        assertThat(response.templates().get(0).appointmentTotal()).isEqualTo(2);
+        assertThat(response.templates().get(0).appointmentConfirmed()).isEqualTo(1);
+        assertThat(response.templates().get(0).appointmentCancelled()).isEqualTo(1);
+
+        // Trava do N+1: nenhuma contagem por template. Se alguem reintroduzir um
+        // countBy... dentro do laco, este teste quebra antes de chegar em producao.
+        verify(submissionRepository, never()).countByTemplate_Id(any());
+        verify(appointmentRepository, never()).countByFormTemplate(any());
+        verify(appointmentRepository, never()).countByFormTemplateAndStatus(any(), any());
+        verify(attendanceRecordRepository, never()).countByFormTemplate(any());
+        verify(attendanceRecordRepository, never()).countByFormTemplateAndAttended(any(), anyBoolean());
     }
 
     // ─── getSummaryForClient ──────────────────────────────────────────────────
@@ -124,13 +169,14 @@ class DashboardServiceTest {
         when(templateRepository.findByClient(client, pageable))
                 .thenReturn(new PageImpl<>(List.of(template)));
 
-        // Estatísticas por template
-        when(submissionRepository.countByTemplate_Id(10L)).thenReturn(1L);
-        when(appointmentRepository.countByFormTemplate(template)).thenReturn(0L);
-        when(appointmentRepository.countByFormTemplateAndStatus(template, AppointmentStatus.AGENDADO)).thenReturn(0L);
-        when(appointmentRepository.countByFormTemplateAndStatus(template, AppointmentStatus.CANCELADO)).thenReturn(0L);
-        when(attendanceRecordRepository.countByFormTemplate(template)).thenReturn(0L);
-        when(attendanceRecordRepository.countByFormTemplateAndAttended(template, true)).thenReturn(0L);
+        // Idem: agregado, nao por template (FABIANO-38)
+        when(submissionRepository.countGroupedByTemplateIds(List.of(10L)))
+                .thenReturn(List.of(submissoes(10L, 1L)));
+        when(appointmentRepository.countGroupedByTemplateIds(
+                List.of(10L), AppointmentStatus.AGENDADO, AppointmentStatus.CANCELADO))
+                .thenReturn(List.of());
+        when(attendanceRecordRepository.countGroupedByTemplateIds(List.of(10L)))
+                .thenReturn(List.of());
 
         // Contagens de tipo por cliente
         when(templateRepository.countByClientAndHasScheduleFalseAndHasAttendanceFalse(client)).thenReturn(1L);
@@ -149,6 +195,28 @@ class DashboardServiceTest {
 
         assertThat(response.totalTemplates()).isEqualTo(1);
         assertThat(response.globalTotalSubmissions()).isEqualTo(1);
+
+        // Template ausente do GROUP BY significa zero, nao null nem excecao:
+        // o agregado so devolve linha para quem tem registro.
+        assertThat(response.templates().get(0).submissionCount()).isEqualTo(1);
+        assertThat(response.templates().get(0).appointmentTotal()).isZero();
+        assertThat(response.templates().get(0).attendanceTotal()).isZero();
+    }
+
+    @Test
+    @DisplayName("getSummary: pagina vazia nao dispara consulta agregada")
+    void getSummary_paginaVazia_naoConsultaAgregados() {
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        when(templateRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of()));
+
+        service.getSummary(pageable);
+
+        // Sem este guarda o JPQL sairia com IN (), que e SQL invalido. A falha
+        // apareceria so quando um cliente novo abrisse o painel pela primeira vez.
+        verify(submissionRepository, never()).countGroupedByTemplateIds(any());
+        verify(appointmentRepository, never()).countGroupedByTemplateIds(any(), any(), any());
+        verify(attendanceRecordRepository, never()).countGroupedByTemplateIds(any());
     }
 
     @Test
