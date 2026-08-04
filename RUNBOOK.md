@@ -315,6 +315,55 @@ Se `swapon --show` vier vazio, o problema volta.
 O certificado expirou uma vez, em 10/07/2026, e derrubou o sistema. Vale conferir
 a data quando estiver perto de setembro.
 
+### 7.7 — Autenticação do usuário do banco (FABIANO-41)
+
+O `admin@%` usa **`caching_sha2_password`** desde 04/08/2026. Antes usava
+`mysql_native_password`, depreciado desde o 8.0.34.
+
+Conferir o método em vigor:
+
+    sudo mysql -h <DB_HOST> -u admin -p -N -B \
+      -e "SELECT plugin FROM mysql.user WHERE user='admin' AND host='%';"
+
+> **Rollback** — uma linha, e continua válida depois do upgrade para 8.4,
+> porque a AWS mantém o plugin antigo ligado (`mysql_native_password`,
+> `Source=system`, `IsModifiable=False`):
+>
+>     ALTER USER 'admin'@'%' IDENTIFIED WITH mysql_native_password BY '<A MESMA SENHA>';
+
+**As três armadilhas deste procedimento**, todas descobertas antes de executar:
+
+1. **O `BY` DEFINE a senha, não a confirma.** Digitar diferente da atual não
+   troca o método — troca a senha, e a aplicação para. Por isso o
+   procedimento lê o `DB_PASSWORD` do `/etc/poc-fabiano.env`, prova que ela
+   autentica, e reusa a mesma string. **Ninguém digita senha.**
+
+2. **O sintoma atrasa 30 minutos.** Autenticação só acontece em conexão
+   **nova**; as que já estão no pool do Hikari continuam funcionando. Com o
+   `maxLifetime` padrão de 30 min, um erro só aparece meia hora depois — e
+   vira "o sistema caiu do nada". Reiniciar o serviço logo após a troca
+   força o pool inteiro a reautenticar e antecipa a resposta.
+
+3. **Sem sessão âncora não há rollback.** Se o método novo não funcionasse,
+   a tentativa de desfazer também falharia — ela precisa autenticar, e é a
+   autenticação que estaria quebrada. O procedimento abre uma conexão
+   **antes** da troca e a mantém viva (`mkfifo` + `mysql` lendo do FIFO); o
+   `ALTER` e o eventual rollback saem por ela.
+
+Rede embaixo da rede, se tudo falhar ao mesmo tempo:
+
+    aws rds modify-db-instance --db-instance-identifier poc-fabiano-db \
+      --master-user-password '<nova>' --apply-immediately
+
+Redefine a senha do master independente de plugin. Nunca se fica trancado
+para fora — mas leva minutos, contra os segundos do rollback pela âncora.
+
+**Pré-requisito que não pode faltar:** o `caching_sha2_password` exige TLS
+no primeiro handshake, ou `allowPublicKeyRetrieval=true`. Sem uma das duas,
+o driver falha com `Public Key Retrieval is not allowed` — erro que ninguém
+associa a mudança de autenticação. O `application-prod.properties` traz
+`sslMode=REQUIRED`, e o `Ssl_cipher` foi conferido em vigor antes da troca.
+
 ---
 
 ## 8. Contatos e janelas
@@ -340,6 +389,7 @@ ser considerado documentado. Ainda não é o caso de todos:
 | Leitura de logs e diagnóstico | sim, em 02 e 03/08 |
 | Backup manual validado | **sim**, 03/08 — 24 tabelas, 22 inserts |
 | Instalação do cliente MySQL | **sim**, 03/08, com ensaio em container antes |
+| Troca de autenticação do banco (7.7) | **sim**, 04/08 — em produção, com rollback armado |
 | Rollback manual (`rollback.sh`) | **não** |
 | Recuperação manual (seção 5) | **não** |
 | Restauração de dump (6.2) | **não** — FABIANO-20 |
