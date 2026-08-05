@@ -91,6 +91,8 @@ services:
       # Fora do conf.d de proposito: o nginx carrega todo *.conf de la como
       # bloco de servidor, e este arquivo tem so cabecalhos de proxy.
       - ./nginx/proxy-common.conf:/etc/nginx/proxy-common.conf:ro
+      # Rotas compartilhadas pelos blocos de producao e de ensaio.
+      - ./nginx/app-locations.conf:/etc/nginx/app-locations.conf:ro
       # Traz cert, chave, options-ssl-nginx.conf e ssl-dhparams.pem de uma vez.
       - /etc/letsencrypt:/etc/letsencrypt:ro
       # Webroot do desafio HTTP-01. Mesmo caminho absoluto dentro e fora do
@@ -106,7 +108,10 @@ services:
         condition: service_healthy
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      # /nginx-health e nao '/': a raiz responde 301 para HTTPS, o wget do
+      # BusyBox segue o redirect, o certificado nao casa com 'localhost' e o
+      # container fica unhealthy para sempre. Ver comentario no nginx.conf.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/nginx-health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

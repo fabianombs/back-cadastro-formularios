@@ -437,13 +437,113 @@ ser considerado documentado. Ainda não é o caso de todos:
 | Backup manual validado | **sim**, 03/08 — 24 tabelas, 22 inserts |
 | Instalação do cliente MySQL | **sim**, 03/08, com ensaio em container antes |
 | Troca de autenticação do banco (7.7) | **sim**, 04/08 — em produção, com rollback armado |
-| Rollback manual (`rollback.sh`) | **não** |
+| Rollback manual (`rollback.sh`) | **sim**, 05/08 — os dois caminhos, na EC2 nova |
 | Recuperação manual (seção 5) | **não** |
 | Restauração de dump (6.2) | **não** — FABIANO-20 |
 | Point-in-time recovery (6.1) | **não** — depende do FABIANO-4 |
 
-Procedimento não executado é hipótese. Os das seções 4, 5 e 6 ainda são hipótese,
+Procedimento não executado é hipótese. Os das seções 5 e 6 ainda são hipótese,
 e é justamente neles que se confia num sábado à noite.
+
+### 9.1 — Como o `rollback.sh` foi testado (05/08/2026)
+
+Executado na EC2 nova (FABIANO-13), contra o banco de ensaio. Produção não foi
+tocada.
+
+Um problema atrapalhava o teste: a máquina só tinha **uma** imagem, então não
+havia versão anterior para voltar. Foi fabricada uma segunda a partir da que
+rodava, mudando só um `LABEL` — mesmo JAR, mesmo comportamento, **ID de imagem
+diferente**. Isso permite provar que o container trocou de imagem de verdade,
+sem introduzir código diferente na equação.
+
+**Caminho de falha** (`./scripts/rollback.sh tag-que-nao-existe-999`): o pull
+falhou com `manifest unknown`, o script saiu com 1 e o `.Id` do container era
+byte a byte o mesmo de antes. A frase *"NADA foi alterado"* que ele imprime é
+verdadeira — conferida, não presumida.
+
+**Caminho de sucesso** (`./scripts/rollback.sh teste-rollback`): **32 segundos**
+do comando ao `{"status":"UP"}`. Depois dele: o `LABEL` do container era o da
+imagem alvo, o `.env` já dizia `BACKEND_TAG=teste-rollback` (sem isso um reboot
+traria a versão ruim de volta) e o HTTPS através do nginx respondeu **200** —
+prova de que o `nginx -s reload` pegou o IP novo do container, que muda a cada
+recriação.
+
+> [!tip] O `--pull never` é o detalhe que faz a rede de segurança existir
+> O `docker-compose.yml` declara `pull_policy: always`. Sem esse flag, voltar
+> para a tag `:previous` — que só existe **localmente**, e é justamente a saída
+> para quando o GHCR está fora do ar — faria o compose tentar buscá-la no
+> registry e falhar exatamente no momento do resgate.
+
+### 9.3 — Smoke contra a máquina nova (05/08/2026)
+
+```powershell
+cd C:\projetos\Fabiano\back-cadastro-formularios
+.\infra\smoke-local.ps1 -Api "https://44-193-5-38.sslip.io"
+```
+
+**39 ok, 0 falhas, 17 pulados.** Não precisa de administrador e não altera nada
+na máquina de quem roda.
+
+O nome `44-193-5-38.sslip.io` é atendido por um bloco `server` próprio no
+nginx, com certificado próprio. Ele **some na virada** — o motivo e o
+`certbot delete` obrigatório estão comentados no `deploy/nginx/nginx.conf`.
+
+> [!danger] Não aponte o domínio de produção para a máquina nova pelo `hosts`
+> Foi a primeira tentativa, e custou caro: o Defender protege o `hosts`, o
+> `Set-Content` **truncou o arquivo e só então falhou ao escrever**, e o
+> `finally` imprimiu "restaurado" com o arquivo zerado. Um teste de leitura não
+> teria percebido — o que denunciou foi conferir a resolução depois.
+
+**Os 17 pulados não são dívida escondida.** São verificações que exigem falar
+com a aplicação direto na 8080: o nginx devolve 404 para todo `/actuator` menos
+`/health`, e o log em JSON fica dentro do container. Elas aparecem como
+`PULADO` na tela e no resumo, e continuam rodando no smoke local. Em troca, o
+modo remoto ganhou duas que só fazem sentido de fora: `/actuator/prometheus` e
+`/actuator/env` **têm** que responder 404. Se virarem 401, o bloqueio caiu.
+
+> [!warning] `docker compose up -d nginx` puxa a imagem do backend
+> O `depends_on` faz o compose resolver o backend também, e `pull_policy:
+> always` faz ele tentar o GHCR. Com o `docker login` expirado, o comando
+> aborta inteiro e **o nginx não é recriado** — enquanto o nginx antigo segue
+> servindo, o que faz parecer que deu certo. Use sempre:
+>
+> ```bash
+> docker compose up -d --no-deps --force-recreate nginx
+> ```
+
+### 9.2 — O backup na máquina nova (05/08/2026)
+
+Rodado à mão na EC2 nova: 25 tabelas, 23 blocos de insert, 121 KB, e-mail
+recebido com o anexo íntegro. Duas coisas só apareceram por ter rodado:
+
+**O script apontava para a máquina errada.** `ENV_FILE` era fixo em
+`/etc/poc-fabiano.env` — que é exatamente a *marca infalível da máquina antiga*
+(seção 0) e não existe na nova. Instalado como estava, o backup teria começado a
+falhar no dia da virada, quando ninguém está olhando para ele. Agora procura em
+ordem: `/etc/poc-fabiano.env`, depois o `.env` do compose.
+
+**O log estava em UTC e o resto em Brasília.** O e-mail dizia 09:15 e o log
+12:15, para o mesmo backup.
+
+> [!warning] O `MAIL_TO` só aponta para o Fabiano depois da virada
+> Enquanto a máquina nova fala com o banco de ensaio, o anexo é dado de teste
+> com o assunto "Backup do sistema". Mandar isso para o cliente é pior do que
+> não mandar nada: ele guardaria uma cópia que parece o negócio dele e não é.
+
+> [!tip] Como saber qual banco um dump salvou
+> `gunzip -c <dump> | grep -c _ENSAIO_NAO_E_PRODUCAO`. Zero é produção. Um dump
+> de ensaio e um de produção são indistinguíveis por tamanho, número de tabelas
+> e pela marca "Dump completed".
+
+O script também passou a registrar o alvo (`alvo: banco X em Y`) no log, pelo
+mesmo motivo.
+
+**Não testado ainda:** o `--com-banco`. É a única operação do projeto que
+destrói dado de forma irreversível, e testá-la de verdade exige um banco
+descartável com dado conhecido — vai junto com o FABIANO-20.
+
+Ao final, `BACKEND_TAG` voltou para `6647635` e a imagem fabricada foi removida.
+A máquina ficou no mesmo estado de antes do teste.
 
 **A prioridade seguinte é executar o teste de restauração (FABIANO-20)** e voltar
 aqui para preencher o RTO real.

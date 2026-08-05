@@ -22,7 +22,18 @@ set -uo pipefail
 
 BACKUP_ROOT="/app/backups"
 LOG="/var/log/backup-db.log"
-ENV_FILE="/etc/poc-fabiano.env"
+# Onde ficam as credenciais depende da GERACAO da maquina:
+#   antiga (Amazon Linux 2, JAR no systemd) -> /etc/poc-fabiano.env
+#   nova   (AL2023, Docker Compose)         -> o .env do compose
+#
+# Durante a migracao blue-green as duas existem, e este mesmo script roda nas
+# duas. Procurar em ordem, em vez de assumir um caminho, e o que impede o
+# backup de simplesmente parar de existir no dia da virada.
+ENV_CANDIDATOS=(
+  "/etc/poc-fabiano.env"
+  "/home/ec2-user/fabiano/deploy/.env"
+)
+ENV_FILE=""
 
 # Um gzip VAZIO tem 20 bytes. Foi assim que os backups do deploy-safe.sh
 # passaram meses parecendo validos. O minimo aqui e deliberadamente alto.
@@ -39,7 +50,11 @@ KEEP_MENSAL=12
 # gera silencio, e silencio e o que ninguem percebe.
 METRICA="/var/lib/node_exporter/textfile_collector/backup_fabiano.prom"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
+# Brasilia, nao UTC. A maquina roda em UTC, mas o nome do arquivo e o e-mail
+# ao cliente ja usam horario de Brasilia. Sem isto o log carimba 12:15 para um
+# backup que o e-mail anuncia as 09:15 — e a hora do log e a que se olha as
+# pressas quando algo deu errado.
+log() { echo "[$(TZ=America/Sao_Paulo date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
 falhar() {
   log "ERRO: $*"
@@ -59,6 +74,12 @@ mkdir -p "$BACKUP_ROOT"/{diario,semanal,mensal}
 command -v mysqldump >/dev/null 2>&1 || falhar "mysqldump nao instalado (sudo yum install -y mariadb)"
 
 # --- Credenciais -------------------------------------------------------------
+for c in "${ENV_CANDIDATOS[@]}"; do
+  if sudo test -r "$c"; then ENV_FILE="$c"; break; fi
+done
+[ -n "$ENV_FILE" ] || falhar "nenhum arquivo de credencial encontrado (procurei: ${ENV_CANDIDATOS[*]})"
+log "credenciais lidas de: $ENV_FILE"
+
 DB_HOST=$(sudo grep '^DB_HOST=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 DB_PORT=$(sudo grep '^DB_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 DB_NAME=$(sudo grep '^DB_NAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
@@ -68,6 +89,12 @@ DB_PASS=$(sudo grep '^DB_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 
 [ -n "$DB_HOST" ] && [ -n "$DB_NAME" ] && [ -n "$DB_USER" ] \
   || falhar "nao consegui ler credenciais de $ENV_FILE"
+
+# Registrar o ALVO, nao so o sucesso. Um dump do banco de ensaio e um dump do
+# banco de producao sao indistinguiveis pelo tamanho, pelo numero de tabelas e
+# pela marca "Dump completed". Se o backup passar a salvar o banco errado,
+# esta linha do log e a unica coisa que denuncia.
+log "alvo: banco ${DB_NAME} em ${DB_HOST}"
 
 # --- Dump --------------------------------------------------------------------
 # Horario de Brasilia, nao UTC: o nome do arquivo precisa bater com a hora que
