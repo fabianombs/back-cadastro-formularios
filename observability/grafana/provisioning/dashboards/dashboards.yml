@@ -1,0 +1,24 @@
+# =============================================================================
+# Provisionamento de dashboards do Grafana (FABIANO-27)
+# =============================================================================
+# O dashboard vive no repositorio, nao no banco interno do Grafana. Com isso
+# ele sobe pronto em qualquer maquina e a mudanca passa por revisao como
+# qualquer outro arquivo.
+#
+# allowUiUpdates: false e proposital. Editar pela tela nao persiste - ao
+# recarregar o provisionamento o Grafana restaura o arquivo. Para alterar de
+# verdade: editar na tela, exportar o JSON e commitar.
+apiVersion: 1
+
+providers:
+  - name: fabiano
+    orgId: 1
+    folder: Fabiano
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      # Cria subpasta no Grafana espelhando subpasta no disco.
+      foldersFromFilesStructure: false

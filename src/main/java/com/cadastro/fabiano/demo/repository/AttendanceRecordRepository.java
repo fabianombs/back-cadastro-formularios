@@ -40,4 +40,21 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
         Long getTemplateId();
         Long getAttendanceCount();
     }
+
+    /**
+     * Total e presentes de varios templates numa consulta so. O dashboard
+     * fazia dois COUNT por template da pagina (FABIANO-38).
+     */
+    @Query("SELECT ar.formTemplate.id AS templateId, " +
+           "COUNT(ar) AS total, " +
+           "SUM(CASE WHEN ar.attended = TRUE THEN 1L ELSE 0L END) AS present " +
+           "FROM AttendanceRecord ar WHERE ar.formTemplate.id IN :templateIds " +
+           "GROUP BY ar.formTemplate.id")
+    List<AttendanceStatsByTemplate> countGroupedByTemplateIds(@Param("templateIds") List<Long> templateIds);
+
+    interface AttendanceStatsByTemplate {
+        Long getTemplateId();
+        Long getTotal();
+        Long getPresent();
+    }
 }

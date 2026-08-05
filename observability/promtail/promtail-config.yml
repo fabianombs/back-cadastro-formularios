@@ -1,0 +1,76 @@
+# =============================================================================
+# Promtail - le o log da aplicacao e entrega ao Loki (FABIANO-23)
+# =============================================================================
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  # Guarda ate onde ja leu. Sem isso, reiniciar o Promtail reenviaria o
+  # arquivo inteiro e duplicaria tudo no Loki.
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: fabiano-back
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: fabiano-back
+          application: fabiano-back
+          ambiente: dev
+          __path__: /logs/*.json
+
+    pipeline_stages:
+      # Extrai os campos do JSON no formato ECS que a aplicacao produz.
+      - json:
+          expressions:
+            nivel: 'log.level'
+            logger: 'log.logger'
+            mensagem: message
+            momento: '"@timestamp"'
+            requestId: requestId
+            userId: userId
+            metodo: method
+            rota: path
+            status: status
+            duracaoMs: duracaoMs
+
+      # Usa o carimbo de tempo da aplicacao, nao a hora em que o Promtail leu.
+      # Sem isso, uma rajada de log antigo apareceria toda no mesmo instante.
+      - timestamp:
+          source: momento
+          format: RFC3339Nano
+
+      # SO nivel e logger viram rotulo. requestId e userId ficam no CORPO da
+      # linha: rotulo de alta cardinalidade no Loki e o mesmo pecado que no
+      # Prometheus - cada valor distinto cria um fluxo proprio, e um requestId
+      # por requisicao criaria um fluxo por requisicao.
+      # A busca por eles continua funcionando com |= "..." no LogQL.
+      - labels:
+          nivel:
+          logger:
+
+      # requestId e userId viram METADADO ESTRUTURADO (Loki 3, schema v13).
+      # Esse e o lugar certo para campo de alta cardinalidade: nao cria fluxo
+      # novo como rotulo criaria, e continua aparecendo na visao detalhada da
+      # linha no Grafana. Sem isto o estagio 'output' abaixo descarta os dois,
+      # e a correlacao com o cabecalho X-Request-Id se perde.
+      - structured_metadata:
+          requestId:
+          userId:
+          # metodo e rota vem do RequestIdFilter; status e duracaoMs vem do
+          # AccessLogFilter. Rota e o caminho CONCRETO (com o slug real), nao
+          # o padrao - alta cardinalidade, por isso metadado e nao rotulo.
+          metodo:
+          rota:
+          status:
+          duracaoMs:
+
+      # Mostra a mensagem legivel no painel, em vez do JSON cru. Os campos
+      # extraidos acima seguem junto como metadado estruturado.
+      - output:
+          source: mensagem

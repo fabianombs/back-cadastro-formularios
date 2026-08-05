@@ -1,0 +1,47 @@
+# =============================================================================
+# Prometheus - coleta das metricas do backend (FABIANO-23)
+# =============================================================================
+global:
+  # 15s e o padrao da industria: granularidade boa para p95 sem inflar o disco.
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    ambiente: dev
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # A aplicacao Spring Boot
+  # ---------------------------------------------------------------------------
+  - job_name: fabiano-back
+    metrics_path: /actuator/prometheus
+    scheme: http
+
+    # O endpoint exige autenticacao. JWT nao serve para coletor: expira em 24h.
+    # O tipo "Metrics-Token" produz o header "Authorization: Metrics-Token <t>",
+    # que o JwtAuthenticationFilter ignora por nao comecar com "Bearer ".
+    #
+    # ATENCAO: este valor e de DESENVOLVIMENTO. Em producao use credentials_file
+    # apontando para um arquivo com permissao restrita, nunca o token inline.
+    authorization:
+      type: Metrics-Token
+      credentials: token-local-de-desenvolvimento-nao-use-em-producao
+
+    static_configs:
+      # PADRAO DA CASA (back-pecas-intercambiaveis): o alvo e o NOME DO SERVICO
+      # na rede do compose, nunca localhost. Assim que o backend virar container
+      # (FABIANO-13 a 19), esta linha troca para:
+      #
+      #   - targets: ["backend:8080"]
+      #
+      # Hoje a aplicacao roda pelo mvnw fora do Docker, entao o container do
+      # Prometheus alcanca a maquina hospedeira por host.docker.internal.
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          application: fabiano-back
+
+  # ---------------------------------------------------------------------------
+  # O proprio Prometheus, para saber se a coleta esta saudavel
+  # ---------------------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

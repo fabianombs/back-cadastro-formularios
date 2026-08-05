@@ -28,6 +28,17 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+
+		<!--
+			Sobrepoe a versao do BOM do Spring Boot 3.5.11, que traz o Flyway
+			11.7.2 (FABIANO-34). O 11.7.2 so declara suporte ate MySQL 8.1 e
+			avisa a cada inicializacao que o 8.4 - a LTS para onde estamos
+			migrando - nao foi testado. O suporte a 8.4 entrou no 11.15.0.
+
+			Mesma linha 11.x de proposito: subir de major tiraria o projeto da
+			combinacao que o Spring Boot testa, por um ganho que nao precisamos.
+		-->
+		<flyway.version>11.15.0</flyway.version>
 	</properties>
 
 	<dependencyManagement>
@@ -47,6 +58,14 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+		<!-- Traduz as metricas do Micrometer para o formato que o Prometheus le.
+		     Sem ela o endpoint /actuator/prometheus simplesmente nao existe. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 
 		<dependency>
@@ -165,6 +184,18 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off</argLine>
+					<systemPropertyVariables>
+						<!--
+						  Os testes rodam com o perfil dev, que grava em logs/app.json -
+						  o MESMO arquivo que o Promtail entrega ao Loki. Sem isto, cada
+						  'mvnw test' despeja centenas de linhas de teste no painel do
+						  Grafana como se fossem da aplicacao, e a tela passa a mostrar
+						  erro que nunca aconteceu em execucao real.
+						  Propriedade de sistema tem precedencia sobre o arquivo de
+						  configuracao, entao basta redirecionar aqui.
+						-->
+						<logging.file.name>target/logs/testes.json</logging.file.name>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 

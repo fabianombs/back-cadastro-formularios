@@ -15,5 +15,6 @@ public record AttendanceRecordResponse(
         int companionsCount,
         List<AttendanceCompanionResponse> companions,
         Integer rowOrder,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime filledAt
 ) {}

@@ -12,7 +12,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: testpassword
           MYSQL_DATABASE: testdb
@@ -62,6 +62,108 @@ jobs:
 
       - name: Verify JAR was generated
         run: ls -la target/*.jar
+
+  # Imagem da branch develop, para o ambiente de homologacao do FABIANO-33.
+  # Tag fixa 'develop': homologacao sempre roda o ultimo develop, sem precisar
+  # descobrir sha nenhum.
+  build-push-develop:
+    name: Publicar imagem develop no GHCR
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    # A tag por SHA e o que o deploy usa. A tag 'develop' e movel: aponta
+    # sempre para a ultima, entao nao serve para rollback nem para promover
+    # a mesma imagem para producao depois (FABIANO-49).
+    outputs:
+      tag: ${{ steps.nomes.outputs.tag }}
+      owner: ${{ steps.nomes.outputs.owner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O GHCR recusa nome de imagem com maiuscula.
+      - name: Normalizar owner e definir a tag
+        id: nomes
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:develop
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ steps.nomes.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================================================
+  # DEPLOY EM HOMOLOGACAO
+  #
+  # Enquanto a migracao blue-green nao termina, 'homologacao' e a EC2 nova
+  # (FABIANO-13), que depois vira producao. Terminada a virada, o segredo
+  # HOMOLOG_EC2_HOST passa a apontar para a instancia clonada (FABIANO-33) e
+  # este job continua identico — muda o valor, nao o desenho.
+  # ===========================================================================
+  deploy-homolog:
+    name: Deploy em homologacao
+    needs: build-push-develop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+
+            # TRAVA: este job nunca pode rodar contra o banco de producao.
+            #
+            # O risco e concreto. Depois da virada, a maquina que hoje e
+            # homologacao vira producao e o .env dela passa a apontar para o
+            # banco real. Se o segredo HOMOLOG_EC2_HOST nao for atualizado
+            # junto, todo merge em develop passaria a deployar em PRODUCAO —
+            # em silencio, porque o job continuaria verde.
+            #
+            # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+            grep -q -- '-ensaio\.' .env || {
+              echo "ABORTADO: o .env desta maquina NAO aponta para um banco de ensaio."
+              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina ja virou producao."
+              exit 1
+            }
+
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Deploy pela tag de SHA, nao pela tag 'develop': e a mesma imagem
+            # que sera promovida para producao depois de validada.
+            ./scripts/deploy-safe.sh "${{ needs['build-push-develop'].outputs.tag }}"
+
+      - name: Tag validada
+        run: |
+          echo "Imagem em homologacao: ${{ needs['build-push-develop'].outputs.tag }}"
+          echo "E ESTA a tag que deve ir para producao depois de validada."
 
   create-pr-to-master:
     name: Create PR to Master

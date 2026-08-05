@@ -1,2 +1,34 @@
-/mvnw text eol=lf
-*.cmd text eol=crlf
+# Fim de linha por tipo de arquivo.
+#
+# O core.autocrlf do Windows converte tudo para CRLF na copia de trabalho. Isso
+# e inofensivo em codigo Java, e quebra qualquer arquivo que vai ser lido por
+# Linux: script com CRLF morre com "bad interpreter: /bin/bash^M", e valor de
+# .env terminado em \r entra no container com o \r junto.
+#
+# Regra: o que roda no servidor e LF, o que roda no Windows e CRLF.
+
+# --- originais, mantidas ---
+# mvnw e um shell script SEM extensao, entao nenhuma regra por extensao pega
+# ele. Precisa da linha propria.
+/mvnw           text eol=lf
+*.cmd           text eol=crlf
+
+# --- servidor: LF ---
+*.sh            text eol=lf
+*.conf          text eol=lf
+*.env.example   text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+deploy/**       text eol=lf
+
+# --- Windows: CRLF ---
+*.ps1           text eol=crlf
+*.bat           text eol=crlf
+
+# --- binarios: nunca converter ---
+*.jar   binary
+*.pem   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gz    binary

@@ -4,10 +4,10 @@ import com.cadastro.fabiano.demo.dto.request.*;
 import com.cadastro.fabiano.demo.dto.response.*;
 import com.cadastro.fabiano.demo.entity.*;
 import com.cadastro.fabiano.demo.repository.*;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.LocalDateTime;
@@ -43,6 +43,8 @@ public class QuizService {
     // ── CRUD de quizzes independentes ─────────────────────────────────────────
 
     /** Lista todos os quizzes da biblioteca */
+    // toConfigResponse percorre questions e options, ambos LAZY (FABIANO-37).
+    @Transactional(readOnly = true)
     public List<QuizConfigResponse> listAll() {
         return quizConfigRepository.findAll().stream()
                 .map(q -> toConfigResponse(q, true))
@@ -108,6 +110,7 @@ public class QuizService {
     }
 
     /** Busca um quiz pelo ID (para edição admin) */
+    @Transactional(readOnly = true)
     public QuizConfigResponse getQuizById(Long quizId) {
         return toConfigResponse(findQuizOrThrow(quizId), true);
     }
@@ -145,6 +148,7 @@ public class QuizService {
     // ── Fluxo público: jogador acessa pelo slug ───────────────────────────────
 
     /** Busca quiz público pelo slug (sem revelar respostas corretas) */
+    @Transactional(readOnly = true)
     public QuizConfigResponse getQuizBySlug(String slug) {
         QuizConfig quiz = quizConfigRepository.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Quiz não encontrado"));

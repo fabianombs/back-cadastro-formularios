@@ -1,0 +1,39 @@
+# =============================================================================
+# Roteamento por severidade (FABIANO-28)
+# =============================================================================
+# Critico repete a cada 1h, alto a cada 4h, medio a cada 24h.
+# Alerta que insiste sem parar vira alerta ignorado, e alerta ignorado e o
+# mesmo que alerta inexistente - so que com a sensacao falsa de cobertura.
+# =============================================================================
+apiVersion: 1
+policies:
+- orgId: 1
+  receiver: email-equipe
+  group_by:
+  - alertname
+  - severidade
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+  - receiver: email-equipe
+    object_matchers:
+    - - severidade
+      - '='
+      - critico
+    group_wait: 10s
+    repeat_interval: 1h
+  - receiver: email-equipe
+    object_matchers:
+    - - severidade
+      - '='
+      - alto
+    group_wait: 30s
+    repeat_interval: 4h
+  - receiver: email-equipe
+    object_matchers:
+    - - severidade
+      - '='
+      - medio
+    group_wait: 2m
+    repeat_interval: 24h

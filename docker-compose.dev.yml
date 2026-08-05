@@ -1,0 +1,206 @@
+# =============================================================================
+# Ambiente de desenvolvimento local (FABIANO-19 / FABIANO-23)
+# =============================================================================
+# Um arquivo so, com perfis, seguindo o padrao do back-pecas-intercambiaveis.
+# Nao toca em nada de producao.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#       MySQL 8.4 (3307) + Dozzle (9999)
+#
+#   docker compose -f docker-compose.dev.yml --profile observabilidade up -d
+#       o acima + Prometheus (9091), Loki (3100), Promtail e Grafana (3000)
+#
+#   docker compose -f docker-compose.dev.yml --profile migracao up -d
+#       o acima + banco descartavel na 3308 para testar as migrations do zero
+#
+#   docker compose -f docker-compose.dev.yml down          # para
+#   docker compose -f docker-compose.dev.yml down -v       # para e apaga os dados
+# =============================================================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: fabiano-mysql-dev
+    restart: unless-stopped
+    # 3307 no host para nao brigar com um MySQL instalado direto no Windows.
+    # Licao do back-resulta: perfil dev apontando para 3306 enquanto o compose
+    # expoe 3307 faz a IDE nunca conectar, e o erro nao e obvio.
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: teste_fabiano_cadastro2
+    command:
+      # utf8mb4 explicito para bater com o charset de producao
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql84_dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Banco descartavel so para o teste de migracao do Flyway.
+  # Separado do de cima para poder derrubar e recriar do zero sem perder o
+  # banco de trabalho do dia a dia.
+  mysql-migracao:
+    image: mysql:8.4
+    container_name: fabiano-mysql84-migracao
+    profiles: ["migracao"]        # so sobe com --profile migracao
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fabiano_migracao_check
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    # Sem volume: cada 'up' comeca com o banco vazio, que e exatamente o que o
+    # teste de migracao precisa.
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: fabiano-dozzle
+    restart: unless-stopped
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+
+  # ===========================================================================
+  # OBSERVABILIDADE (FABIANO-23) - perfil "observabilidade"
+  # ===========================================================================
+  # No mesmo compose de proposito, seguindo o padrao do back-pecas-intercambiaveis:
+  # um arquivo, uma rede, e o Prometheus raspando pelo NOME DO SERVICO quando o
+  # backend estiver containerizado (FABIANO-13 a 19).
+  #
+  # Enquanto o backend roda pelo mvnw fora do Docker, o alvo e host.docker.internal.
+  # A troca para "backend:8080" e uma linha no prometheus.yml.
+  #
+  #   docker compose -f docker-compose.dev.yml --profile observabilidade up -d
+  #
+  #   Grafana     http://localhost:3000   (admin / admin)
+  #   Prometheus  http://localhost:9091
+  #   Loki        http://localhost:3100
+  # ===========================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: fabiano-prometheus
+    profiles: ["observabilidade"]
+    restart: unless-stopped
+    # 9091 no host: a 9090 costuma estar ocupada, e dentro do container
+    # continua sendo 9090, que e o que o proprio Prometheus espera.
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dados:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Sem teto de retencao o volume cresce sem parar.
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: fabiano-loki
+    profiles: ["observabilidade"]
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_dados:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: fabiano-promtail
+    profiles: ["observabilidade"]
+    restart: unless-stopped
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      # A aplicacao escreve logs/app.json em JSON (perfil dev). Somente leitura:
+      # o Promtail nunca precisa escrever no log.
+      - ./logs:/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: fabiano-grafana
+    profiles: ["observabilidade"]
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_dados:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      # Credencial de DESENVOLVIMENTO. Em producao vem de variavel de ambiente
+      # e o Grafana fica atras do nginx.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Sem chamada externa de checagem de versao: sobe mais rapido e nao
+      # depende de internet.
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Envio de alerta por e-mail (FABIANO-28). Nenhum segredo mora aqui:
+      # tudo vem do ambiente. Com SMTP_ENABLED em false - o padrao - o Grafana
+      # nao envia nada e os alertas ficam visiveis apenas na tela de Alerting.
+      # Esse e o comportamento seguro para desenvolvimento: melhor nao enviar
+      # do que enviar para o lugar errado enquanto se testa.
+      GF_SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${SMTP_HOST:-}
+      GF_SMTP_USER: ${SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_FROM:-alertas@nexventa.com.br}
+      GF_SMTP_FROM_NAME: Nexventa - Alertas
+      # Destinatario dos alertas, lido pelo contact-points.yaml.
+      # PRECISA de um valor: o Grafana valida que endereco de e-mail nao pode
+      # ser vazio e, se for, REJEITA O ARQUIVO INTEIRO de contatos - o que
+      # derruba junto as 8 regras de alerta. O padrao abaixo e proposital e
+      # inofensivo: com GF_SMTP_ENABLED em false nada e enviado, e os alertas
+      # ficam visiveis na tela de Alerting. Troque pelo endereco real junto
+      # com as variaveis de SMTP.
+      ALERTA_EMAIL: ${ALERTA_EMAIL:-alertas@localhost}
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+volumes:
+  mysql84_dev:
+  prometheus_dados:
+  loki_dados:
+  grafana_dados:

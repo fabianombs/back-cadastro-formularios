@@ -16,8 +16,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,10 @@ public class DashboardService {
     private String frontendUrl;
 
     // Admin: vê todos os templates e todos os clientes
+    // O dashboard percorre os templates contando campos, quiz e survey - todos
+    // LAZY. Com open-in-view=false (FABIANO-37) isso precisa acontecer dentro da
+    // transacao, senao a contagem estoura LazyInitializationException.
+    @Transactional(readOnly = true)
     public DashboardResponse getSummary(Pageable pageable) {
         Page<FormTemplate> page = templateRepository.findAll(pageable);
         long totalClients = clientRepository.count();
@@ -45,6 +52,7 @@ public class DashboardService {
     }
 
     // Client: vê apenas os templates do seu cliente
+    @Transactional(readOnly = true)
     public DashboardResponse getSummaryForClient(String username, Pageable pageable) {
         Client client = clientRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
@@ -60,13 +68,44 @@ public class DashboardService {
 
     private DashboardResponse buildResponse(Page<FormTemplate> page, long totalClients, boolean isAdmin, Client client) {
         List<FormTemplate> templates = page.getContent();
+        List<Long> templateIds = templates.stream().map(FormTemplate::getId).toList();
+
+        // Tres consultas agregadas no lugar de seis por template. Antes, uma pagina
+        // de 20 templates custava 120 idas ao banco so para montar os numeros do
+        // painel - o custo dominante desta rota (FABIANO-38).
+        // O guarda de lista vazia existe porque IN () e SQL invalido.
+        Map<Long, Long> submissoesPorTemplate = templateIds.isEmpty() ? Map.of()
+                : submissionRepository.countGroupedByTemplateIds(templateIds).stream()
+                        .collect(Collectors.toMap(
+                                FormSubmissionRepository.SubmissionCountByTemplate::getTemplateId,
+                                FormSubmissionRepository.SubmissionCountByTemplate::getTotal));
+
+        Map<Long, AppointmentRepository.AppointmentCountByTemplate> agendamentosPorTemplate =
+                templateIds.isEmpty() ? Map.of()
+                : appointmentRepository.countGroupedByTemplateIds(
+                                templateIds, AppointmentStatus.AGENDADO, AppointmentStatus.CANCELADO).stream()
+                        .collect(Collectors.toMap(
+                                AppointmentRepository.AppointmentCountByTemplate::getTemplateId, r -> r));
+
+        Map<Long, AttendanceRecordRepository.AttendanceStatsByTemplate> presencasPorTemplate =
+                templateIds.isEmpty() ? Map.of()
+                : attendanceRecordRepository.countGroupedByTemplateIds(templateIds).stream()
+                        .collect(Collectors.toMap(
+                                AttendanceRecordRepository.AttendanceStatsByTemplate::getTemplateId, r -> r));
+
         List<TemplateStatResponse> templateStats = templates.stream().map(t -> {
-            long submissions = submissionRepository.countByTemplate_Id(t.getId());
-            long apptTotal = appointmentRepository.countByFormTemplate(t);
-            long apptConfirmed = appointmentRepository.countByFormTemplateAndStatus(t, AppointmentStatus.AGENDADO);
-            long apptCancelled = appointmentRepository.countByFormTemplateAndStatus(t, AppointmentStatus.CANCELADO);
-            long attTotal = attendanceRecordRepository.countByFormTemplate(t);
-            long attPresent = attendanceRecordRepository.countByFormTemplateAndAttended(t, true);
+            // Template sem nenhum registro nao aparece no GROUP BY: ausencia e zero.
+            long submissions = submissoesPorTemplate.getOrDefault(t.getId(), 0L);
+
+            AppointmentRepository.AppointmentCountByTemplate ag = agendamentosPorTemplate.get(t.getId());
+            long apptTotal     = ag != null ? ag.getTotal() : 0L;
+            long apptConfirmed = ag != null ? ag.getConfirmed() : 0L;
+            long apptCancelled = ag != null ? ag.getCancelled() : 0L;
+
+            AttendanceRecordRepository.AttendanceStatsByTemplate pr = presencasPorTemplate.get(t.getId());
+            long attTotal   = pr != null ? pr.getTotal() : 0L;
+            long attPresent = pr != null ? pr.getPresent() : 0L;
+
             String clientName = t.getClient() != null ? t.getClient().getName() : null;
 
             // Quiz associado diretamente ao template (nova arquitetura independente)

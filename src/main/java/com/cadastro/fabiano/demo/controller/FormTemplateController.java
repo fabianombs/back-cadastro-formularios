@@ -5,12 +5,12 @@ import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ViewConfigRequest;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.FormTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,18 +41,19 @@ public class FormTemplateController {
 
     @GetMapping("/my-templates")
     @Operation(summary = "Meus templates", description = "Retorna os templates do usuário autenticado (CLIENT)")
-    public ResponseEntity<Page<FormTemplateResponse>> getMyTemplates(
+    public ResponseEntity<PaginaResponse<FormTemplateResponse>> getMyTemplates(
             Authentication authentication,
             Pageable pageable) {
 
-        return ResponseEntity.ok(templateService.findTemplatesByUsername(authentication.getName(), pageable));
+        return ResponseEntity.ok(PaginaResponse.de(
+                templateService.findTemplatesByUsername(authentication.getName(), pageable)));
     }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
     @Operation(summary = "Listar todos os templates", description = "Retorna todos os templates ativos (ADMIN/FUNCIONARIO)")
-    public ResponseEntity<Page<FormTemplateResponse>> getAllTemplates(Pageable pageable) {
-        return ResponseEntity.ok(templateService.findAllTemplates(pageable));
+    public ResponseEntity<PaginaResponse<FormTemplateResponse>> getAllTemplates(Pageable pageable) {
+        return ResponseEntity.ok(PaginaResponse.de(templateService.findAllTemplates(pageable)));
     }
 
     @GetMapping("/slug/{slug}")

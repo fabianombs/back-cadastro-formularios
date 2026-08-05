@@ -55,6 +55,11 @@ public class AttendanceRecord {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Quando a linha foi efetivamente preenchida (editada na tabela ou cadastrada pelo público).
+    // NULL em linhas só importadas — a coluna "Preenchido em" fica em branco até preencherem.
+    @Column(name = "filled_at")
+    private LocalDateTime filledAt;
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
