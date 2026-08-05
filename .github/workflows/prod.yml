@@ -217,6 +217,58 @@ jobs:
       packages: read
 
     steps:
+      # Os arquivos de deploy (compose, nginx.conf, scripts) vivem no repo, mas
+      # NADA os levava ate a maquina: o job so fazia 'cd ~/fabiano/deploy' e
+      # rodava o que ja estava la. Uma correcao no nginx.conf entrava no git, o
+      # pipeline passava verde, e a maquina continuava com a versao antiga — a
+      # divergencia so apareceria no dia em que alguem dependesse dela.
+      #
+      # SCP a partir do runner, e nao 'git pull' na maquina: evita instalar git
+      # e guardar credencial do repositorio dentro de um servidor.
+      #
+      # O .env NAO e versionado, entao nao ha risco de sobrescrever as
+      # credenciais da maquina. O que esta no repo sobrescreve o resto — o repo
+      # e a fonte da verdade, e ajuste feito a mao no servidor deve sumir mesmo.
+      - uses: actions/checkout@v4
+
+      # Conferir o alvo ANTES de escrever qualquer coisa nele.
+      #
+      # Esta checagem ja existiu dentro do script de deploy, e estava tarde
+      # demais: o scp abaixo ja teria sobrescrito arquivos na maquina errada
+      # antes de alguem descobrir que era a maquina errada. Abortar depois de
+      # ter mexido em coisa nao e abortar.
+      #
+      # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+      - name: Conferir que o alvo e a maquina certa
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+            # Espelho da trava do develop.yml: la aborta se NAO for ensaio,
+            # aqui aborta se FOR. As duas juntas fecham o cerco.
+            if grep -q -- '-ensaio\.' .env; then
+              echo "ABORTADO: o .env desta maquina aponta para um banco de ENSAIO."
+              echo "Este job e o de PRODUCAO. Confira o segredo EC2_HOST."
+              echo "NADA foi enviado."
+              exit 1
+            fi
+            echo "Alvo confirmado: banco de producao."
+
+      - name: Enviar arquivos de deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          source:   "deploy/**"
+          target:   "/home/ec2-user/fabiano/"
+          strip_components: 0
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -227,18 +279,8 @@ jobs:
             set -euo pipefail
             cd ~/fabiano/deploy
 
-            # TRAVA, espelho da que existe no develop.yml.
-            #
-            # La o job aborta se o .env NAO apontar para um banco de ensaio.
-            # Aqui e o contrario: aborta se apontar. As duas juntas fecham o
-            # cerco - depois da virada, a maquina que era homologacao vira
-            # producao, e um segredo desatualizado faria cada pipeline
-            # deployar no lugar errado com o job verde.
-            if grep -q -- '-ensaio\.' .env; then
-              echo "ABORTADO: o .env desta maquina aponta para um banco de ENSAIO."
-              echo "Este job e o de PRODUCAO. Confira o segredo EC2_HOST."
-              exit 1
-            fi
+            # O scp nao preserva o bit de execucao.
+            chmod +x scripts/*.sh
 
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u ${{ github.actor }} --password-stdin
