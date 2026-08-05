@@ -46,6 +46,17 @@ jobs:
             sleep 2
           done
 
+      # O 'cache: maven' do setup-java guarda ~/.m2/repository, mas NAO o
+      # Maven em si: o wrapper baixa o apache-maven-*.zip do repositorio
+      # central a cada execucao. Uma instabilidade la derruba o build inteiro
+      # sem nenhuma relacao com o codigo — aconteceu em 05/08/2026,
+      # 'wget: Failed to fetch .../apache-maven-3.9.12-bin.zip'.
+      - name: Cache do Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Make mvnw executable
         run: chmod +x mvnw
 
@@ -128,6 +139,56 @@ jobs:
       packages: read
 
     steps:
+      # Os arquivos de deploy (compose, nginx.conf, scripts) vivem no repo, mas
+      # NADA os levava ate a maquina: o job so fazia 'cd ~/fabiano/deploy' e
+      # rodava o que ja estava la. Uma correcao no nginx.conf entrava no git, o
+      # pipeline passava verde, e a maquina continuava com a versao antiga — a
+      # divergencia so apareceria no dia em que alguem dependesse dela.
+      #
+      # SCP a partir do runner, e nao 'git pull' na maquina: evita instalar git
+      # e guardar credencial do repositorio dentro de um servidor.
+      #
+      # O .env NAO e versionado, entao nao ha risco de sobrescrever as
+      # credenciais da maquina. O que esta no repo sobrescreve o resto — o repo
+      # e a fonte da verdade, e ajuste feito a mao no servidor deve sumir mesmo.
+      - uses: actions/checkout@v4
+
+      # Conferir o alvo ANTES de escrever qualquer coisa nele.
+      #
+      # Esta checagem ja existiu dentro do script de deploy, e estava tarde
+      # demais: o scp abaixo ja teria sobrescrito arquivos na maquina errada
+      # antes de alguem descobrir que era a maquina errada. Abortar depois de
+      # ter mexido em coisa nao e abortar.
+      #
+      # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+      - name: Conferir que o alvo e a maquina certa
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+            grep -q -- '-ensaio\.' .env || {
+              echo "ABORTADO: o .env desta maquina NAO aponta para um banco de ENSAIO."
+              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina ja virou producao."
+              echo "NADA foi enviado."
+              exit 1
+            }
+            echo "Alvo confirmado: banco de ensaio."
+
+      - name: Enviar arquivos de deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          source:   "deploy/**"
+          target:   "/home/ec2-user/fabiano/"
+          strip_components: 0
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -138,20 +199,8 @@ jobs:
             set -euo pipefail
             cd ~/fabiano/deploy
 
-            # TRAVA: este job nunca pode rodar contra o banco de producao.
-            #
-            # O risco e concreto. Depois da virada, a maquina que hoje e
-            # homologacao vira producao e o .env dela passa a apontar para o
-            # banco real. Se o segredo HOMOLOG_EC2_HOST nao for atualizado
-            # junto, todo merge em develop passaria a deployar em PRODUCAO —
-            # em silencio, porque o job continuaria verde.
-            #
-            # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
-            grep -q -- '-ensaio\.' .env || {
-              echo "ABORTADO: o .env desta maquina NAO aponta para um banco de ensaio."
-              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina ja virou producao."
-              exit 1
-            }
+            # O scp nao preserva o bit de execucao.
+            chmod +x scripts/*.sh
 
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u ${{ github.actor }} --password-stdin

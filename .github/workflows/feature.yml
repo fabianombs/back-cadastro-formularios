@@ -46,6 +46,17 @@ jobs:
             sleep 2
           done
 
+      # O 'cache: maven' do setup-java guarda ~/.m2/repository, mas NAO o
+      # Maven em si: o wrapper baixa o apache-maven-*.zip do repositorio
+      # central a cada execucao. Uma instabilidade la derruba o build inteiro
+      # sem nenhuma relacao com o codigo — aconteceu em 05/08/2026,
+      # 'wget: Failed to fetch .../apache-maven-3.9.12-bin.zip'.
+      - name: Cache do Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Make mvnw executable
         run: chmod +x mvnw
 

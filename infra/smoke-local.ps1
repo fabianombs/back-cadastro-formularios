@@ -12,12 +12,53 @@
 # ErrorActionPreference = Continue; nada de barra invertida escapando aspas.
 # =============================================================================
 
-$ErrorActionPreference = "Continue"
-$API = "http://localhost:8080"
+param(
+    # Alvo do smoke. Local por padrao; a maquina nova e alcancada apontando o
+    # dominio de producao para o IP dela no arquivo hosts do Windows, para que
+    # o certificado continue casando.
+    [string]$Api = "http://localhost:8080"
+)
 
-$script:ok     = 0
-$script:falhas = 0
-$script:avisos = 0
+$ErrorActionPreference = "Continue"
+
+# TRAVA: este smoke ESCREVE no banco - cria usuario, formulario e submissao.
+# Rodar contra producao sujaria o banco do cliente com lixo de teste.
+#
+# A checagem e por IP RESOLVIDO, nao pelo texto da URL, justamente porque o
+# jeito de apontar para a maquina nova e reescrever a resolucao do mesmo nome.
+# GetHostAddresses le o arquivo hosts, entao a trava enxerga o que o HTTP vai
+# enxergar de fato.
+$IP_PRODUCAO = "100.30.35.83"
+try {
+    $alvoHost = ([uri]$Api).Host
+    $ips = [System.Net.Dns]::GetHostAddresses($alvoHost) | ForEach-Object { $_.IPAddressToString }
+} catch {
+    Write-Host ("ABORTADO: nao consegui resolver {0}" -f $Api) -ForegroundColor Red
+    exit 1
+}
+if ($ips -contains $IP_PRODUCAO) {
+    Write-Host ""
+    Write-Host ("ABORTADO: {0} resolve para {1} - isso e PRODUCAO." -f $Api, $IP_PRODUCAO) -ForegroundColor Red
+    Write-Host "Este smoke grava no banco. Aponte para a maquina de ensaio." -ForegroundColor Red
+    exit 1
+}
+Write-Host ("Alvo: {0}  ->  {1}" -f $Api, ($ips -join ", ")) -ForegroundColor Cyan
+
+$script:ok      = 0
+$script:falhas  = 0
+$script:avisos  = 0
+$script:pulados = 0
+
+# Contra localhost a aplicacao responde direto. Contra a maquina remota o
+# trafego atravessa o nginx, e o nginx bloqueia /actuator por design (so
+# /health passa). Alem disso o log em JSON fica DENTRO do container, fora do
+# alcance de um script rodando no Windows.
+#
+# Sem distinguir os dois casos, o smoke remoto acusa 11 falhas que nao existem
+# - e pior: a secao de log lia um arquivo VELHO da maquina local e concluia
+# coisas sobre ele. Teste que le a fonte errada e mais perigoso que teste que
+# falha, porque um dia ele passa.
+$MODO_REMOTO = ([uri]$Api).Host -notin @("localhost", "127.0.0.1")
 
 function Testar($nome, $bloco) {
     Write-Host ("  {0,-52} " -f $nome) -NoNewline
@@ -29,6 +70,19 @@ function Testar($nome, $bloco) {
         Write-Host "FALHOU" -ForegroundColor Red
         Write-Host ("      -> {0}" -f $_.Exception.Message) -ForegroundColor DarkRed
         $script:falhas++
+    }
+}
+
+# Verificacao que so faz sentido contra a aplicacao direta. PULADO aparece na
+# tela e no resumo de proposito: teste que sumiu do relatorio vira teste que
+# ninguem sente falta.
+function TestarLocal($nome, $bloco) {
+    if ($MODO_REMOTO) {
+        Write-Host ("  {0,-52} " -f $nome) -NoNewline
+        Write-Host "PULADO (so local)" -ForegroundColor DarkGray
+        $script:pulados++
+    } else {
+        Testar $nome $bloco
     }
 }
 
@@ -403,7 +457,34 @@ Secao "[12] Observabilidade - metricas do Micrometer (FABIANO-22)"
 # metrica simplesmente nao aparece, e a gente so descobre no dia que precisar
 # do p95. Por isso cada item aqui confere o conteudo da resposta, nao so o 200.
 
-Testar "GET /actuator/prometheus exige autenticacao" {
+# Do lado de fora, o certo NAO e 401 - e nao existir. O nginx devolve 404 para
+# todo /actuator menos /health, entao um 401 aqui significaria que o bloqueio
+# caiu e a superficie de ataque aumentou sem ninguem notar.
+#
+# O Prometheus nao e afetado: ele coleta em backend:8080, dentro da rede do
+# compose, sem passar pelo nginx.
+if ($MODO_REMOTO) {
+    Testar "Pelo nginx, /actuator/prometheus NAO existe (404)" {
+        try {
+            Invoke-WebRequest "$API/actuator/prometheus" -UseBasicParsing -TimeoutSec 10 | Out-Null
+            throw "respondeu 200 - o bloqueio do nginx caiu"
+        } catch {
+            $s = StatusDoErro $_
+            if ($s -ne 404) { throw "esperava 404, veio $s" }
+        }
+    }
+    Testar "Pelo nginx, /actuator/env tambem NAO existe (404)" {
+        try {
+            Invoke-WebRequest "$API/actuator/env" -UseBasicParsing -TimeoutSec 10 | Out-Null
+            throw "respondeu 200 - vazamento de configuracao"
+        } catch {
+            $s = StatusDoErro $_
+            if ($s -ne 404) { throw "esperava 404, veio $s" }
+        }
+    }
+}
+
+TestarLocal "GET /actuator/prometheus exige autenticacao" {
     try {
         Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 15 | Out-Null
         throw "endpoint respondeu SEM token - deveria exigir autenticacao"
@@ -416,13 +497,13 @@ Testar "GET /actuator/prometheus exige autenticacao" {
 # O Prometheus nao usa JWT: token de coletor nao pode expirar em 24h.
 $TOKEN_METRICAS = "token-local-de-desenvolvimento-nao-use-em-producao"
 
-Testar "Token de coleta libera /actuator/prometheus (FABIANO-23)" {
+TestarLocal "Token de coleta libera /actuator/prometheus (FABIANO-23)" {
     $r = Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 20 `
             -Headers @{ "X-Metrics-Token" = $TOKEN_METRICAS }
     if (("$r" -split "`n").Count -lt 50) { throw "resposta curta demais para ser a saida de metricas" }
 }
 
-Testar "Prometheus consegue pelo header Authorization" {
+TestarLocal "Prometheus consegue pelo header Authorization" {
     # Forma que o proprio Prometheus envia. O tipo NAO e Bearer de proposito,
     # para o filtro JWT nao tentar interpretar o valor como token.
     $r = Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 20 `
@@ -430,7 +511,7 @@ Testar "Prometheus consegue pelo header Authorization" {
     if ("$r" -notmatch "jvm_memory_used_bytes") { throw "veio resposta, mas sem as metricas" }
 }
 
-Testar "Token de coleta errado e RECUSADO" {
+TestarLocal "Token de coleta errado e RECUSADO" {
     try {
         Invoke-RestMethod "$API/actuator/prometheus" -TimeoutSec 15 `
             -Headers @{ "X-Metrics-Token" = "token-errado" } | Out-Null
@@ -448,7 +529,7 @@ Testar "GET /actuator/health continua publico" {
 
 # Gera trafego antes de ler as metricas: sem requisicao registrada o medidor
 # http_server_requests nem existe, e o teste passaria por engano.
-Testar "Metricas expostas no formato Prometheus" {
+TestarLocal "Metricas expostas no formato Prometheus" {
     1..3 | ForEach-Object { Invoke-RestMethod "$API/actuator/health" -TimeoutSec 10 | Out-Null }
     $script:metricas = Invoke-RestMethod "$API/actuator/prometheus" -Headers $H -TimeoutSec 20
     $linhas = ($script:metricas -split "`n").Count
@@ -456,7 +537,7 @@ Testar "Metricas expostas no formato Prometheus" {
     Write-Host ("`n      {0} linhas de metrica" -f $linhas) -ForegroundColor DarkGray -NoNewline
 }
 
-Testar "Metricas de JVM, HTTP, Hikari e Tomcat presentes" {
+TestarLocal "Metricas de JVM, HTTP, Hikari e Tomcat presentes" {
     if (-not $script:metricas) { return "AVISO" }
     $faltando = @()
     foreach ($m in @("jvm_memory_used_bytes", "http_server_requests_seconds",
@@ -466,7 +547,7 @@ Testar "Metricas de JVM, HTTP, Hikari e Tomcat presentes" {
     if ($faltando.Count -gt 0) { throw "ausentes: $($faltando -join ', ')" }
 }
 
-Testar "Tags application e environment em todas as metricas" {
+TestarLocal "Tags application e environment em todas as metricas" {
     if (-not $script:metricas) { return "AVISO" }
     if ($script:metricas -notmatch 'application="fabiano-back"') {
         throw "tag application ausente - o MeterRegistryCustomizer nao aplicou"
@@ -482,7 +563,7 @@ Testar "Tags application e environment em todas as metricas" {
     }
 }
 
-Testar "Contadores de login expostos (FABIANO-24)" {
+TestarLocal "Contadores de login expostos (FABIANO-24)" {
     if (-not $script:metricas) { return "AVISO" }
     # A secao [2] ja exercitou login com senha certa e com senha errada, entao
     # os dois resultados tem que estar registrados. Se o contador nao aparecer,
@@ -497,7 +578,7 @@ Testar "Contadores de login expostos (FABIANO-24)" {
     }
 }
 
-Testar "Nenhum dado pessoal virou rotulo de metrica" {
+TestarLocal "Nenhum dado pessoal virou rotulo de metrica" {
     if (-not $script:metricas) { return "AVISO" }
     # Identificador de pessoa como rotulo e dado pessoal no monitoramento e
     # cardinalidade sem teto: mil usuarios virariam mil series temporais.
@@ -509,7 +590,7 @@ Testar "Nenhum dado pessoal virou rotulo de metrica" {
     Write-Host ("`n      {0} linhas auth_* conferidas" -f $linhasAuth.Count) -ForegroundColor DarkGray -NoNewline
 }
 
-Testar "Histograma de latencia habilitado (buckets p95/p99)" {
+TestarLocal "Histograma de latencia habilitado (buckets p95/p99)" {
     if (-not $script:metricas) { return "AVISO" }
     # O bucket so existe com percentiles-histogram ligado. Se a propriedade
     # tivesse sido ignorada, viriam apenas _count e _sum.
@@ -592,7 +673,7 @@ function LinhasDoLog($quantas = 600) {
     return $objetos
 }
 
-Testar "Requisicao gera linha de acesso com o mesmo requestId" {
+TestarLocal "Requisicao gera linha de acesso com o mesmo requestId" {
     $meu = "smoke-acesso-" + (Get-Random -Maximum 999999)
     Invoke-WebRequest "$API/form-templates" -UseBasicParsing -TimeoutSec 20 `
         -Headers ($H + @{ "X-Request-Id" = $meu }) | Out-Null
@@ -613,7 +694,7 @@ Testar "Requisicao gera linha de acesso com o mesmo requestId" {
     Write-Host ("`n      {0}" -f $l.message) -ForegroundColor DarkGray -NoNewline
 }
 
-Testar "O /actuator fica fora do log de acesso" {
+TestarLocal "O /actuator fica fora do log de acesso" {
     # Sem esta exclusao, o scrape do Prometheus a cada 15 segundos viraria mais
     # de quatro linhas por minuto, para sempre, no disco da t2.micro.
     $marca = "smoke-actuator-" + (Get-Random -Maximum 999999)
@@ -658,7 +739,7 @@ function ValorDe($texto, $nome, $rotulos) {
     return 0.0
 }
 
-Testar "Submissao bem-sucedida incrementa formulario_submissao_total" {
+TestarLocal "Submissao bem-sucedida incrementa formulario_submissao_total" {
     if (-not $tplId) { return "AVISO" }
     $antes = ValorDe (LerMetricas) "formulario_submissao_total" @('resultado="sucesso"')
 
@@ -670,7 +751,7 @@ Testar "Submissao bem-sucedida incrementa formulario_submissao_total" {
     if ($depois -le $antes) { throw "contador nao subiu (antes=$antes depois=$depois)" }
 }
 
-Testar "Submissao com template inexistente conta erro e erro_tratado" {
+TestarLocal "Submissao com template inexistente conta erro e erro_tratado" {
     $antesErro  = ValorDe (LerMetricas) "formulario_submissao_total" @('resultado="erro"')
     $antesTrata = ValorDe (LerMetricas) "erro_tratado_total" @('status="400"')
 
@@ -712,7 +793,7 @@ function EnviarArquivoMultipart($url, $caminho, $tipo, $cabecalhos) {
         -ContentType "multipart/form-data; boundary=$limite" -Body $corpo
 }
 
-Testar "Upload invalido incrementa upload_imagem_total{resultado=erro}" {
+TestarLocal "Upload invalido incrementa upload_imagem_total{resultado=erro}" {
     $antes = ValorDe (LerMetricas) "upload_imagem_total" @('resultado="erro"')
 
     # Arquivo de texto anunciado como imagem: o validador recusa pelo tipo.
@@ -730,7 +811,7 @@ Testar "Upload invalido incrementa upload_imagem_total{resultado=erro}" {
     }
 }
 
-Testar "Nenhum Timer com sufixo de unidade escrito a mao" {
+TestarLocal "Nenhum Timer com sufixo de unidade escrito a mao" {
     # A pegadinha registrada no card: o Micrometer acrescenta _seconds sozinho.
     # Um timer chamado "duracao_segundos" viraria "duracao_segundos_seconds" e
     # a consulta do dashboard, escrita com o nome obvio, nao acharia nada.
@@ -747,7 +828,7 @@ Testar "Nenhum Timer com sufixo de unidade escrito a mao" {
     if ($ruins.Count -gt 0) { throw "nome com sufixo duplicado: $($ruins -join ', ')" }
 }
 
-Testar "Nenhum rotulo de metrica de negocio carrega id ou dado pessoal" {
+TestarLocal "Nenhum rotulo de metrica de negocio carrega id ou dado pessoal" {
     # Regra de cardinalidade do card: rotulo so pode ser conjunto pequeno e
     # fechado. id de template, CPF ou e-mail criariam uma serie por valor.
     $texto = LerMetricas
@@ -768,7 +849,11 @@ Testar "Nenhum rotulo de metrica de negocio carrega id ou dado pessoal" {
 # -----------------------------------------------------------------------------
 Write-Host ""
 Write-Host "############################################################"
-Write-Host ("# RESULTADO: {0} ok | {1} avisos | {2} falhas" -f $script:ok, $script:avisos, $script:falhas)
+Write-Host ("# RESULTADO: {0} ok | {1} avisos | {2} falhas | {3} pulados" -f $script:ok, $script:avisos, $script:falhas, $script:pulados)
+if ($script:pulados -gt 0) {
+    Write-Host ("# {0} verificacoes so rodam contra localhost:8080 (nginx bloqueia /actuator," -f $script:pulados)
+    Write-Host "#   e o log JSON fica dentro do container). Rode o smoke local tambem."
+}
 Write-Host "############################################################"
 if ($script:falhas -gt 0) {
     Write-Host "Ha falhas - nao subir para producao antes de entender cada uma." -ForegroundColor Red

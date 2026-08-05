@@ -46,6 +46,17 @@ jobs:
             sleep 2
           done
 
+      # O 'cache: maven' do setup-java guarda ~/.m2/repository, mas NAO o
+      # Maven em si: o wrapper baixa o apache-maven-*.zip do repositorio
+      # central a cada execucao. Uma instabilidade la derruba o build inteiro
+      # sem nenhuma relacao com o codigo — aconteceu em 05/08/2026,
+      # 'wget: Failed to fetch .../apache-maven-3.9.12-bin.zip'.
+      - name: Cache do Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Make mvnw executable
         run: chmod +x mvnw
 
@@ -63,43 +74,53 @@ jobs:
       - name: Verify JAR was generated
         run: ls -la target/*.jar
 
-      - name: Upload JAR as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-jar
-          path: target/*.jar
-          retention-days: 1
-
-  # Publica a imagem no GitHub Container Registry (FABIANO-16).
+  # ===========================================================================
+  # A IMAGEM DE PRODUCAO (FABIANO-49)
   #
-  # Este job SOMA, nao substitui: o job 'deploy' abaixo continua enviando o JAR
-  # por SCP. Trocar agora quebraria o proximo push, porque a EC2 ainda nao tem
-  # Docker (FABIANO-13). A troca acontece no FABIANO-17, quando o
-  # deploy-safe.sh passar a puxar imagem.
-  build-push:
-    name: Publicar imagem no GHCR
+  # Este job PROMOVE a imagem que ja foi validada em homologacao, em vez de
+  # construir uma nova a partir da master.
+  #
+  # A diferenca importa. Reconstruir produz um artefato que NUNCA foi testado:
+  # mesmo codigo-fonte, outra imagem, outro instante, outras camadas base
+  # resolvidas. "Subir para producao o que foi validado" viraria "rebuildar e
+  # torcer" - e a validacao inteira do FABIANO-15 perderia o sentido.
+  #
+  # O merge de develop em master gera um commit de merge cujo SEGUNDO pai e a
+  # ponta da develop, que e exatamente o commit cuja imagem rodou em
+  # homologacao. Em merge fast-forward nao existe segundo pai, e o proprio HEAD
+  # ja e esse commit.
+  # ===========================================================================
+  imagem:
+    name: Promover imagem validada
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
-    steps:
-      - uses: actions/checkout@v4
+    outputs:
+      tag: ${{ steps.saida.outputs.tag }}
+      owner: ${{ steps.nomes.outputs.owner }}
+      promovida: ${{ steps.alvo.outputs.promovida }}
 
-      # O GHCR recusa nome de imagem com maiuscula. Login do GitHub pode ter,
-      # e o erro so apareceria no momento do push, depois do build inteiro.
-      - name: Normalizar owner e tag curta
+    steps:
+      # fetch-depth 0 porque o padrao traz um clone raso, e num clone raso o
+      # segundo pai do commit de merge simplesmente nao existe - a deteccao
+      # falharia sempre, silenciosamente, caindo no rebuild toda vez.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # O GHCR recusa nome de imagem com maiuscula, e o erro so apareceria no
+      # push, depois do build inteiro.
+      - name: Normalizar owner
         id: nomes
-        run: |
-          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-          echo "curta=${GITHUB_SHA::7}"            >> "$GITHUB_OUTPUT"
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
       # GITHUB_TOKEN e nao PAT: nasce e morre com a execucao, tem escopo so
-      # deste repositorio e ninguem precisa rotacionar a mao. O que habilita e
-      # o 'packages: write' declarado acima.
+      # deste repositorio e ninguem precisa rotacionar a mao.
       - name: Login no GHCR
         uses: docker/login-action@v3
         with:
@@ -107,94 +128,183 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # O Dockerfile builda com -DskipTests de proposito: quem garante os
-      # testes e o job build-and-test, que este aqui espera via 'needs'.
-      # Imagem de codigo reprovado nunca chega a existir.
-      - name: Build e push
+      - name: Descobrir qual imagem foi validada
+        id: alvo
+        run: |
+          set -uo pipefail
+          IMAGEM="ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back"
+
+          if PAI2=$(git rev-parse --verify -q HEAD^2); then
+            CAND="${PAI2::7}"
+            echo "Commit de merge: a develop entrou pelo segundo pai ($CAND)."
+          else
+            CAND="${GITHUB_SHA::7}"
+            echo "Sem segundo pai (fast-forward ou commit direto na master)."
+          fi
+          echo "candidata=$CAND" >> "$GITHUB_OUTPUT"
+
+          # imagetools inspect le o manifesto no registry sem baixar a imagem.
+          if docker buildx imagetools inspect "$IMAGEM:$CAND" >/dev/null 2>&1; then
+            echo "promovida=true" >> "$GITHUB_OUTPUT"
+            echo "ACHEI $IMAGEM:$CAND - esta imagem ja passou por homologacao."
+          else
+            echo "promovida=false" >> "$GITHUB_OUTPUT"
+            echo "NAO existe $IMAGEM:$CAND no GHCR."
+          fi
+
+      # Copia de manifesto, nao rebuild: os bytes da imagem sao exatamente os
+      # mesmos que rodaram em homologacao.
+      - name: Promover
+        if: steps.alvo.outputs.promovida == 'true'
+        run: |
+          IMAGEM="ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back"
+          CAND="${{ steps.alvo.outputs.candidata }}"
+          docker buildx imagetools create \
+            -t "$IMAGEM:latest" \
+            -t "$IMAGEM:prod-$CAND" \
+            "$IMAGEM:$CAND"
+          echo "$IMAGEM:$CAND promovida para :latest e :prod-$CAND"
+
+      # Caminho de excecao: hotfix direto na master, ou merge cuja imagem de
+      # develop expirou. Nao bloqueia o deploy - bloquear um hotfix urgente e
+      # pior - mas NUNCA pode parecer igual a uma promocao. Ver o resumo.
+      - name: Construir (imagem validada nao encontrada)
+        if: steps.alvo.outputs.promovida != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
             ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:latest
-            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ steps.nomes.outputs.curta }}
             ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ github.sha }}
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:prod-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Definir a tag do deploy
+        id: saida
+        run: |
+          if [ "${{ steps.alvo.outputs.promovida }}" = "true" ]; then
+            echo "tag=${{ steps.alvo.outputs.candidata }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resumo
         run: |
           {
-            echo "### Imagem publicada"
-            echo ""
-            echo '```'
-            echo "ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:latest"
-            echo "ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ steps.nomes.outputs.curta }}"
-            echo '```'
-            echo ""
-            echo "Para apontar o deploy a esta versao exata:"
-            echo '`BACKEND_TAG=${{ steps.nomes.outputs.curta }}` no .env da EC2"'
+            if [ "${{ steps.alvo.outputs.promovida }}" = "true" ]; then
+              echo "### Imagem PROMOVIDA de homologacao"
+              echo ""
+              echo "Tag \`${{ steps.alvo.outputs.candidata }}\` - os mesmos bytes que rodaram em homologacao."
+            else
+              echo "### ATENCAO: imagem construida agora, NAO promovida"
+              echo ""
+              echo "Nao existe imagem publicada para \`${{ steps.alvo.outputs.candidata }}\`."
+              echo "A imagem que vai para producao foi construida nesta execucao e"
+              echo "**nunca passou por homologacao**."
+              echo ""
+              echo "Isso e esperado num hotfix direto na master. Em qualquer outro"
+              echo "caso, investigue antes de confiar neste deploy."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # ===========================================================================
+  # DEPLOY EM PRODUCAO
+  #
+  # Sem SCP de JAR: a imagem vem do registry. O que trafega por SSH e um
+  # comando, nao um artefato.
+  #
+  # A instalacao da cron de backup saiu daqui de proposito. Ela e coisa de
+  # provisionamento (FABIANO-47), feita uma vez - nao algo reinstalado a cada
+  # deploy da aplicacao.
+  # ===========================================================================
   deploy:
-    name: Deploy to EC2 (safe)
-    needs: build-and-test
+    name: Deploy em producao
+    needs: [build-and-test, imagem]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
     steps:
+      # Os arquivos de deploy (compose, nginx.conf, scripts) vivem no repo, mas
+      # NADA os levava ate a maquina: o job so fazia 'cd ~/fabiano/deploy' e
+      # rodava o que ja estava la. Uma correcao no nginx.conf entrava no git, o
+      # pipeline passava verde, e a maquina continuava com a versao antiga — a
+      # divergencia so apareceria no dia em que alguem dependesse dela.
+      #
+      # SCP a partir do runner, e nao 'git pull' na maquina: evita instalar git
+      # e guardar credencial do repositorio dentro de um servidor.
+      #
+      # O .env NAO e versionado, entao nao ha risco de sobrescrever as
+      # credenciais da maquina. O que esta no repo sobrescreve o resto — o repo
+      # e a fonte da verdade, e ajuste feito a mao no servidor deve sumir mesmo.
       - uses: actions/checkout@v4
 
-      - name: Gerar versao automatica (data + commit)
-        id: ver
-        run: |
-          VER="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "Versao deste deploy: $VER"
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: app-jar
-          path: target/
-
-      - name: Enviar JAR + scripts via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host:     ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          source:   "target/*.jar,infra/deploy-safe.sh,infra/rollback.sh,infra/backup-db.sh,infra/enviar-backup-email.py"
-          target:   "/home/ec2-user/deploy/"
-          strip_components: 0
-
-      - name: Deploy seguro (backup + health-gate + rollback)
+      # Conferir o alvo ANTES de escrever qualquer coisa nele.
+      #
+      # Esta checagem ja existiu dentro do script de deploy, e estava tarde
+      # demais: o scp abaixo ja teria sobrescrito arquivos na maquina errada
+      # antes de alguem descobrir que era a maquina errada. Abortar depois de
+      # ter mexido em coisa nao e abortar.
+      #
+      # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+      - name: Conferir que o alvo e a maquina certa
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e
-            sudo mkdir -p /app
+            set -euo pipefail
+            cd ~/fabiano/deploy
+            # Espelho da trava do develop.yml: la aborta se NAO for ensaio,
+            # aqui aborta se FOR. As duas juntas fecham o cerco.
+            if grep -q -- '-ensaio\.' .env; then
+              echo "ABORTADO: o .env desta maquina aponta para um banco de ENSAIO."
+              echo "Este job e o de PRODUCAO. Confira o segredo EC2_HOST."
+              echo "NADA foi enviado."
+              exit 1
+            fi
+            echo "Alvo confirmado: banco de producao."
 
-            # Os scripts sao editados no Windows: CRLF quebra o shebang no
-            # Linux com o erro enganoso "bad interpreter: /usr/bin/env bash^M".
-            sed -i 's/\r$//' /home/ec2-user/deploy/infra/*.sh /home/ec2-user/deploy/infra/*.py
+      - name: Enviar arquivos de deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          source:   "deploy/**"
+          target:   "/home/ec2-user/fabiano/"
+          strip_components: 0
+          overwrite: true
 
-            sudo cp /home/ec2-user/deploy/infra/deploy-safe.sh         /app/deploy-safe.sh
-            sudo cp /home/ec2-user/deploy/infra/rollback.sh            /app/rollback.sh
-            sudo cp /home/ec2-user/deploy/infra/backup-db.sh           /app/backup-db.sh
-            sudo cp /home/ec2-user/deploy/infra/enviar-backup-email.py /app/enviar-backup-email.py
-            sudo chmod +x /app/deploy-safe.sh /app/rollback.sh /app/backup-db.sh /app/enviar-backup-email.py
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
 
-            sudo touch /var/log/backup-db.log
-            sudo chown ec2-user /var/log/backup-db.log
+            # O scp nao preserva o bit de execucao.
+            chmod +x scripts/*.sh
 
-            # Cron do backup diario as 03:30 de Brasilia (06:30 UTC).
-            # Idempotente: apaga a linha antiga antes de gravar, entao rodar o
-            # deploy 50 vezes nao cria 50 entradas no crontab.
-            ( sudo crontab -l 2>/dev/null | grep -v 'backup-db.sh' ; \
-              echo "30 6 * * * /app/backup-db.sh >> /var/log/backup-db.log 2>&1" ) \
-              | sudo crontab -
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            JAR=$(ls -t /home/ec2-user/deploy/target/*.jar | head -1)
-            sudo /app/deploy-safe.sh "$JAR" "${{ steps.ver.outputs.version }}"
+            ./scripts/deploy-safe.sh "${{ needs.imagem.outputs.tag }}"
+
+      - name: Resumo do deploy
+        run: |
+          {
+            echo "### Producao"
+            echo ""
+            echo "Tag no ar: \`${{ needs.imagem.outputs.tag }}\`"
+            echo "Promovida de homologacao: \`${{ needs.imagem.outputs.promovida }}\`"
+            echo ""
+            echo "Para voltar, na EC2: \`./scripts/rollback.sh <tag>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
