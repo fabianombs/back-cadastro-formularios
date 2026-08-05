@@ -25,7 +25,10 @@ public class FormSubmission {
     @JoinColumn(name = "form_template_id")
     private FormTemplate template;
 
-    // Respostas da submissao: uma consulta por submissao na listagem.
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
     @BatchSize(size = 100)
     @CollectionTable(name = "form_submission_values", joinColumns = @JoinColumn(name = "submission_id"))
