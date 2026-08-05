@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +40,10 @@ public class FormField {
      * Opções disponíveis para campos do tipo "select".
      * Armazenadas em tabela separada (form_field_options).
      */
+    // Opcoes do campo: uma consulta por CAMPO ao montar a resposta do
+    // template. Um formulario de 20 campos fazia 20 consultas so aqui.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(name = "form_field_options", joinColumns = @JoinColumn(name = "form_field_id"))
     @Column(name = "option_value")
     @OrderColumn(name = "option_order")
