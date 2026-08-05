@@ -25,14 +25,10 @@ public class AttendanceRecord {
     @JoinColumn(name = "form_template_id", nullable = false)
     private FormTemplate formTemplate;
 
-    // O N+1 mais caro do sistema. Cada registro carrega seu rowData numa
-    // consulta propria: uma pagina de 50 linhas fazia 54 consultas, medido no
-    // homolog em 05/08/2026. Numa lista de 1005 registros, o custo escala com
-    // o tamanho da pagina, e esta e a rota mais acessada pelo cliente do
-    // Fabiano — a tela de presenca no tablet, durante o evento.
-    //
-    // @BatchSize agrupa os ids pendentes num "WHERE record_id IN (...)".
-    // Tamanho 100 para cobrir com folga a maior pagina que o front pede.
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
     @BatchSize(size = 100)
     @CollectionTable(

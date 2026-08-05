@@ -98,9 +98,13 @@ public class AttendanceService {
 
         templateRepository.save(template);
 
+        // A importacao apaga a lista anterior e cria registros novos, entao
+        // nenhum deles tem acompanhante. Consultar o banco por registro aqui
+        // custava uma consulta por linha importada — 9000 linhas, 9000
+        // consultas, todas devolvendo vazio (FABIANO-38).
         List<AttendanceRecordResponse> importados = attendanceRepository.saveAll(records)
                 .stream()
-                .map(this::toResponse)
+                .map(r -> toResponse(r, List.of()))
                 .toList();
 
         // O tamanho da importacao entra como distribuicao, nao como contador:
@@ -120,8 +124,20 @@ public class AttendanceService {
                 pageable.getPageSize(),
                 Sort.by(Sort.Order.asc("rowOrder"), Sort.Order.asc("createdAt"))
         );
-        return attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template, sorted)
-                .map(this::toResponse);
+        Page<AttendanceRecord> pagina =
+                attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template, sorted);
+
+        // Os acompanhantes da pagina inteira vem numa consulta so, indexados
+        // por registro. Antes o toResponse consultava um a um — o custo crescia
+        // junto com o tamanho da pagina, e esta e a tela que o cliente do
+        // Fabiano usa no tablet durante o evento (FABIANO-38).
+        List<Long> ids = pagina.getContent().stream().map(AttendanceRecord::getId).toList();
+        Map<Long, List<AttendanceCompanion>> porRegistro = ids.isEmpty()
+                ? Map.of()
+                : companionRepository.findByAttendanceRecordIdInOrderByCreatedAtAsc(ids).stream()
+                        .collect(Collectors.groupingBy(c -> c.getAttendanceRecord().getId()));
+
+        return pagina.map(r -> toResponse(r, porRegistro.getOrDefault(r.getId(), List.of())));
     }
 
     /**
@@ -287,9 +303,15 @@ public class AttendanceService {
                 .orElse(0);
     }
 
+    // Caminho de registro unico (marcar presenca, adicionar acompanhante...):
+    // uma consulta a mais nao pesa. Em lista, usar a sobrecarga que recebe os
+    // acompanhantes ja carregados.
     private AttendanceRecordResponse toResponse(AttendanceRecord r) {
-        List<AttendanceCompanionResponse> companions = companionRepository
-                .findByAttendanceRecordOrderByCreatedAtAsc(r)
+        return toResponse(r, companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(r));
+    }
+
+    private AttendanceRecordResponse toResponse(AttendanceRecord r, List<AttendanceCompanion> acompanhantes) {
+        List<AttendanceCompanionResponse> companions = acompanhantes
                 .stream()
                 .map(c -> new AttendanceCompanionResponse(
                         c.getId(),

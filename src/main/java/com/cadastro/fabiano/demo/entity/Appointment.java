@@ -49,8 +49,10 @@ public class Appointment {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
-    // Valores extras do agendamento: sem batch, uma consulta por linha na
-    // listagem de agendamentos.
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
     @BatchSize(size = 100)
     @CollectionTable(
