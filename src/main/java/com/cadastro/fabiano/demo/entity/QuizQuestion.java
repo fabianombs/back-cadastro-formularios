@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +29,10 @@ public class QuizQuestion {
     @Column(name = "order_index", nullable = false)
     private int orderIndex = 0;
 
+    // Segundo nivel do N+1 aninhado: uma consulta de opcoes POR questao.
+    // Um quiz de 10 questoes fazia 1 + 10; agora faz 1 + 1.
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 50)
     @OrderBy("orderIndex ASC")
     @Builder.Default
     private List<QuizOption> options = new ArrayList<>();
