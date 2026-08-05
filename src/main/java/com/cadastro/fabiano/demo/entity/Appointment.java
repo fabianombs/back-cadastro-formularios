@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,7 +49,10 @@ public class Appointment {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    // Valores extras do agendamento: sem batch, uma consulta por linha na
+    // listagem de agendamentos.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(
         name = "appointment_extra_values",
         joinColumns = @JoinColumn(name = "appointment_id")

@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -24,7 +25,16 @@ public class AttendanceRecord {
     @JoinColumn(name = "form_template_id", nullable = false)
     private FormTemplate formTemplate;
 
+    // O N+1 mais caro do sistema. Cada registro carrega seu rowData numa
+    // consulta propria: uma pagina de 50 linhas fazia 54 consultas, medido no
+    // homolog em 05/08/2026. Numa lista de 1005 registros, o custo escala com
+    // o tamanho da pagina, e esta e a rota mais acessada pelo cliente do
+    // Fabiano — a tela de presenca no tablet, durante o evento.
+    //
+    // @BatchSize agrupa os ids pendentes num "WHERE record_id IN (...)".
+    // Tamanho 100 para cobrir com folga a maior pagina que o front pede.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(
         name = "attendance_record_data",
         joinColumns = @JoinColumn(name = "record_id")
