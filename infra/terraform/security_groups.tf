@@ -1,6 +1,15 @@
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
-  description = "Security group para EC2 - SSH, HTTP e HTTPS"
+
+  # NAO "arrumar" este texto. A AWS nao permite alterar a descricao de um
+  # security group depois de criado — o provider trata description como
+  # ForceNew, entao qualquer mudanca aqui faz o plan propor DESTRUIR e
+  # RECRIAR o SG da EC2 em producao.
+  #
+  # A string abaixo e a que esta de fato na AWS (conferida em 04/08/2026).
+  # Ela ficou datada quando a porta 8080 foi removida no FABIANO-45, mas
+  # divergir dela custa mais caro do que o texto desatualizado.
+  description = "Security group para EC2 - SSH e porta 8080"
 
   # ATENCAO: ssh_allowed_cidr tem default 0.0.0.0/0, e e assim que esta na AWS
   # hoje. Com passwordauthentication=no na EC2 a forca bruta nao funciona, mas
