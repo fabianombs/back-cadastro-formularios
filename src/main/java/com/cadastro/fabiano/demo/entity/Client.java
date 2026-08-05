@@ -2,7 +2,9 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,8 +41,15 @@ public class Client {
     @Column(unique = true, nullable = false)
     private String username;
 
+    // Sem @CreationTimestamp o Hibernate incluia a coluna no INSERT com NULL
+    // explicito, e NULL explicito SOBREPOE o DEFAULT CURRENT_TIMESTAMP da
+    // migration V2 — o padrao do MySQL so vale quando a coluna e omitida.
+    // Resultado: nenhum cliente criado pela aplicacao tinha data (FABIANO-53).
+    @CreationTimestamp
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
