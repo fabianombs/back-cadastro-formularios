@@ -16,12 +16,24 @@ param(
     # Alvo do smoke. Local por padrao; a maquina nova e alcancada apontando o
     # dominio de producao para o IP dela no arquivo hosts do Windows, para que
     # o certificado continue casando.
-    [string]$Api = "http://localhost:8080"
+    [string]$Api = "http://localhost:8080",
+
+    # Usuario de servico do smoke. UM por ambiente, reaproveitado em toda
+    # rodada. A versao anterior criava um usuario NOVO a cada execucao
+    # ("smoke_" + numero aleatorio) e nunca removia - o banco ia acumulando
+    # credencial ROLE_FUNCIONARIO ativa e valida, uma por rodada, para sempre.
+    [string]$SmokeUser = $(if ($env:SMOKE_USER) { $env:SMOKE_USER } else { "smoke_servico" }),
+
+    # Sobrescrever por variavel de ambiente quando o ambiente for compartilhado.
+    # O padrao existe para o smoke rodar sem configuracao previa; a trava de IP
+    # no inicio do script garante que isso nunca alcanca producao.
+    [string]$SmokePassword = $(if ($env:SMOKE_PASSWORD) { $env:SMOKE_PASSWORD } else { "Smoke@12345" })
 )
 
 $ErrorActionPreference = "Continue"
 
-# TRAVA: este smoke ESCREVE no banco - cria usuario, formulario e submissao.
+# TRAVA: este smoke ESCREVE no banco - submissao, presenca e agendamento.
+# O usuario de servico e criado UMA vez por ambiente e reaproveitado depois.
 # Rodar contra producao sujaria o banco do cliente com lixo de teste.
 #
 # A checagem e por IP RESOLVIDO, nao pelo texto da URL, justamente porque o
@@ -111,29 +123,59 @@ Testar "GET /actuator/health responde UP" {
 # -----------------------------------------------------------------------------
 Secao "[2] Autenticacao"
 # -----------------------------------------------------------------------------
-# Usuario novo a cada rodada: /auth/register e publico e devolve o JWT direto,
-# entao nao precisamos da senha de ninguem do dump.
-$usuario = "smoke_" + (Get-Random -Minimum 10000 -Maximum 99999)
-$token = $null
+# Um unico usuario de servico por ambiente, criado sob demanda.
+#
+# O smoke tenta LOGAR primeiro. Se o usuario ainda nao existe (ambiente novo,
+# homolog recem-criado, banco restaurado), ele CADASTRA e loga em seguida.
+#
+# Isso resolve dois problemas de uma vez:
+#   - o cadastro continua sendo testado de ponta a ponta, sempre que o
+#     ambiente e novo - que e exatamente quando o fluxo importa
+#   - nao acumula: da segunda rodada em diante o usuario ja existe e o smoke
+#     so faz login. UM registro por ambiente, nao um por execucao
+#
+# Nao ha limpeza no final de proposito. Apagar e recriar o mesmo usuario a
+# cada rodada seria trabalho para chegar no mesmo estado - e limpeza que roda
+# no fim so funciona quando o script termina bem, que e justamente quando ela
+# menos importa.
+$usuario = $SmokeUser
+$senha   = $SmokePassword
+$token   = $null
+$script:cadastrou = $false
 
-Testar "POST /auth/register cria ADMIN e devolve JWT" {
-    $body = @{
-        name            = "Smoke Test"
-        email           = "$usuario@teste.local"
-        username        = $usuario
-        password        = "Smoke@12345"
-        confirmPassword = "Smoke@12345"
-    } | ConvertTo-Json
-    $r = Invoke-RestMethod "$API/auth/register" -Method Post -Body $body -ContentType "application/json"
-    if (-not $r.token) { throw "sem token na resposta" }
-    $script:token = $r.token
+Testar "POST /auth/login com o usuario de servico (cadastra se nao existir)" {
+    $bodyLogin = @{ username = $usuario; password = $senha } | ConvertTo-Json
+    try {
+        $r = Invoke-RestMethod "$API/auth/login" -Method Post -Body $bodyLogin -ContentType "application/json"
+        if (-not $r.token) { throw "login sem token na resposta" }
+        $script:token = $r.token
+    } catch {
+        # Login falhou: presume ambiente novo e exercita o cadastro completo.
+        $bodyReg = @{
+            name            = "Smoke Servico"
+            email           = "$usuario@teste.local"
+            username        = $usuario
+            password        = $senha
+            confirmPassword = $senha
+        } | ConvertTo-Json
+        $r = Invoke-RestMethod "$API/auth/register" -Method Post -Body $bodyReg -ContentType "application/json"
+        if (-not $r.token) { throw "cadastro nao devolveu token" }
+        $script:token     = $r.token
+        $script:cadastrou = $true
+
+        # Login DEPOIS do cadastro: o token que o register devolve prova que o
+        # endpoint responde, nao que a credencial ficou utilizavel. Sao coisas
+        # diferentes, e so a segunda importa na proxima rodada.
+        $r2 = Invoke-RestMethod "$API/auth/login" -Method Post -Body $bodyLogin -ContentType "application/json"
+        if (-not $r2.token) { throw "cadastrou mas o login seguinte falhou" }
+        $script:token = $r2.token
+    }
 }
 
-Testar "POST /auth/login com a senha certa devolve JWT" {
-    $body = @{ username = $usuario; password = "Smoke@12345" } | ConvertTo-Json
-    $r = Invoke-RestMethod "$API/auth/login" -Method Post -Body $body -ContentType "application/json"
-    if (-not $r.token) { throw "sem token" }
-    $script:token = $r.token
+if ($script:cadastrou) {
+    Write-Host ("       usuario de servico '{0}' nao existia e foi criado (cadastro testado)" -f $usuario) -ForegroundColor DarkGray
+} else {
+    Write-Host ("       usuario de servico '{0}' reaproveitado (nada criado)" -f $usuario) -ForegroundColor DarkGray
 }
 
 # Caminho negativo: um teste que so verifica o caminho feliz nao prova nada.
@@ -146,10 +188,31 @@ Testar "POST /auth/login com senha errada e RECUSADO" {
     if (-not $recusou) { throw "aceitou senha errada" }
 }
 
+# Valida o cadastro em TODA rodada, inclusive quando o usuario ja existe - e
+# sem gravar nada. A conferencia de senha acontece ANTES do save
+# (AuthService.java:67), entao senhas divergentes sao recusadas sem tocar no
+# banco. E o unico teste de /auth/register que pode rodar sempre.
+Testar "POST /auth/register com senhas divergentes e RECUSADO" {
+    $recusou = $false
+    try {
+        $body = @{
+            name            = "Smoke Divergente"
+            email           = "smoke_divergente@teste.local"
+            username        = "smoke_divergente_nao_deve_existir"
+            password        = "Smoke@12345"
+            confirmPassword = "OutraSenha@999"
+        } | ConvertTo-Json
+        Invoke-RestMethod "$API/auth/register" -Method Post -Body $body -ContentType "application/json" | Out-Null
+    } catch { $recusou = $true }
+    if (-not $recusou) { throw "cadastrou com senhas diferentes" }
+}
+
 $token = $script:token
 if (-not $token) {
     Write-Host ""
     Write-Host "Sem token - os testes autenticados nao podem rodar. Parando." -ForegroundColor Red
+    Write-Host ("Usuario de servico: {0}. Ajuste com -SmokeUser/-SmokePassword ou" -f $usuario) -ForegroundColor Red
+    Write-Host "as variaveis SMOKE_USER / SMOKE_PASSWORD se a senha foi trocada." -ForegroundColor Red
     exit 1
 }
 $H = @{ Authorization = "Bearer $token" }
