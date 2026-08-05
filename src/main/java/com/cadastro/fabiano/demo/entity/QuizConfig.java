@@ -2,10 +2,15 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+// @BatchSize de classe vale para quem aponta para ca por @ManyToOne LAZY
+// (FormTemplate.quiz e FormTemplate.survey). Numa listagem de templates,
+// sem isto e uma consulta por template; com isto, uma para a pagina toda.
+@BatchSize(size = 25)
 @Entity
 @Table(name = "quiz_configs")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -32,7 +37,10 @@ public class QuizConfig {
     @Column(nullable = false)
     private boolean active = true;
 
+    // Primeiro nivel do N+1 aninhado do quiz: sem batch, montar o
+    // QuizConfigResponse faz 1 consulta por quiz para trazer as questoes.
     @OneToMany(mappedBy = "quizConfig", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 25)
     @OrderBy("orderIndex ASC")
     @Builder.Default
     private List<QuizQuestion> questions = new ArrayList<>();

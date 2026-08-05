@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
@@ -29,7 +30,15 @@ public class FormTemplate {
     @JoinColumn(name = "client_id")
     private Client client;
 
+    // @BatchSize mata o N+1 da listagem: sem ele, uma pagina de 20 templates
+    // dispara 1 consulta para a lista + 20 para os campos. Com ele, o Hibernate
+    // agrupa os ids pendentes num unico "WHERE template_id IN (...)".
+    //
+    // Escolhido em vez de JOIN FETCH porque nao mexe em consulta nenhuma e
+    // convive com Pageable — JOIN FETCH de colecao com paginacao faz o
+    // Hibernate paginar EM MEMORIA (aviso HHH000104), trazendo a tabela inteira.
     @OneToMany(mappedBy = "formTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 25)
     private List<FormField> fields;
 
     // =====================
@@ -71,7 +80,12 @@ public class FormTemplate {
      * Se preenchido → a combinação dos valores desses campos deve ser única por template.
      * Exemplo: {"CPF"} ou {"Nome", "CPF"}
      */
+    // EAGER numa colecao e o pior caso para listagem: o Hibernate emite uma
+    // consulta POR LINHA da pagina, sempre, mesmo quando ninguem le o campo.
+    // O @BatchSize agrupa essas consultas; trocar para LAZY exigiria conferir
+    // cada uso e fica para o card do N+1 se o ganho nao bastar.
     @ElementCollection(fetch = FetchType.EAGER)
+    @BatchSize(size = 25)
     @CollectionTable(
         name = "form_template_dedup_fields",
         joinColumns = @JoinColumn(name = "template_id")

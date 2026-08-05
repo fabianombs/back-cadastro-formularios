@@ -2,10 +2,15 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+// @BatchSize de classe vale para quem aponta para ca por @ManyToOne LAZY
+// (FormTemplate.quiz e FormTemplate.survey). Numa listagem de templates,
+// sem isto e uma consulta por template; com isto, uma para a pagina toda.
+@BatchSize(size = 25)
 @Entity
 @Table(name = "survey_configs")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
