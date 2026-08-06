@@ -47,9 +47,23 @@ scrape_configs:
         replacement: 'homolog'
 
     pipeline_stages:
-      # O driver json-file embrulha cada linha em {"log": "...", "stream": ...}.
-      # Primeiro desembrulha; so entao o JSON da aplicacao fica visivel.
-      - docker: {}
+      # NAO usar o estagio 'docker' aqui (FABIANO-62).
+      #
+      # Ele existe para desembrulhar o formato do driver json-file
+      # ({"log":"...","stream":...}), lido por CAMINHO DE ARQUIVO. Mas a
+      # descoberta acima e docker_sd_configs, que entrega a linha JA
+      # desembrulhada pela API do Docker.
+      #
+      # Aplicado numa linha limpa, ele procurava um campo 'log' e usava como
+      # conteudo. O JSON da aplicacao TEM um campo 'log' — e um objeto:
+      # "log":{"level":"WARN","logger":"..."}. A linha inteira virava esse
+      # objeto, e mensagem, requestId, rota, status e duracao eram descartados.
+      # Os estagios seguintes procuravam 'log.level' num conteudo que ja nao
+      # tinha mais 'log', entao os rotulos nivel e logger nunca eram criados —
+      # e o alerta "Erros aparecendo no log", que consulta nivel="ERROR",
+      # nunca poderia disparar.
+      #
+      # - docker: {}
 
       # Linha que nao e JSON (nginx, banner do Spring) passa direto. Sem este
       # desvio, o estagio json abaixo derruba a linha inteira em silencio.
