@@ -106,6 +106,13 @@ jobs:
         working-directory: infra/terraform
 
     steps:
+      # checkout PRIMEIRO, e sem condicao. O job declara
+      # working-directory: infra/terraform como padrao, e esse diretorio so
+      # existe depois do checkout — qualquer passo `run` antes dele falha com
+      # "No such file or directory", que parece erro de caminho e e erro de
+      # ordem. Custa segundos e evita a classe inteira.
+      - uses: actions/checkout@v4
+
       - name: Sem credencial? Explica e para por aqui
         if: env.ROLE == ''
         run: |
@@ -120,9 +127,6 @@ jobs:
           echo "  3. criar a role OIDC e gravar o ARN no secret AWS_ROLE_TERRAFORM_PLAN"
           echo
           echo "Enquanto isso, o job 'validar' ja cobre sintaxe e semantica."
-
-      - uses: actions/checkout@v4
-        if: env.ROLE != ''
 
       - name: Credencial AWS (OIDC)
         if: env.ROLE != ''
