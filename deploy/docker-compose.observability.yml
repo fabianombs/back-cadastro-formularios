@@ -162,6 +162,30 @@ services:
       # defeito do APP_FRONTEND_URL que passou meses em producao.
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:?defina GRAFANA_ROOT_URL no .env}
       GF_SERVER_ENABLE_GZIP: "true"
+
+      # ---- Envio de e-mail -------------------------------------------------
+      # As MESMAS credenciais que o backup diario usa (/etc/fabiano-backup.env).
+      # Copiadas para o .env porque o container nao consegue ler um arquivo
+      # root:600 do host — mas sao a mesma conta, de proposito: uma credencial
+      # a menos para girar quando a senha mudar.
+      #
+      # Obrigatorias, sem padrao: alerta que acende na tela e nao avisa ninguem
+      # e meio sistema de alerta. Melhor a stack recusar subir do que subir
+      # muda. Foi assim que o contact point ficou com "Last delivery attempt
+      # failed" na primeira tentativa.
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${SMTP_HOST:?defina SMTP_HOST no .env}:${SMTP_PORT:-587}
+      GF_SMTP_USER: ${SMTP_USER:?defina SMTP_USER no .env}
+      GF_SMTP_PASSWORD: ${SMTP_PASS:?defina SMTP_PASS no .env}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_USER}
+      GF_SMTP_FROM_NAME: ${GRAFANA_FROM_NAME:-Nexventa - Monitoramento}
+      # O Gmail na 587 exige STARTTLS. 'Mandatory' e nao 'Opportunistic' para
+      # a conexao falhar em vez de cair para texto puro com a senha dentro.
+      GF_SMTP_STARTTLS_POLICY: MandatoryStartTLS
+
+      # Pausa a regra de ausencia de submissao onde ninguem usa o sistema.
+      # true em homologacao, false em producao. Ver rules.yaml.
+      ALERTA_SUBMISSAO_PAUSADO: ${ALERTA_SUBMISSAO_PAUSADO:-false}
     mem_limit: 400m
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]

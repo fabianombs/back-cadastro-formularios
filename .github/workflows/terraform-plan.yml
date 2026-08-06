@@ -1,0 +1,198 @@
+# =============================================================================
+# terraform: validacao em todo PR, plan quando houver credencial (FABIANO-10)
+# =============================================================================
+# NUNCA aplica.
+#
+# Dois jobs de proposito, porque eles tem pre-requisitos diferentes:
+#
+#   validar  - fmt e validate. NAO precisa de AWS. Roda sempre, em todo PR.
+#              E a verificacao semantica de verdade: pega variavel inexistente,
+#              atributo errado, referencia quebrada. Vale por si so.
+#
+#   plan     - precisa de credencial e de state. Enquanto a role OIDC nao
+#              existir (depende da liberacao de IAM, FABIANO-20), este job e
+#              PULADO com mensagem explicando — e nao falha.
+#
+# Job que falha todo dia por motivo conhecido vira X vermelho decorativo, e X
+# vermelho decorativo ensina todo mundo a ignorar o CI. Pular dizendo por que e
+# honesto; falhar em silencio nao e.
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+  schedule:
+    # 07:00 UTC = 04:00 em Brasilia, depois da janela de backup do RDS.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Sem AWS: roda sempre, e e o que da retorno hoje
+  # ---------------------------------------------------------------------------
+  validar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.15.8'
+          terraform_wrapper: false
+
+      # NAO bloqueante ainda, e o motivo e honesto: os arquivos foram escritos
+      # a mao, sem `terraform fmt` nunca ter passado neles. Bloquear agora
+      # quebraria o PR por alinhamento de sinal de igual — motivo cosmetico,
+      # que ensina a ignorar CI vermelho.
+      #
+      # Depois de rodar UMA vez `terraform fmt -recursive` e commitar o
+      # resultado, trocar continue-on-error para false. A partir dai o gate
+      # passa a valer de verdade.
+      - name: Formatacao
+        continue-on-error: true
+        run: |
+          terraform fmt -check -recursive -diff || {
+            echo "::notice::terraform fmt encontrou diferencas de formatacao."
+            echo "Rode 'terraform fmt -recursive' em infra/terraform e commite."
+            echo "Depois disso, remova o continue-on-error deste passo."
+          }
+
+      # -backend=false dispensa o bucket de state e a credencial: baixa o
+      # provider e monta o grafo de dependencias, que e o suficiente para
+      # validar. E onde um erro de digitacao aparece antes de custar caro.
+      - name: Init sem backend
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate -no-color
+
+      # O modulo asg/ e inerte: nenhum 'module' o referencia, entao o validate
+      # da raiz NAO o enxerga. Validar em separado evita que ele apodreca sem
+      # ninguem perceber ate o dia em que for ligado.
+      - name: Validate do modulo asg (inerte, mas nao esquecido)
+        working-directory: infra/terraform/asg
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate -no-color
+
+  # ---------------------------------------------------------------------------
+  # Com AWS: so quando a credencial existir
+  # ---------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    needs: validar
+    env:
+      # Secrets nao podem ser lidos direto num 'if' de job. Passando por env,
+      # da para pular passo a passo sem falhar o job inteiro.
+      ROLE: ${{ secrets.AWS_ROLE_TERRAFORM_PLAN }}
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      # checkout PRIMEIRO, e sem condicao. O job declara
+      # working-directory: infra/terraform como padrao, e esse diretorio so
+      # existe depois do checkout — qualquer passo `run` antes dele falha com
+      # "No such file or directory", que parece erro de caminho e e erro de
+      # ordem. Custa segundos e evita a classe inteira.
+      - uses: actions/checkout@v4
+
+      - name: Sem credencial? Explica e para por aqui
+        if: env.ROLE == ''
+        run: |
+          echo "::notice::plan PULADO — o secret AWS_ROLE_TERRAFORM_PLAN nao existe."
+          echo
+          echo "Isto e esperado hoje, e nao e falha. A role OIDC depende da"
+          echo "liberacao de IAM que ainda nao saiu (FABIANO-20)."
+          echo
+          echo "Para ligar:"
+          echo "  1. rodar infra/terraform/bootstrap-state.sh (cria o bucket do state)"
+          echo "  2. descomentar o bloco backend \"s3\" em versions.tf"
+          echo "  3. criar a role OIDC e gravar o ARN no secret AWS_ROLE_TERRAFORM_PLAN"
+          echo
+          echo "Enquanto isso, o job 'validar' ja cobre sintaxe e semantica."
+
+      - name: Credencial AWS (OIDC)
+        if: env.ROLE != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TERRAFORM_PLAN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        if: env.ROLE != ''
+        with:
+          terraform_version: '1.15.8'
+          terraform_wrapper: false
+
+      - name: Init
+        if: env.ROLE != ''
+        run: terraform init -input=false
+
+      - name: Plan
+        id: plan
+        if: env.ROLE != ''
+        # -detailed-exitcode distingue "sem mudanca" (0) de "ha mudanca" (2).
+        # 2 NAO e erro. -lock-timeout evita falhar de imediato quando outro job
+        # segura o bloqueio do state.
+        run: |
+          set +e
+          terraform plan -no-color -input=false -lock-timeout=5m -detailed-exitcode -out=plano.bin
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+          terraform show -no-color plano.bin > plano.txt
+        continue-on-error: true
+
+      - name: Publicar o diff no PR
+        if: env.ROLE != '' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          EXITCODE: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const bruto = fs.readFileSync('infra/terraform/plano.txt', 'utf8');
+            // Comentario do GitHub tem limite de 65536 caracteres.
+            const plano = bruto.length > 60000
+              ? bruto.slice(0, 60000) + '\n\n... (truncado — ver o log completo do job)'
+              : bruto;
+            const codigo = process.env.EXITCODE;
+            const titulo = codigo === '0'
+              ? 'Sem mudancas — a AWS bate com o codigo'
+              : codigo === '2'
+                ? 'HA MUDANCAS — leia antes de aprovar'
+                : 'O plan FALHOU';
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### terraform plan — ${titulo}\n\n<details><summary>Ver plano</summary>\n\n\`\`\`terraform\n${plano}\n\`\`\`\n\n</details>`
+            });
+
+      # Drift fora de PR (execucao agendada) significa que alguem mexeu pelo
+      # console. Falha de proposito, para aparecer.
+      - name: Falhar se houve drift na execucao agendada
+        if: env.ROLE != '' && github.event_name == 'schedule' && steps.plan.outputs.exitcode == '2'
+        run: |
+          echo "O plan agendado encontrou diferenca entre o codigo e a AWS."
+          echo "Ou alguem alterou algo pelo console, ou o codigo ficou para tras."
+          exit 1
+
+      - name: Falhar se o plan quebrou
+        if: env.ROLE != '' && steps.plan.outputs.exitcode == '1'
+        run: exit 1

@@ -1,0 +1,29 @@
+# =============================================================================
+# Molde do terraform.tfvars — COPIE, NAO EDITE ESTE ARQUIVO
+# =============================================================================
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars esta no .gitignore porque pode conter senha. Este .example
+# fica versionado justamente para o proximo a chegar saber o que precisa existir.
+#
+# Depois do import, NENHUM destes valores precisa estar preenchido para o plan
+# funcionar: os dois campos sensiveis tem ignore_changes. Estao aqui pelo caso
+# de um dia a infra precisar ser recriada do zero.
+# =============================================================================
+
+# Vazio e o esperado no dia a dia. A senha real esta no /etc/poc-fabiano.env da
+# maquina e no RDS; o Terraform ignora este campo (ver lifecycle em main.tf).
+db_password = ""
+
+# Conteudo da chave publica ed25519 do key pair poc-fabiano-key.
+# Obter com: ssh-keygen -y -f ~/.ssh/poc-fabiano
+# Chave PUBLICA nao e segredo — se um dia isto for preenchido, pode ficar no Git.
+public_key_material = ""
+
+# Restringir SSH depende do FABIANO-45: e preciso combinar quais IPs entram.
+# Hoje a AWS esta com 0.0.0.0/0 e mudar aqui SEM mudar la gera drift ao contrario.
+# ssh_allowed_cidr = "0.0.0.0/0"
+
+# Multi-AZ do RDS: unica protecao contra queda de zona inteira, dobra o custo do
+# banco. Decisao de negocio, nao tecnica.
+# db_multi_az = false

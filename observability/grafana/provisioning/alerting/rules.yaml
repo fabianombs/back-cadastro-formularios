@@ -431,6 +431,10 @@ groups:
   folder: Fabiano
   interval: 1m
   rules:
+  # Ausencia de envio so e sintoma onde alguem usa o sistema. Em homologacao
+  # ninguem usa, entao esta regra viveria acesa — e alerta que sempre toca e
+  # alerta que todo mundo aprende a ignorar. ALERTA_SUBMISSAO_PAUSADO vem do
+  # .env: true em homologacao, false em producao.
   - uid: fabiano-sem-submissao
     title: Nenhum formulario enviado em horario comercial
     condition: B
@@ -487,7 +491,7 @@ groups:
       runbook_url: http://localhost:3000/d/fabiano-produto
     labels:
       severidade: medio
-    isPaused: false
+    isPaused: $ALERTA_SUBMISSAO_PAUSADO
     notification_settings:
       receiver: email-equipe
       mute_time_intervals:
@@ -544,7 +548,7 @@ groups:
     annotations:
       summary: O ultimo backup do banco tem mais de 26 horas.
       description: 'Nenhum backup bem sucedido nas ultimas 26h. Conferir nesta ordem: "sudo crontab -l"
-        (a maquina ja ficou sem cron instalado), o fim de /var/log/fabiano-backup.log, e se
+        (a maquina ja ficou sem cron instalado), o fim de /var/log/backup-db.log, e se
         /var/lib/node_exporter/textfile_collector/backup_fabiano.prom esta sendo atualizado. Alerta sem
         dado tambem cai aqui: metrica que sumiu e backup que parou sao a mesma emergencia.'
     labels:

@@ -5,6 +5,9 @@ import com.cadastro.fabiano.demo.dto.response.ErrorResponse;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -101,6 +104,72 @@ class GlobalExceptionHandlerTest {
         registro.find("erro.tratado").counters().forEach(c ->
                 c.getId().getTags().forEach(tag ->
                         assertThat(tag.getValue()).doesNotContain("123.456.789")));
+    }
+
+    // ------------------------------------------------------------------
+    // Infraestrutura indisponivel -> 503 (FABIANO-56)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("handleIndisponivel: banco fora vira 503, nao 400")
+    void handleIndisponivel_returns503() {
+        // A excecao que a aplicacao produziu de verdade em 05/08/2026, com o
+        // RDS de ensaio fora durante o upgrade para o MySQL 8.4.
+        var ex = new DataAccessResourceFailureException("Unable to acquire JDBC Connection");
+
+        ResponseEntity<ErrorResponse> response = handler.handleIndisponivel(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("handleIndisponivel: responde com Retry-After")
+    void handleIndisponivel_temRetryAfter() {
+        var ex = new QueryTimeoutException("statement timeout");
+
+        ResponseEntity<ErrorResponse> response = handler.handleIndisponivel(ex);
+
+        assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
+    }
+
+    @Test
+    @DisplayName("handleIndisponivel: nao vaza host nem string de conexao para o usuario")
+    void handleIndisponivel_naoVazaDetalheDeInfra() {
+        // A mensagem do Spring costuma trazer host, porta e usuario. Isso nao
+        // pode chegar a tela de quem so queria marcar presenca num evento.
+        var ex = new DataAccessResourceFailureException(
+                "Could not open connection to jdbc:mysql://poc-fabiano-db.abc123.us-east-1.rds.amazonaws.com:3306/poc_fabiano_new");
+
+        ResponseEntity<ErrorResponse> response = handler.handleIndisponivel(ex);
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message())
+                .doesNotContain("jdbc")
+                .doesNotContain("rds.amazonaws.com")
+                .doesNotContain("3306")
+                .isEqualTo("Sistema temporariamente indisponivel. Tente novamente em instantes.");
+    }
+
+    @Test
+    @DisplayName("A correcao NAO alargou: erro de negocio continua 400")
+    void erroDeNegocio_continua400() {
+        // Trava do criterio de aceite. Se um dia alguem mover uma excecao de
+        // regra de negocio para o handler de indisponibilidade, o cliente passa
+        // a ver "tente de novo" onde deveria corrigir o formulario — e o painel
+        // de 5xx acende sem haver incidente nenhum.
+        ResponseEntity<ErrorResponse> negocio = handler.handleRuntime(
+                new RuntimeException("Template nao encontrado"));
+
+        assertThat(negocio.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(negocio.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isNull();
+    }
+
+    @Test
+    @DisplayName("erro_tratado_total: indisponibilidade e contada como 503")
+    void erroTratado_registra503() {
+        handler.handleIndisponivel(new DataAccessResourceFailureException("banco fora"));
+
+        assertThat(contador("DataAccessResourceFailureException", 503)).isEqualTo(1.0);
     }
 
     private double contador(String tipo, int status) {
