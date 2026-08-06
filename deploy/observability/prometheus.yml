@@ -1,0 +1,51 @@
+# =============================================================================
+# Prometheus — versao de SERVIDOR (EC2). FABIANO-23
+# =============================================================================
+# Diferencas para observability/prometheus/prometheus.yml, que e a de dev:
+#   - o alvo e o container 'backend' na rede fabiano-internal, nao
+#     host.docker.internal (em dev a aplicacao roda fora do Docker)
+#   - o token vem de arquivo com permissao restrita, nao inline
+#   - existe node-exporter, que em dev nao faz sentido
+#   - retencao e ambiente diferentes
+# =============================================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    # Vira rotulo em toda serie. Quando o Grafana passar a ver producao e
+    # homologacao ao mesmo tempo, e por aqui que se separa uma da outra.
+    ambiente: homolog
+
+scrape_configs:
+  - job_name: fabiano-back
+    metrics_path: /actuator/prometheus
+    scheme: http
+
+    # O tipo NAO e Bearer de proposito: o JwtAuthenticationFilter so reage a
+    # "Bearer " e ignoraria... o contrario. Ver SecurityConfig.coletorAutorizado.
+    # credentials_file e nao credentials inline: o token nao entra no Git nem
+    # aparece em 'docker inspect'.
+    authorization:
+      type: Metrics-Token
+      credentials_file: /etc/prometheus/metrics-token
+
+    static_configs:
+      - targets: ["backend:8080"]
+        labels:
+          application: fabiano-back
+
+  # ---------------------------------------------------------------------------
+  # Metricas da maquina + o dead man's switch do backup
+  # ---------------------------------------------------------------------------
+  # O backup-db.sh escreve backup_fabiano_* em
+  # /var/lib/node_exporter/textfile_collector/. Ate hoje ninguem lia esse
+  # arquivo — o switch existia e nao estava ligado a coisa nenhuma.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          application: fabiano-host
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

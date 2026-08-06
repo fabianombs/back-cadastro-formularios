@@ -184,7 +184,11 @@ jobs:
           host:     ${{ secrets.HOMOLOG_EC2_HOST }}
           username: ${{ secrets.HOMOLOG_EC2_USER }}
           key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
-          source:   "deploy/**"
+          # observability/** vai junto: os paineis, as regras de alerta e a
+          # config do Loki sao compartilhados com o ambiente de dev e vivem
+          # fora de deploy/. Sem esta linha o compose de observabilidade sobe
+          # na maquina apontando para arquivo que nao existe.
+          source:   "deploy/**,observability/**"
           target:   "/home/ec2-user/fabiano/"
           strip_components: 0
           overwrite: true

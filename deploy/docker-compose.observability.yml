@@ -1,0 +1,177 @@
+# =============================================================================
+# Stack de observabilidade — versao de SERVIDOR (EC2). FABIANO-23 / 27 / 28
+# =============================================================================
+# Roda em /home/ec2-user/fabiano/deploy/, ao lado do docker-compose.yml.
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#   docker compose -f docker-compose.observability.yml ps
+#   docker compose -f docker-compose.observability.yml down      (mantem dados)
+#
+# Stack SEPARADA de proposito, e nao servicos a mais no compose principal:
+# derrubar o Grafana para mexer num painel nao pode exigir tocar no container
+# que atende o cliente. O preco e a rede 'external' abaixo.
+#
+# NENHUMA porta e publicada no host. O Grafana chega pela internet unicamente
+# pelo nginx, que termina o TLS em grafana-hml.nexventa.com.br. Publicar 3000
+# deixaria o painel acessivel em HTTP puro pelo IP da EC2, contornando o
+# certificado — o mesmo motivo de o backend nao publicar a 8080.
+# =============================================================================
+
+name: fabiano-observabilidade
+
+networks:
+  # A rede e criada pelo docker-compose.yml principal. 'external' aqui
+  # significa "ja existe, nao crie" — e por ela que o Prometheus alcanca
+  # backend:8080 e o nginx alcanca grafana:3000, sem nada exposto no host.
+  #
+  # Consequencia pratica: a stack principal precisa estar de pe antes desta.
+  fabiano-internal:
+    external: true
+
+volumes:
+  prometheus-dados:
+  grafana-dados:
+  loki-dados:
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: fabiano-prometheus
+    restart: unless-stopped
+    networks: [fabiano-internal]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Token de leitura do /actuator/prometheus. Fica fora do compose e fora
+      # do Git; e criado na maquina com permissao 600. Ver .env.example.
+      - ./observability/metrics-token:/etc/prometheus/metrics-token:ro
+      - prometheus-dados:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 30 dias. O disco tem 20 GB e a serie deste porte gasta pouco; o teto
+      # existe para o volume nao crescer sem fim, nao por falta de espaco.
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=4GB
+      - --web.enable-lifecycle
+    mem_limit: 400m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # node-exporter: metricas da maquina + o dead man's switch do backup
+  # ---------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: fabiano-node-exporter
+    restart: unless-stopped
+    networks: [fabiano-internal]
+    # O container precisa enxergar o host, nao o proprio namespace, senao mede
+    # a si mesmo e reporta um disco de 0 byte.
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+      # Onde o backup-db.sh grava backup_fabiano_*.prom. Somente leitura: quem
+      # escreve e o script no host.
+      - /var/lib/node_exporter/textfile_collector:/textfile:ro
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile
+      # Coletores de sobra para uma EC2 pequena; desligados para economizar
+      # memoria e nao encher o TSDB de serie que ninguem consulta.
+      - --no-collector.wifi
+      - --no-collector.hwmon
+      - --no-collector.mdadm
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: fabiano-loki
+    restart: unless-stopped
+    networks: [fabiano-internal]
+    volumes:
+      - ../observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-dados:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    mem_limit: 400m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: fabiano-promtail
+    restart: unless-stopped
+    networks: [fabiano-internal]
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      # Socket do Docker para a descoberta de containers, e o diretorio onde o
+      # driver json-file guarda as linhas.
+      #
+      # ATENCAO: acesso de leitura ao socket do Docker equivale a acesso de
+      # root na maquina. E o preco de ler log de container sem caminho fixo;
+      # o Promtail nao publica porta e nao e alcancavel de fora.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    mem_limit: 128m
+    depends_on:
+      loki:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: fabiano-grafana
+    restart: unless-stopped
+    networks: [fabiano-internal]
+    env_file: .env
+    volumes:
+      - grafana-dados:/var/lib/grafana
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      # Sem padrao de proposito: se a variavel faltar, o Grafana sobe com senha
+      # vazia e recusa o login — falha barulhenta. Um padrao 'admin' aqui
+      # deixaria o painel do cliente aberto com a senha que todo mundo conhece.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD no .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # O Grafana esta atras do nginx. Sem estas duas linhas ele monta os links
+      # de e-mail e os redirecionamentos com http://localhost:3000 — o mesmo
+      # defeito do APP_FRONTEND_URL que passou meses em producao.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:?defina GRAFANA_ROOT_URL no .env}
+      GF_SERVER_ENABLE_GZIP: "true"
+    mem_limit: 400m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
