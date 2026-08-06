@@ -130,7 +130,10 @@ resource "aws_db_instance" "mysql" {
   # Realidade conferida em 05/08/2026 via describe-db-instances.
   backup_retention_period    = var.db_backup_retention
   backup_window              = "04:00-04:30"
-  maintenance_window         = "mon:06:17-06:47"
+  # Formato da AWS: ddd:hh24:mi-ddd:hh24:mi — o dia da semana vai nos DOIS
+  # lados. O inventario do card registrou "mon:06:17-06:47", abreviado como
+  # se escreve numa anotacao, e a abreviacao virou erro de sintaxe aqui.
+  maintenance_window         = "mon:06:17-mon:06:47"
   deletion_protection        = true
   auto_minor_version_upgrade = true
   multi_az                   = var.db_multi_az
