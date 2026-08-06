@@ -1,4 +1,30 @@
 #!/bin/bash
+# =============================================================================
+# ARQUIVO HISTORICO — NAO EDITAR (FABIANO-10)
+# =============================================================================
+# Isto e o provisionamento da maquina ANTIGA: Java 21 e o servico systemd do
+# JAR. Nao descreve mais nada que se pretenda construir.
+#
+# POR QUE NAO FOI SUBSTITUIDO NO LUGAR:
+#
+#   `user_data` e ForceNew no provider da AWS. O conteudo deste arquivo entra no
+#   hash do recurso aws_instance.app. Reescrever aqui faria o `terraform plan`
+#   propor DESTRUIR E RECRIAR a EC2 que atende o cliente hoje — o oposto do que
+#   este card quer. Por isso o recurso tem ignore_changes = [user_data] e este
+#   arquivo fica congelado.
+#
+# O PROVISIONAMENTO NOVO, com Docker, vive em:
+#
+#   infra/terraform/asg/templates/user_data.sh.tftpl
+#
+# Ele cobre o que a maquina nova recebeu a mao e nunca foi codificado: docker,
+# docker-compose-plugin, mariadb (mysqldump), cronie, certbot, os scripts de
+# /app e a linha do cron do backup.
+#
+# Este arquivo desaparece junto com a instancia solta, quando o Auto Scaling
+# assumir.
+# =============================================================================
+
 # Script executado automaticamente na primeira inicializacao da EC2 (Amazon Linux 2)
 
 set -e

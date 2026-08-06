@@ -38,7 +38,16 @@ infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.backup
 infra/terraform/*.tfvars
-infra/terraform/.terraform.lock.hcl
+
+# O .terraform.lock.hcl ESTAVA sendo ignorado aqui, e nao devia. Ele fixa a
+# versao e o hash de cada provider; sem ele versionado, a maquina do dev e o
+# runner do CI podem baixar providers diferentes e produzir plans diferentes
+# para o mesmo codigo. E o equivalente do package-lock.json, que ninguem
+# cogitaria ignorar.
+#
+# Ele nao contem segredo nenhum — so nomes, versoes e hashes.
+# Recomendacao explicita da HashiCorp: commitar.
+!infra/terraform/.terraform.lock.hcl
 *.tfstate
 *.tfstate.backup
 *.bak

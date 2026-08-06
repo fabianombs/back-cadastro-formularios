@@ -1,0 +1,75 @@
+# =============================================================================
+# terraform apply — MANUAL, com aprovacao (FABIANO-10)
+# =============================================================================
+# Nunca dispara sozinho. Sem push, sem merge, sem schedule.
+#
+# Duas travas:
+#   1. workflow_dispatch — alguem precisa clicar
+#   2. environment: producao — exige aprovacao configurada no GitHub
+#
+# Alem disso, exige digitar "aplicar" no campo de confirmacao. Parece exagero;
+# nao e. Do outro lado deste botao esta o RDS que guarda a lista de presenca dos
+# eventos do cliente.
+name: terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacao:
+        description: 'Digite "aplicar" para confirmar. Qualquer outra coisa aborta.'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    # Configurar em Settings > Environments > producao > Required reviewers.
+    # Sem isso o environment nao adiciona protecao nenhuma.
+    environment: producao
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - name: Conferir a confirmacao
+        if: inputs.confirmacao != 'aplicar'
+        run: |
+          echo "Confirmacao ausente ou errada. Nada foi feito."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Credencial AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TERRAFORM_APPLY }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+
+      - run: terraform init -input=false
+
+      # O plan roda de novo aqui, e o apply consome ESTE arquivo. Assim o que e
+      # aplicado e exatamente o que foi calculado neste job — e nao um plano de
+      # outro momento, contra um state que mudou no meio.
+      - name: Plan
+        run: terraform plan -no-color -input=false -lock-timeout=5m -out=plano.bin
+
+      - name: Mostrar o que sera aplicado
+        run: terraform show -no-color plano.bin
+
+      - name: Apply
+        run: terraform apply -input=false -lock-timeout=5m plano.bin
+
+      - name: Estado final
+        run: terraform output -no-color

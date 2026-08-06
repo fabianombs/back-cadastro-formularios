@@ -1,5 +1,6 @@
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-ec2-sg"
+  name   = "${var.project_name}-ec2-sg"
+  vpc_id = data.aws_vpc.default.id
 
   # NAO "arrumar" este texto. A AWS nao permite alterar a descricao de um
   # security group depois de criado — o provider trata description como
@@ -58,10 +59,18 @@ resource "aws_security_group" "ec2" {
   tags = {
     Name = "${var.project_name}-ec2-sg"
   }
+
+  lifecycle {
+    # Segunda rede de seguranca contra a armadilha descrita acima. Se alguem
+    # "melhorar" a description mesmo assim, o destroy e recusado com erro claro
+    # em vez de derrubar o SG da EC2 de producao no meio de um apply.
+    prevent_destroy = true
+  }
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
+  name   = "${var.project_name}-rds-sg"
+  vpc_id = data.aws_vpc.default.id
   description = "Security group para RDS MySQL - acessivel apenas pela EC2"
 
   ingress {
@@ -81,5 +90,9 @@ resource "aws_security_group" "rds" {
 
   tags = {
     Name = "${var.project_name}-rds-sg"
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }
