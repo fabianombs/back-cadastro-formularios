@@ -576,7 +576,7 @@ groups:
       datasourceUid: prometheus-fabiano
       model:
         refId: A
-        expr: 100 * (1 - node_filesystem_avail_bytes{job="node",mountpoint="/host"} / node_filesystem_size_bytes{job="node",mountpoint="/host"})
+        expr: 100 * (1 - node_filesystem_avail_bytes{job="node",mountpoint="/",fstype!~"tmpfs|vfat"} / node_filesystem_size_bytes{job="node",mountpoint="/",fstype!~"tmpfs|vfat"})
         instant: true
         editorMode: code
         range: false
@@ -595,9 +595,22 @@ groups:
           query: { params: [B] }
           reducer: { type: last, params: [] }
           type: query
-    # OK e nao Alerting: disco sem dado por alguns minutos e falha de coleta,
-    # nao emergencia. Diferente do backup, onde o silencio E o sintoma.
-    noDataState: OK
+    # Alerting, e nao OK. O raciocinio anterior ("disco sem dado e falha de
+    # coleta, nao emergencia") parecia razoavel e produziu o pior resultado
+    # possivel: o seletor estava errado — mountpoint="/host" nao existe, o
+    # node-exporter expoe "/" porque o collector remove o prefixo de
+    # --path.rootfs — entao a consulta nunca devolveu nada, o noDataState: OK
+    # traduziu isso como saude, e a regra ficou em Normal verde desde que foi
+    # escrita. Nunca disparou e nunca reclamou (FABIANO-65).
+    #
+    # Medido em 06/08/2026 na maquina de homologacao:
+    #   mountpoint=/           fstype=xfs    device=/dev/nvme0n1p1
+    #   mountpoint=/boot/efi   fstype=vfat
+    #   mountpoint=/run,/tmp   fstype=tmpfs
+    #
+    # A regra geral que fica: se a metrica sumir significa que voce parou de
+    # enxergar, e nao que o problema acabou, entao Alerting.
+    noDataState: Alerting
     execErrState: Error
     for: 15m
     annotations:
@@ -608,4 +621,115 @@ groups:
         calada bem quando seria mais util.'
     labels:
       severidade: alto
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
+  # Quem vigia os vigias (FABIANO-65)
+  # ---------------------------------------------------------------------------
+  # Todo alerta acima depende de uma fonte de dado continuar viva. Se a fonte
+  # morre, a consulta nao falha: ela devolve vazio. E vazio, para um alerta de
+  # limiar, e indistinguivel de "esta tudo bem".
+  #
+  # Foi assim que o Loki ficou recebendo lixo sem ninguem notar (FABIANO-62): o
+  # painel mostrava zero erro em verde, que e exatamente o que ele mostraria
+  # se tudo estivesse bem. As duas regras abaixo existem para que a proxima
+  # vez seja um e-mail, e nao uma descoberta por acaso.
+  - uid: fabiano-coleta-host-parada
+    title: Parei de coletar metricas da maquina
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        # 'up' e sintetica: o Prometheus a escreve a cada coleta, 1 se
+        # respondeu, 0 se nao. Se o alvo sumir da configuracao, ela deixa de
+        # existir — dai o noDataState abaixo.
+        expr: min(up{job="node"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [1] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: O node-exporter parou de responder.
+      description: 'Sem ele nao ha metrica de disco, CPU nem memoria da EC2 — e o alerta de disco
+        cheio deixa de poder disparar. Conferir com "docker compose -f docker-compose.observability.yml
+        ps" e "docker logs fabiano-node-exporter". Enquanto isto estiver aberto, a ausencia de alerta de
+        infraestrutura nao significa nada.'
+      runbook_url: http://localhost:3000/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+
+  - uid: fabiano-coleta-log-parada
+    title: Parei de receber log da aplicacao
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 1800, to: 0 }
+      datasourceUid: loki-fabiano
+      model:
+        refId: A
+        # Nao mede erro: mede se CHEGA log. A aplicacao no ar sempre produz
+        # alguma linha — nem que seja o access log de uma sonda de saude.
+        # Zero por 10 minutos, com a aplicacao respondendo, significa que o
+        # caminho Promtail -> Loki quebrou.
+        expr: sum(count_over_time({application="fabiano-back"}[10m]))
+        # queryType e o campo que o datasource do Loki le; 'instant' abaixo e
+        # do Prometheus e e ignorado aqui. Sem ele a consulta volta como serie
+        # temporal e a expressao de limiar recusa, deixando a regra em Error
+        # permanente — foi o que aconteceu com a regra de erro no log
+        # (FABIANO-62).
+        queryType: instant
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: loki, uid: loki-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 1800, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [1] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # Alerting de proposito, e aqui a escolha e quase tautologica: se a regra
+    # nao consegue consultar o Loki, o Loki esta fora — que e exatamente o que
+    # ela deveria avisar.
+    noDataState: Alerting
+    execErrState: Alerting
+    for: 10m
+    annotations:
+      summary: Nenhuma linha de log chegou nos ultimos 10 minutos.
+      description: 'A tela de Logs esta cega, e com ela o alerta "Erros aparecendo no log". Conferir
+        "docker logs fabiano-promtail" — o erro classico e "final error sending batch ... at least one
+        label pair is required per stream". Atencao: painel de log vazio parece calmaria e e apagao.'
+      runbook_url: http://localhost:3000/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
     isPaused: false

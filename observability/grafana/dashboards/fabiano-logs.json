@@ -107,7 +107,7 @@
       "type": "stat",
       "id": 1,
       "title": "Linhas de log / min",
-      "description": "Cair a zero com a aplicacao no ar significa que o Promtail parou, nao que o sistema ficou quieto.",
+      "description": "Cair a zero com a aplicacao no ar significa que o Promtail parou, nao que o sistema ficou quieto. Vermelho no zero de proposito: com a aplicacao no ar, zero linha por minuto nao e calmaria, e o Promtail parado (FABIANO-62). O alerta 'Parei de receber log da aplicacao' cobre o mesmo caso para quem nao esta olhando.",
       "datasource": {
         "type": "loki",
         "uid": "loki-fabiano"
@@ -141,8 +141,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           },
