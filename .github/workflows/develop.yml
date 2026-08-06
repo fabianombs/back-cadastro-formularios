@@ -74,6 +74,83 @@ jobs:
       - name: Verify JAR was generated
         run: ls -la target/*.jar
 
+
+  # ===========================================================================
+  # PACOTE DE DEPLOY NO S3 (FABIANO-58)
+  #
+  # A esteira entrega os arquivos por scp para uma maquina que JA EXISTE. Uma
+  # instancia criada pelo Auto Scaling as 3h da manha nao tem endereco conhecido
+  # nem chave autorizada — ninguem faz scp para ela. Ela precisa BUSCAR o
+  # pacote, e este job e quem o publica.
+  #
+  # Nao substitui o scp: enquanto a maquina for fixa, o scp continua sendo o
+  # caminho do deploy. Este job so garante que exista um pacote para uma maquina
+  # que ainda nao nasceu. Por isso NAO e dependencia do job de deploy — se o
+  # bucket estiver fora, o deploy do dia nao pode parar por causa disso.
+  # ===========================================================================
+  publicar-bundle:
+    name: Publicar pacote de deploy (S3)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: credencial temporaria, nenhuma chave guardada
+
+    env:
+      AMBIENTE: homologacao
+      BUCKET: fabiano-artefatos-135133927228
+      # 'secrets' nao pode ser lido no 'if' de um job — o GitHub resolve o if
+      # antes de montar o contexto de segredos. Por isso a role passa por env e
+      # a decisao de pular fica em cada passo.
+      ROLE: ${{ secrets.AWS_ROLE_DEPLOY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Montar o pacote
+        run: |
+          chmod +x infra/montar-bundle.sh
+          ./infra/montar-bundle.sh deploy-bundle.tar.gz
+
+      # Anexar a execucao vale mesmo com o S3 no ar: da para baixar e conferir o
+      # conteudo de qualquer build passado sem precisar de credencial da AWS.
+      - name: Anexar o pacote a execucao
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-bundle-${{ github.sha }}
+          path: deploy-bundle.tar.gz
+          retention-days: 14
+
+      - name: Sem credencial da AWS — publicacao pulada
+        if: env.ROLE == ''
+        run: |
+          echo "::notice::AWS_ROLE_DEPLOY nao configurado. O pacote foi montado e anexado a execucao, mas NAO foi para o S3."
+          echo "Depende da liberacao de IAM: criar a role OIDC do GitHub Actions e gravar o ARN no segredo AWS_ROLE_DEPLOY."
+
+      - name: Assumir a role de deploy
+        if: env.ROLE != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: us-east-1
+
+      - name: Publicar no S3
+        if: env.ROLE != ''
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA::7}"
+
+          # A copia com SHA e o historico; 'latest' e o que a maquina nova le no
+          # boot. A versionada vai PRIMEIRO de proposito: se o job morrer no
+          # meio, o latest continua sendo um pacote que ja subiu uma maquina.
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz"
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz"
+
+          echo "### Pacote publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz\` (o que a maquina nova le)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz\` (historico)" >> "$GITHUB_STEP_SUMMARY"
+
   # Imagem da branch develop, para o ambiente de homologacao do FABIANO-33.
   # Tag fixa 'develop': homologacao sempre roda o ultimo develop, sem precisar
   # descobrir sha nenhum.

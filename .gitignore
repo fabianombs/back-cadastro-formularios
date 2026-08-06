@@ -73,3 +73,9 @@ backups/
 ### Saidas dos scripts de infra ###
 diagnostico-aws.txt
 blindagem-aws.txt
+
+# Pacotes montados a mao para subir na CloudShell. Sao copia do que ja esta
+# versionado em infra/terraform/ — versionar o zip criaria uma segunda fonte
+# da verdade que envelhece em silencio.
+/terraform*.zip
+deploy-bundle.tar.gz
