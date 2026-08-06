@@ -10,8 +10,9 @@
 #
 # Alertas do card que ainda NAO da para escrever, e o motivo:
 #   - Certificado SSL expirando: nao ha coletor de certificado; precisa do blackbox_exporter ou de um monitor externo
-#   - Backup atrasado: nao existe metrica de idade do backup; depende do FABIANO-20
-#   - Disco enchendo: precisa do node-exporter, que nao foi subido (FABIANO-23)
+#   (resolvidos em 06/08/2026, quando o node-exporter entrou na stack de
+#    servidor: "Backup atrasado" e "Disco enchendo" agora existem, no grupo
+#    fabiano-infra ao final deste arquivo)
 #   - RDS com CPU alta: precisa do CloudWatch, bloqueado por falta de credencial AWS
 #
 # Alerta apoiado em metrica inexistente fica eternamente em No Data. Como
@@ -491,3 +492,109 @@ groups:
       receiver: email-equipe
       mute_time_intervals:
       - fora-do-horario-comercial
+- orgId: 1
+  name: fabiano-infra
+  folder: Fabiano
+  interval: 5m
+  rules:
+  # ---------------------------------------------------------------------------
+  # O dead man's switch do backup, finalmente ligado em alguma coisa
+  # ---------------------------------------------------------------------------
+  # O backup-db.sh escreve backup_fabiano_timestamp_seconds a cada execucao bem
+  # sucedida. A metrica existia desde 05/08 e nao era lida por ninguem — o
+  # switch estava instalado e desconectado.
+  #
+  # O alerta mede IDADE, nao sucesso. Backup que falha grava sucesso=0 e avisa;
+  # backup que simplesmente PARA DE RODAR nao grava nada — e foi exatamente o
+  # que aconteceu quando descobrimos que a maquina nao tinha cron.
+  - uid: fabiano-backup-atrasado
+    title: Backup do banco atrasado
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: (time() - max(backup_fabiano_timestamp_seconds)) / 3600
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [26] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # 26h e nao 24h: o backup roda uma vez ao dia e a folga evita alarme por
+    # atraso de minutos. Sem dado nenhum DISPARA de proposito — metrica ausente
+    # e indistinguivel de backup que nunca rodou, e essa e a falha que importa.
+    noDataState: Alerting
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: O ultimo backup do banco tem mais de 26 horas.
+      description: 'Nenhum backup bem sucedido nas ultimas 26h. Conferir nesta ordem: "sudo crontab -l"
+        (a maquina ja ficou sem cron instalado), o fim de /var/log/fabiano-backup.log, e se
+        /var/lib/node_exporter/textfile_collector/backup_fabiano.prom esta sendo atualizado. Alerta sem
+        dado tambem cai aqui: metrica que sumiu e backup que parou sao a mesma emergencia.'
+    labels:
+      severidade: critico
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
+  # Disco da EC2
+  # ---------------------------------------------------------------------------
+  # O disco desta maquina ja encheu de log do proprio json-file. Prometheus e
+  # Loki agora escrevem nela tambem, entao o risco subiu, nao desceu.
+  - uid: fabiano-disco-cheio
+    title: Disco da maquina acima de 85%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * (1 - node_filesystem_avail_bytes{job="node",mountpoint="/host"} / node_filesystem_size_bytes{job="node",mountpoint="/host"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [85] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # OK e nao Alerting: disco sem dado por alguns minutos e falha de coleta,
+    # nao emergencia. Diferente do backup, onde o silencio E o sintoma.
+    noDataState: OK
+    execErrState: Error
+    for: 15m
+    annotations:
+      summary: O disco da EC2 passou de 85% de uso.
+      description: 'Espaco acabando em /. Candidatos habituais, em ordem de tamanho: os volumes do
+        Prometheus e do Loki (docker system df -v), os dumps em /var/backups, e o log json-file dos
+        containers. Disco cheio derruba o banco de log e o TSDB juntos — e a observabilidade morre
+        calada bem quando seria mais util.'
+    labels:
+      severidade: alto
+    isPaused: false

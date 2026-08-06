@@ -1,0 +1,96 @@
+# =============================================================================
+# Promtail — versao de SERVIDOR (EC2). FABIANO-23
+# =============================================================================
+# Em dev a aplicacao escreve ./logs/app.json e o Promtail le o arquivo. Aqui a
+# aplicacao roda em container e escreve em stdout: quem guarda e o driver
+# json-file do Docker. Por isso a descoberta e pelo socket do Docker, e nao por
+# caminho fixo — assim um container recriado pelo deploy continua sendo lido
+# sem ninguem mexer em configuracao.
+# =============================================================================
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: containers-fabiano
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+
+    relabel_configs:
+      # So os containers da stack. Sem este filtro, Loki, Grafana e Prometheus
+      # entrariam tambem — e o log do Promtail sobre o Loki indo para o Loki e
+      # um jeito conhecido de encher disco.
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(fabiano-backend|fabiano-nginx)'
+        action: keep
+
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+
+      # 'application' precisa ser exatamente fabiano-back: e o rotulo que a
+      # regra de alerta "Erros aparecendo no log" consulta (rules.yaml:383).
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/fabiano-backend'
+        target_label: 'application'
+        replacement: 'fabiano-back'
+
+      - target_label: 'ambiente'
+        replacement: 'homolog'
+
+    pipeline_stages:
+      # O driver json-file embrulha cada linha em {"log": "...", "stream": ...}.
+      # Primeiro desembrulha; so entao o JSON da aplicacao fica visivel.
+      - docker: {}
+
+      # Linha que nao e JSON (nginx, banner do Spring) passa direto. Sem este
+      # desvio, o estagio json abaixo derruba a linha inteira em silencio.
+      - match:
+          selector: '{application="fabiano-back"}'
+          stages:
+            - json:
+                expressions:
+                  nivel: 'log.level'
+                  logger: 'log.logger'
+                  mensagem: message
+                  momento: '"@timestamp"'
+                  requestId: requestId
+                  userId: userId
+                  metodo: method
+                  rota: path
+                  status: status
+                  duracaoMs: duracaoMs
+
+            - timestamp:
+                source: momento
+                format: RFC3339Nano
+                # Linha sem carimbo valido usa a hora da coleta em vez de ser
+                # descartada. Perder o log do boot por causa do banner seria
+                # perder justamente o que se olha quando algo nao subiu.
+                action_on_failure: fudge
+
+            - labels:
+                nivel:
+                logger:
+
+            # Alta cardinalidade vai como metadado, nunca como rotulo: cada
+            # valor distinto de rotulo cria um fluxo proprio no Loki, e um
+            # requestId por requisicao criaria um fluxo por requisicao.
+            - structured_metadata:
+                requestId:
+                userId:
+                metodo:
+                rota:
+                status:
+                duracaoMs:
+
+            - output:
+                source: mensagem
