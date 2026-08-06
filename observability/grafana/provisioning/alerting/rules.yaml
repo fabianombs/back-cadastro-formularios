@@ -382,6 +382,13 @@ groups:
       model:
         refId: A
         expr: sum(count_over_time({application="fabiano-back", nivel="ERROR"}[5m]))
+        # queryType e o campo que o datasource do LOKI le. O 'instant: true'
+        # abaixo e do Prometheus e o Loki ignora — sem esta linha a consulta
+        # volta como serie temporal, e a expressao de limiar recusa:
+        # "looks like time series data, only reduced data can be alerted on".
+        # A regra ficava em Error permanente, mandando e-mail de DatasourceError
+        # em vez de avisar sobre erro no log (FABIANO-62).
+        queryType: instant
         instant: true
         editorMode: code
         range: false
