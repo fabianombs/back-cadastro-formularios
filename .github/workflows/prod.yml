@@ -392,7 +392,7 @@ jobs:
       # Passo separado, DEPOIS do deploy, e que NUNCA derruba a execucao.
       # Observabilidade fora do ar e ruim; derrubar o deploy da aplicacao por
       # causa dela e pior. A falha vira aviso visivel, nao silencio.
-      - name: Recarregar a stack de observabilidade
+      - name: Recarregar a observabilidade e o nginx
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.EC2_HOST }}
@@ -415,6 +415,46 @@ jobs:
               docker compose -f docker-compose.observability.yml ps
             else
               echo "::warning::A stack de observabilidade NAO subiu. Painel e alerta continuam com a versao ANTERIOR, mesmo com este deploy verde. Causa mais comum: variaveis SMTP_HOST/SMTP_USER/SMTP_PASS ausentes no .env da maquina — elas sao obrigatorias no compose e travam o arquivo inteiro (ver FABIANO-28)."
+            fi
+
+            # ---- FABIANO-68 -------------------------------------------------
+            # 'up -d' compara a DEFINICAO do servico, nao o conteudo dos
+            # arquivos montados por bind. Prometheus, Loki e Promtail leem a
+            # propria configuracao no BOOT: alterar prometheus.yml,
+            # promtail-config.yml ou loki-config.yml NAO muda a definicao do
+            # servico, entao o Compose nao recria nada e o processo continua
+            # rodando com a versao anterior.
+            #
+            # Aconteceu em 07/08/2026: o job do blackbox entrou no
+            # prometheus.yml, o deploy passou verde, e o container seguiu 47h
+            # com a config antiga. Como as regras novas usam
+            # noDataState: Alerting, o resultado foi alarme falso por e-mail.
+            #
+            # Restart incondicional, e nao recarga condicional, de proposito:
+            # custa ~10 segundos e nao tem como errar. Este projeto ja foi
+            # mordido quatro vezes pelo mesmo padrao — mecanismo esperto que
+            # falha calado (FABIANO-29, 62, 63 e este).
+            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail; then
+              echo "prometheus, loki e promtail releram a configuracao"
+            else
+              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail (FABIANO-68)."
+            fi
+
+            # ---- FABIANO-67 -------------------------------------------------
+            # O nginx resolve os nomes de 'proxy_pass' (backend, grafana) uma
+            # UNICA vez, quando carrega a configuracao. Todo container recriado
+            # nos passos acima ganhou IP novo na rede do Docker, e o nginx
+            # continuaria falando com o IP de antes — devolvendo 502 para
+            # sempre, com o container Up (healthy) e nenhum sinal interno
+            # acusando. Foi o que derrubou o grafana-hml em 07/08/2026.
+            #
+            # 'reload' e graceful: sobe workers novos e drena os antigos, sem
+            # derrubar conexao em andamento. Roda por ultimo, depois de tudo
+            # que podia ter sido recriado.
+            if docker exec fabiano-nginx nginx -s reload; then
+              echo "nginx recarregado — enderecos dos containers re-resolvidos"
+            else
+              echo "::warning::Nao consegui recarregar o nginx. Se algum container foi recriado neste deploy, o dominio dele pode estar respondendo 502 agora, mesmo com o container saudavel. Conferir de fora com curl e, se preciso: docker exec fabiano-nginx nginx -s reload (FABIANO-67)."
             fi
 
             # Nunca propaga falha: ver o comentario do passo.
