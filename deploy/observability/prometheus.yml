@@ -49,3 +49,51 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+
+  # ---------------------------------------------------------------------------
+  # Sonda externa: o sistema visto de fora, pelo endereco publico (FABIANO-64)
+  # ---------------------------------------------------------------------------
+  # Todo job acima raspa o container pela rede interna do Docker. Isso mede a
+  # aplicacao, e nao o caminho ate ela: nginx, TLS, DNS e Security Group ficam
+  # de fora da conta. Este job fecha essa lacuna — e e o unico lugar do projeto
+  # de onde sai probe_ssl_earliest_cert_expiry, a data de validade do
+  # certificado que o servidor REALMENTE apresenta.
+  #
+  # O alvo aqui nao e um host: e a URL a sondar. O relabel abaixo a transforma
+  # em parametro do blackbox e devolve o endereco do proprio exporter como
+  # destino da coleta. Sem esse desvio o Prometheus tentaria raspar a URL
+  # diretamente, esperando formato de metrica onde ha HTML.
+  - job_name: blackbox-https
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    # 30s e nao 15s: sonda externa custa uma conexao TLS completa por alvo, e
+    # certificado nao muda de minuto a minuto.
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - https://100-30-35-83.sslip.io/actuator/health
+          - https://api-hml.nexventa.com.br/actuator/health
+          # /api/health do Grafana responde sem autenticacao. Este alvo importa
+          # em dobro: se o certificado DELE vencer, o painel que deveria avisar
+          # e o primeiro a ficar inacessivel.
+          - https://grafana-hml.nexventa.com.br/api/health
+        labels:
+          application: fabiano-externo
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      # 'instance' passa a ser a URL sondada, e nao 'blackbox:9115' — sem isto
+      # as tres sondas colidiriam na mesma serie.
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # O vigia do vigia: se o proprio blackbox morrer, probe_success some e as
+  # regras que dependem dele ficam sem dado. Ver FABIANO-65.
+  - job_name: blackbox
+    static_configs:
+      - targets: ["blackbox:9115"]
+        labels:
+          application: fabiano-host

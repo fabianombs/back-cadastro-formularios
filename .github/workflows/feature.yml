@@ -85,8 +85,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create Pull Request to develop
+        # O autor do PR e quem assina este token. Com o GITHUB_TOKEN padrao o
+        # autor e o github-actions[bot], e todo workflow com gatilho
+        # 'pull_request' nesse PR nasce em "Action required", esperando alguem
+        # clicar "Approve and run" — foi o que travou o terraform no PR #63.
+        #
+        # PR_CREATE_TOKEN e OPCIONAL: se o secret nao existir, cai no token
+        # padrao e tudo continua funcionando como antes. Definindo-o (PAT de
+        # usuario, escopo repo), o PR passa a ter autor humano e o gate
+        # acidental desaparece para qualquer workflow futuro de pull_request.
+        # O terraform-plan.yml ja nao depende disso: mudou para gatilho push.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PR_CREATE_TOKEN || github.token }}
         run: |
           BRANCH="${{ github.ref_name }}"
           PR_TITLE="feat: merge ${BRANCH} into develop"

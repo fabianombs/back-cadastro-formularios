@@ -1,0 +1,45 @@
+# =============================================================================
+# blackbox_exporter — a sonda que olha o sistema DE FORA (FABIANO-64)
+# =============================================================================
+# Por que este arquivo existe:
+#
+# O Prometheus raspa 'backend:8080', que e o nome do container na rede interna
+# do Docker. Essa coleta nao passa pelo nginx, nao passa pelo TLS, nao passa
+# pelo DNS e nao passa pelo Security Group. Consequencia: se o certificado
+# expirar, se o nginx cair ou se a 443 fechar, up{job="fabiano-back"} continua
+# valendo 1 e TODO painel fica verde — enquanto nenhum usuario consegue entrar.
+#
+# Foi exatamente o incidente de 10/07/2026, o mesmo que originou a epica de
+# observabilidade (FABIANO-3): certificado expirado, sistema fora, descoberto
+# por reclamacao de cliente.
+#
+# O blackbox faz a requisicao pelo endereco publico, igual a um navegador, e
+# devolve duas coisas que nenhuma outra metrica deste projeto tem:
+#   probe_success                   — o caminho inteiro respondeu 2xx?
+#   probe_ssl_earliest_cert_expiry  — ate quando vale o certificado APRESENTADO
+#
+# Limitacao honesta: ele roda na MESMA EC2. Cobre nginx, TLS, DNS e roteamento;
+# NAO cobre queda total da maquina (se ela morrer, ele morre junto). Vigia de
+# queda total precisa morar fora — e o papel dos alarmes CloudWatch do
+# FABIANO-57.
+# =============================================================================
+modules:
+
+  # Sonda HTTPS padrao: segue o mesmo caminho de um usuario real.
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      # Sem valid_status_codes: o padrao ja e "qualquer 2xx". Deixar explicito
+      # um 200 unico quebraria no dia em que a rota passasse a devolver 204.
+      method: GET
+      preferred_ip_protocol: ip4
+      # Sem fallback para IPv6: a VPC nao tem IPv6, e a tentativa so adiciona
+      # timeout a cada sonda.
+      ip_protocol_fallback: false
+      follow_redirects: true
+      # false de proposito, e este e o ponto do card: com skip_verify a sonda
+      # aceitaria o certificado vencido e nunca reclamaria — que e justamente
+      # o cenario que precisamos detectar.
+      tls_config:
+        insecure_skip_verify: false

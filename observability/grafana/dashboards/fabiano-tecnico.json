@@ -574,7 +574,7 @@
       "type": "timeseries",
       "id": 9,
       "title": "Heap",
-      "description": "Usado encostando no maximo por tempo prolongado antecede o OOM na t2.micro.",
+      "description": "Usado encostando no maximo por tempo prolongado antecede o OOM. O maximo vem do teto do container (700m), nao da RAM da maquina.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-fabiano"

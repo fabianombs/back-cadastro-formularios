@@ -32,7 +32,15 @@ services:
 
     env_file: .env
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      # O perfil vem do .env de CADA maquina (FABIANO-66). Antes era 'prod'
+      # fixo, e como este compose e o mesmo nas duas maquinas, homologacao
+      # subia com o perfil de producao: o application-homolog.properties
+      # existia no repositorio e nunca era carregado, e a etiqueta
+      # 'environment' das metricas saia 'prod' nos dois lados.
+      #
+      # Padrao 'prod' de proposito: maquina sem a variavel definida se comporta
+      # como producao, que e o lado seguro de errar.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
 
     # Sem 'ports:' de proposito. O backend so e alcancavel pela rede interna do
     # compose — quem fala com a internet e o nginx, que termina o TLS. Publicar
