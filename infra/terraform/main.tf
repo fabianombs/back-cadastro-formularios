@@ -47,6 +47,17 @@ resource "aws_instance" "app" {
   key_name               = aws_key_pair.deployer.key_name
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
+  # Identidade da maquina (FABIANO-20). Associar perfil a uma instancia que ja
+  # existe e alteracao NO LUGAR — nao recria, nao reinicia, nao derruba o
+  # cliente. E o que destrava a copia do backup no S3 e, depois, a leitura dos
+  # segredos no Parameter Store.
+  #
+  # Ate hoje esta maquina rodava com AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY
+  # escritas no .env do disco. Com o perfil no ar, essas duas linhas podem ser
+  # apagadas: credencial que a AWS entrega e rotaciona sozinha e melhor que
+  # chave permanente guardada em arquivo dentro de um servidor exposto.
+  iam_instance_profile = aws_iam_instance_profile.instancia.name
+
   # O conteudo real do user_data que rodou no primeiro boot nao e recuperavel de
   # forma confiavel, e o arquivo do repositorio foi editado depois. Declarar o
   # arquivo aqui faria o plan comparar hashes diferentes e propor RECRIAR a EC2

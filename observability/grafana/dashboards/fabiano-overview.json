@@ -358,7 +358,7 @@
       "type": "stat",
       "id": 5,
       "title": "Heap usado",
-      "description": "Encostar no teto por tempo prolongado e o quadro que antecede o OOM na t2.micro.",
+      "description": "Encostar no teto por tempo prolongado e o quadro que antecede o OOM. O teto e o do container (700m), nao os 4 GB da maquina.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-fabiano"
@@ -1384,6 +1384,161 @@
       ]
     },
     {
+      "type": "stat",
+      "id": 22,
+      "title": "Site visto de fora",
+      "description": "A sonda do blackbox bate no endereco PUBLICO, igual a um navegador: passa por DNS, Security Group, nginx e TLS. O painel \"Coleta de metricas\" ao lado mede a aplicacao por dentro, pela rede do Docker. A diferenca entre os dois e o diagnostico: este vermelho com aquele verde significa que a aplicacao esta viva e o caminho ate ela quebrou — nginx, certificado, DNS ou Security Group. Foi essa combinacao que ninguem enxergou em 10/07/2026 (FABIANO-64).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "probe_success",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FORA",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "NO AR",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 23,
+      "title": "Certificado HTTPS — dias restantes",
+      "description": "Dias ate expirar o certificado que cada dominio REALMENTE apresenta — nao o que o certbot deveria ter renovado. A diferenca importa: renovacao automatica ja falhou neste projeto e o jeito de descobrir foi o cliente ligando. O certbot renova aos 30 dias; abaixo de 14 o alerta dispara, porque a essa altura a renovacao automatica ja falhou. Atencao ao grafana-hml: se for o dele que vencer, esta tela e a primeira a ficar inacessivel (FABIANO-64).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 16,
+        "x": 8,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "sizing": "auto"
+      }
+    },
+    {
       "type": "timeseries",
       "id": 19,
       "title": "Trafego e erro",
@@ -1396,7 +1551,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 16
       },
       "targets": [
         {
@@ -1465,7 +1620,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 16
       },
       "targets": [
         {
@@ -1544,7 +1699,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 16
       },
       "targets": [
         {

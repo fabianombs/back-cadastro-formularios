@@ -380,6 +380,46 @@ jobs:
 
             ./scripts/deploy-safe.sh "${{ needs.imagem.outputs.tag }}"
 
+      # A stack de observabilidade le configuracao no BOOT: o Grafana carrega
+      # provisioning/ ao subir, e Prometheus, Loki e Promtail leem os proprios
+      # arquivos ao subir. O scp acima entrega painel e regra novos, mas sem
+      # recriar o container eles ficam no disco SEM EFEITO NENHUM — e o
+      # pipeline verde afirma que estao no ar (FABIANO-63).
+      #
+      # O caso mais perigoso e o do alerta: a unica forma de perceber que ele
+      # nao foi aplicado seria um incidente em que ele deveria tocar e nao toca.
+      #
+      # Passo separado, DEPOIS do deploy, e que NUNCA derruba a execucao.
+      # Observabilidade fora do ar e ruim; derrubar o deploy da aplicacao por
+      # causa dela e pior. A falha vira aviso visivel, nao silencio.
+      - name: Recarregar a stack de observabilidade
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/fabiano/deploy || {
+              echo "::warning::Nao achei ~/fabiano/deploy nesta maquina. Observabilidade nao recarregada."
+              exit 0
+            }
+
+            # 'up -d' recria SOMENTE os servicos cuja definicao ou configuracao
+            # mudou; os demais continuam de pe. Nao e restart cego da stack.
+            #
+            # Roda depois do deploy-safe.sh de proposito: o compose de
+            # observabilidade usa a rede externa 'fabiano-internal', criada pelo
+            # compose da aplicacao. Antes dele, a rede nao existe.
+            if docker compose -f docker-compose.observability.yml up -d; then
+              echo "observabilidade recarregada"
+              docker compose -f docker-compose.observability.yml ps
+            else
+              echo "::warning::A stack de observabilidade NAO subiu. Painel e alerta continuam com a versao ANTERIOR, mesmo com este deploy verde. Causa mais comum: variaveis SMTP_HOST/SMTP_USER/SMTP_PASS ausentes no .env da maquina — elas sao obrigatorias no compose e travam o arquivo inteiro (ver FABIANO-28)."
+            fi
+
+            # Nunca propaga falha: ver o comentario do passo.
+            exit 0
+
       - name: Resumo do deploy
         run: |
           {

@@ -14,6 +14,12 @@
 #   SMTP_PASS=<app password de 16 caracteres, sem espacos>
 #   MAIL_TO=fabiano@exemplo.com.br
 #   MAIL_CC=vinicius.politta1@gmail.com
+#
+# Opcionais:
+#   PROJETO=Tablet's House          -> vira prefixo do assunto: "[Tablet's House] Backup..."
+#                                      Serve para filtrar por cliente na caixa
+#                                      de entrada quando ha mais de um projeto.
+#   MAIL_FROM_NOME=Resulta Tecnologia  -> nome do remetente
 # =============================================================================
 
 import os
@@ -86,9 +92,16 @@ def main():
     hoje = agora.strftime("%d/%m/%Y")
     hora = agora.strftime("%H:%M")
 
+    # O prefixo do assunto existe para quem recebe backup de MAIS DE UM projeto:
+    # com ele da para criar um filtro por cliente na caixa de entrada, em vez de
+    # ter tudo misturado sob o mesmo "Backup do sistema". Configuravel de
+    # proposito — o mesmo script serve outro cliente sem edicao de codigo.
+    projeto = cfg.get("PROJETO", "").strip()
+    prefixo = f"[{projeto}] " if projeto else ""
+
     msg = EmailMessage()
-    msg["Subject"] = f"Backup do sistema — {hoje}"
-    msg["From"] = f"Resulta Tecnologia <{cfg['SMTP_USER']}>"
+    msg["Subject"] = f"{prefixo}Backup do sistema — {hoje}"
+    msg["From"] = f"{cfg.get('MAIL_FROM_NOME', 'Resulta Tecnologia')} <{cfg['SMTP_USER']}>"
     msg["To"] = cfg["MAIL_TO"]
     if cfg.get("MAIL_CC"):
         msg["Cc"] = cfg["MAIL_CC"]

@@ -18,8 +18,26 @@
 # honesto; falhar em silencio nao e.
 name: terraform
 
+# Gatilho em PUSH, e nao em pull_request, e a mudanca importa mais do que
+# parece.
+#
+# O PR para develop e aberto pelo proprio pipeline (feature.yml), autenticado
+# com o GITHUB_TOKEN — entao o autor do PR e o github-actions[bot]. Workflow
+# disparado por um PR de bot cai em "Action required" e fica parado esperando
+# um mantenedor clicar "Approve and run". Resultado observado em 06/08/2026 no
+# PR #63: o terraform nem chegou a validar nada, e o PR ficou com um X de
+# workflow pendente que ninguem sabia por que estava la.
+#
+# Gate manual que existe por acidente e pior do que gate nenhum: ninguem sabe
+# se e proposital, entao todo mundo aprende a clicar sem ler.
+#
+# No push nao ha aprovacao a dar: o codigo ja esta no repositorio, a validacao
+# roda, e o resultado aparece no proprio commit — e por tabela na lista de
+# checks do PR, que e o mesmo lugar de antes. O comentario com o diff do plan
+# continua sendo publicado no PR: o passo procura o PR aberto para o commit em
+# vez de depender do evento (ver mais abaixo).
 on:
-  pull_request:
+  push:
     paths:
       - 'infra/terraform/**'
       - '.github/workflows/terraform-plan.yml'
@@ -158,14 +176,28 @@ jobs:
           terraform show -no-color plano.bin > plano.txt
         continue-on-error: true
 
+      # Com o gatilho em push nao existe github.event.number. O PR e descoberto
+      # a partir do commit: se houver um aberto, o diff vai para la; se nao
+      # houver (push direto em develop, por exemplo), o passo apenas registra e
+      # segue — nao falha.
       - name: Publicar o diff no PR
-        if: env.ROLE != '' && github.event_name == 'pull_request'
+        if: env.ROLE != '' && github.event_name == 'push'
         uses: actions/github-script@v7
         env:
           EXITCODE: ${{ steps.plan.outputs.exitcode }}
         with:
           script: |
             const fs = require('fs');
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const aberto = prs.data.find(pr => pr.state === 'open');
+            if (!aberto) {
+              core.notice('Nenhum PR aberto para este commit — o plan esta no log do job.');
+              return;
+            }
             const bruto = fs.readFileSync('infra/terraform/plano.txt', 'utf8');
             // Comentario do GitHub tem limite de 65536 caracteres.
             const plano = bruto.length > 60000
@@ -178,7 +210,7 @@ jobs:
                 ? 'HA MUDANCAS — leia antes de aprovar'
                 : 'O plan FALHOU';
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: aberto.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `### terraform plan — ${titulo}\n\n<details><summary>Ver plano</summary>\n\n\`\`\`terraform\n${plano}\n\`\`\`\n\n</details>`
