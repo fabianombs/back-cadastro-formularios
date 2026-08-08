@@ -23,11 +23,30 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 15s
+        # FABIANO-69. Filtro na ORIGEM, pedindo ao Docker so estes containers.
+        #
+        # O 'action: keep' do relabel abaixo tinha a mesma intencao e nao bastou:
+        # com os 8 containers descobertos, ALGUM deles produzia fluxo sem rotulo
+        # nenhum, e o Loki recusa o LOTE INTEIRO com 400 quando um unico fluxo
+        # vem vazio — levando junto as linhas boas do backend.
+        #
+        # Resultado medido em 08/08/2026: com 8 alvos, promtail_sent_entries_total
+        # ficou em 0 e 32.258 linhas foram descartadas. Com o filtro, 2/2 alvos e
+        # a entrega voltou.
+        filters:
+          - name: name
+            values: ["fabiano-backend", "fabiano-nginx"]
 
     relabel_configs:
       # So os containers da stack. Sem este filtro, Loki, Grafana e Prometheus
       # entrariam tambem — e o log do Promtail sobre o Loki indo para o Loki e
       # um jeito conhecido de encher disco.
+      #
+      # ATENCAO (FABIANO-69): este 'keep' NAO estava bastando. Em 08/08/2026 a
+      # pagina /targets mostrava "8/8 ready" com ele presente e carregado.
+      # O filtro que de fato restringe e o 'filters' do docker_sd_configs acima.
+      # Este bloco fica porque as regras seguintes (container, application)
+      # dependem dele e funcionam — mas nao confie nele como unica barreira.
       - source_labels: ['__meta_docker_container_name']
         regex: '/(fabiano-backend|fabiano-nginx)'
         action: keep
@@ -47,6 +66,17 @@ scrape_configs:
         replacement: 'homolog'
 
     pipeline_stages:
+      # FABIANO-69. Rede de seguranca: carimba um rotulo em TODA linha, sem
+      # depender de nenhuma regra de relabel dar certo.
+      #
+      # Fluxo sem nenhum par de rotulo faz o Loki devolver 400 e descartar o
+      # lote inteiro. E a falha mais cara possivel: silenciosa, total, e com
+      # o painel mostrando zero em verde.
+      #
+      # Sozinho, este estagio ja tirou a entrega de 0 para 95 linhas em 60s.
+      - static_labels:
+          ambiente: homolog
+
       # NAO usar o estagio 'docker' aqui (FABIANO-62).
       #
       # Ele existe para desembrulhar o formato do driver json-file
