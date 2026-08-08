@@ -4,96 +4,285 @@
 > comando nenhum. Tudo aqui é para copiar e colar. Onde houver valor a
 > preencher, a mesma linha diz onde encontrá-lo.
 
-**Atualizado em:** 06/08/2026
+**Atualizado em:** 08/08/2026 — dia da virada (secao 0 e secao 9)
 
 ---
 
-## 0. ONDE EU ESTOU? (migracao blue-green em andamento)
+## 0. ONDE EU ESTOU? (virada concluida em 08/08/2026)
 
-> [!danger] Existem DUAS maquinas agora. Confira antes de digitar qualquer coisa.
+> [!success] A virada aconteceu. A maquina que atende o cliente e a NOVA.
+> O Elastic IP de producao `100.30.35.83` foi reassociado da maquina antiga
+> para a nova as 13h de 08/08/2026
+> (`eipassoc-0241dd3379a562d08`). A antiga continua ligada por seguranca,
+> **sem endereco publico**, ate o FABIANO-48 desliga-la.
 
 ```bash
-# PRODUCAO — atende o cliente hoje. Elastic IP, Amazon Linux 2, JAR no systemd.
+# PRODUCAO — atende o cliente. AL2023, Docker Compose, RDS poc-fabiano-db.
 ssh -i ~/.ssh/poc-fabiano ec2-user@100.30.35.83
-
-# NOVA — HOMOLOGACAO desde 05/08. Atende api-hml e grafana-hml. AL2023, Docker.
-ssh -i ~/.ssh/poc-fabiano ec2-user@54.197.175.159
 ```
 
 No PowerShell, trocar `~` por `$HOME`:
 
     ssh -i $HOME\.ssh\poc-fabiano ec2-user@100.30.35.83
-    ssh -i $HOME\.ssh\poc-fabiano ec2-user@54.197.175.159
 
-> [!warning] O IP da maquina nova mudou em 06/08
-> Era `44.193.5.38`, um IP **efemero** — parar a instancia o devolvia para a AWS.
-> Ao trocar o tipo para t3.medium foi preciso desligar, entao alocamos um Elastic
-> IP proprio: **`54.197.175.159`** (`eipalloc-053acd67132fed0af`). Agora ele
-> pertence a maquina e sobrevive a stop/start.
->
-> Quem tambem dependia do endereco antigo, e foi corrigido junto:
-> o registro A de `api-hml` na Vercel, o secret `HOMOLOG_EC2_HOST` do GitHub
-> (a esteira falhava com `dial tcp ***:22: i/o timeout`), e o certificado de
-> `44-193-5-38.sslip.io`, que foi **apagado** — o nome derivava do IP efemero.
+### O SSH parou de funcionar depois da virada. Os dois casos.
+
+Ambos sao consequencia esperada de mover um Elastic IP. Nenhum e defeito.
+
+**Caso 1 — `Connection timed out` no endereco de homolog.**
+
+    ssh ... ec2-user@54.197.175.159   ->  trava e expira
+
+Associar um segundo Elastic IP a mesma interface **desassocia o primeiro**. A
+maquina nova tinha `54.197.175.159` (homolog); ao receber `100.30.35.83`
+(producao), perdeu aquele. Nao existe mais nada atras de `54.197.175.159`.
+Solucao: usar `100.30.35.83`. E a mesma maquina.
+
+**Caso 2 — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**
+
+```
+@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@
+Offending ECDSA key in C:\Users\user/.ssh/known_hosts:2
+Host key for 100.30.35.83 has changed and you have requested strict checking.
+```
+
+Isso e o SSH funcionando **corretamente**: o `known_hosts` guarda a impressao
+digital por *endereco*, e ate ontem `100.30.35.83` era a maquina antiga. Hoje o
+mesmo endereco entrega outra maquina, com outra chave de host. Ele nao tem como
+saber que a troca foi intencional — quem sabe e voce.
+
+Correcao (PowerShell ou bash, o comando e o mesmo):
+
+```powershell
+ssh-keygen -R 100.30.35.83
+ssh -i $HOME\.ssh\poc-fabiano ec2-user@100.30.35.83
+```
+
+Ele pergunta `Are you sure you want to continue connecting?`. **Antes de
+responder `yes`, confira o fingerprint** — tem que ser o da maquina nova:
+
+    SHA256:qYhE6KDOP4kK3nd0jA4hyUMUh9YZ8pyu1OEgKwpRmec   (ED25519)
+
+Se aparecer outro, **pare**. Ai sim pode ser problema de verdade.
+
+> [!tip] Vale para qualquer virada futura
+> Toda vez que um Elastic IP mudar de maquina, todo mundo que ja usou aquele IP
+> vai levar esse aviso — inclusive a esteira, se o runner guardar `known_hosts`.
+> `ssh-keygen -R <ip>` e o remedio, e conferir o fingerprint e o que separa
+> "eu movi o IP" de "alguem esta no meio".
 
 ### Como saber em qual voce esta
 
-| | PRODUCAO (antiga) | NOVA (em construcao) |
+| | PRODUCAO (nova, desde 08/08) | ANTIGA (desativada) |
 |---|---|---|
-| IP publico | `100.30.35.83` (Elastic IP) | `54.197.175.159` (Elastic IP desde 06/08) |
-| Prompt | `ec2-user@ip-172-31-28-215` | `ec2-user@ip-172-31-12-104` |
-| Instancia | `i-0987e63c336e202b9` | `i-008f8d272588845ef` |
-| Tipo / AZ | `t2.micro` / `us-east-1c` | `t3.medium` (4 GB, desde 06/08) / `us-east-1a` |
-| SO | Amazon Linux 2 (**sem suporte** desde 30/06/2026) | Amazon Linux 2023 |
-| Runtime | JAR no systemd | Docker + Compose |
-| Banco | `poc-fabiano-db` — MySQL 8.0.45 | `poc-fabiano-db-ensaio` — MySQL **8.4.10** (desde 05/08) |
-| Observabilidade | nao tem | Prometheus, Loki, Promtail, Grafana, node-exporter (secao 8) |
-| Marca infalivel | `/etc/poc-fabiano.env` **existe** | esse arquivo **nao existe** |
+| IP publico | `100.30.35.83` (Elastic IP) | **nenhum** — perdeu o EIP na virada |
+| Prompt | `ec2-user@ip-172-31-12-104` | `ec2-user@ip-172-31-28-215` |
+| Instancia | `i-008f8d272588845ef` | `i-0987e63c336e202b9` |
+| Tipo / AZ | `t3.medium` (4 GB) / `us-east-1a` | `t2.micro` / `us-east-1c` |
+| SO | Amazon Linux 2023 | Amazon Linux 2 (**sem suporte** desde 30/06/2026) |
+| Runtime | Docker + Compose | JAR no systemd |
+| Banco | `poc-fabiano-db` (producao) | — |
+| Observabilidade | Prometheus, Loki, Promtail, Grafana, blackbox (secao 8) | nao tem |
+| Marca infalivel | `/etc/poc-fabiano.env` **nao existe** | esse arquivo **existe** |
 
 > [!tip] A marca infalivel e a que vale
 > IP se digita errado e prompt se confunde. `[ -f /etc/poc-fabiano.env ]` nao.
 > Todo script perigoso deste runbook comeca com essa checagem — em produtos
 > diferentes, no sentido certo.
 
-> [!warning] Enquanto as duas existirem
-> A **antiga** e quem atende o cliente. A **nova** deixou de estar "em
-> construcao" em 05/08: ela atende `api-hml.nexventa.com.br` e
-> `grafana-hml.nexventa.com.br`, e o frontend de homologacao
-> (`hml.nexventa.com.br`, Preview da Vercel atrelado a branch `develop`) fala
-> com ela. O banco dela e o de **ensaio**, nunca o de producao.
->
-> A nova **tem** cron de backup ativo (o AL2023 nao traz cron; foi preciso
-> `dnf install -y cronie`). Enquanto as duas rodarem backup, chegam dois e-mails
-> por dia — e isso e esperado, nao defeito.
->
-> `certbot renew --dry-run` **falha** na maquina nova para
-> `100-30-35-83.sslip.io`. Tambem esperado: esse nome resolve para a maquina
-> antiga. Nao silencie; a falha some sozinha na virada.
+> [!warning] A maquina antiga ainda esta ligada
+> Enquanto estiver, ela continua rodando **cron de backup e certbot** contra o
+> banco de producao, e mandando e-mail. Dois e-mails de backup por dia sao
+> esperados neste intervalo, nao defeito. O FABIANO-48 desativa os crons e
+> **para** (nao termina) a instancia — ela e o rollback ate a virada provar-se
+> estavel.
 
-A virada e uma reassociacao de Elastic IP, de segundos. O dominio
-`100-30-35-83.sslip.io` deriva do proprio IP, entao o certificado atravessa a
-troca sem ajuste. Rollback e o mesmo comando ao contrario. Detalhes no
-FABIANO-47.
+### Rollback da virada
+
+Um comando, segundos, sem perda de dados novos **apenas se ninguem tiver
+gravado nada desde a virada** — a partir da primeira escrita, voltar significa
+perder essas escritas, porque as duas maquinas escrevem em bancos diferentes.
+
+```bash
+aws ec2 associate-address \
+  --allocation-id eipalloc-025082e8787508bb8 \
+  --instance-id i-0987e63c336e202b9 \
+  --allow-reassociation --region us-east-1
+```
+
+O dominio `100-30-35-83.sslip.io` deriva do proprio IP, entao o certificado
+atravessa a troca nos dois sentidos sem ajuste. Detalhes no FABIANO-47.
+
+### Elastic IP orfao
+
+`eipalloc-053acd67132fed0af` (`54.197.175.159`) ficou **sem associacao** apos a
+virada, e EIP parado e cobrado (~US$ 3,65/mes).
+
+> [!danger] NAO liberar este EIP — decidido em 08/08/2026
+> Ele e o endereco da futura homolog (FABIANO-33), e ja vem com o trabalho
+> pronto:
+>
+> * `api-hml.nexventa.com.br` **ja aponta** para ele
+> * `grafana-hml.nexventa.com.br` **ja aponta** para ele
+> * os certificados Let's Encrypt dos dois valem ate **03/11/2026**
+>
+> Associar este EIP a EC2 de homolog faz DNS e HTTPS funcionarem no mesmo
+> instante — sem emitir certificado, sem esperar propagacao, sem tocar na
+> Vercel. `aws ec2 release-address` devolveria o endereco a AWS e jogaria fora
+> os dois certificados junto.
+>
+> Os US$ 3,65/mes compram exatamente isso. E o item mais barato desta conta.
+
+> [!warning] Os certificados vencem em 03/11/2026
+> A renovacao depende do certbot rodando **na maquina que atende aqueles
+> nomes** — e ela so existira durante os ciclos de homologacao. Se nenhum ciclo
+> cair na janela de renovacao (30 dias antes), eles expiram, e o ciclo seguinte
+> comeca com HTTPS quebrado. Decisao pendente no FABIANO-33: `certbot renew` na
+> subida, ou reemitir quando expirar.
 
 ---
 
 ## 1. Mapa do ambiente
 
+> Descreve a maquina que atende producao **hoje** (a nova, Docker). A antiga,
+> baseada em JAR + systemd, esta descrita na secao 5, que continua valendo
+> enquanto ela existir.
+
 | Item | Valor | Onde confirmar |
 |---|---|---|
-| EC2 | `100.30.35.83` (Elastic IP), Amazon Linux 2 | `ssh -i ~/.ssh/poc-fabiano ec2-user@100.30.35.83` |
-| Serviço | `poc-fabiano.service` (systemd), porta 8080 | `systemctl status poc-fabiano` |
-| Aplicação | `/app/app.jar`, Java 21, roda como `appuser` | — |
-| Banco | RDS MySQL 8.0.45 → 8.4 | `sudo grep DB_HOST /etc/poc-fabiano.env` |
-| Configuração | `/etc/poc-fabiano.env` (chmod 600) | única fonte de credenciais |
-| Versões antigas | `/app/releases/` — 8 últimos jars e dumps | `ls -lht /app/releases/` |
-| Versão no ar | `/app/CURRENT_VERSION` | `cat /app/CURRENT_VERSION` |
-| Backups diários | `/app/backups/{diario,semanal,mensal}` | existe a partir do deploy que instala o cron |
-| Proxy | nginx + Let's Encrypt, `100-30-35-83.sslip.io` | `sudo nginx -t` |
+| EC2 | `100.30.35.83` (Elastic IP), Amazon Linux 2023 | `ssh -i ~/.ssh/poc-fabiano ec2-user@100.30.35.83` |
+| Serviço | containers `fabiano-backend` e `fabiano-nginx` | `docker compose ps` em `/home/ec2-user/fabiano/deploy` |
+| Aplicação | imagem `ghcr.io/...:$BACKEND_TAG`, Java 21 | `grep BACKEND_TAG ~/fabiano/deploy/.env` |
+| Perfil Spring | `SPRING_PROFILES_ACTIVE=prod` | `grep SPRING_PROFILES ~/fabiano/deploy/.env` |
+| Banco | RDS `poc-fabiano-db`, MySQL 8.0.45 → 8.4 | `grep DB_HOST ~/fabiano/deploy/.env` |
+| Configuração | `/home/ec2-user/fabiano/deploy/.env` | única fonte de credenciais |
+| Backup do `.env` | `.env.backup-pre-virada` na mesma pasta | `ls -l ~/fabiano/deploy/.env*` |
+| Backups diários | `/app/backups/{diario,semanal,mensal}` | cron do `ec2-user` (`cronie`) |
+| Proxy | nginx em container, Let's Encrypt, `100-30-35-83.sslip.io` | `docker exec fabiano-nginx nginx -t` |
 | Frontend | `nexventa.com.br` (Vercel) | — |
 | Secrets do CI | GitHub → Settings → Secrets: `EC2_HOST`, `EC2_USER`, `SSH_PRIVATE_KEY` | — |
 | Secrets do CI (homolog) | `HOMOLOG_EC2_HOST`, `HOMOLOG_EC2_USER`, `HOMOLOG_SSH_PRIVATE_KEY` | — |
 | Conta AWS | `135133927228`, regiao `us-east-1` | `aws sts get-caller-identity` |
+
+> [!danger] A variavel do shell vence o `.env` — a armadilha de 08/08/2026
+> O `docker-compose.yml` usa `SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}`.
+> Na hora de resolver esse `${...}`, o Compose olha **primeiro a variavel do
+> shell** e so depois o arquivo `.env`. O shell ganha, sempre.
+>
+> Foi assim que, minutos depois da virada, o backend subiu com o perfil
+> **`homolog` em producao** — com o `.env` do disco dizendo `prod` o tempo todo.
+> Alguem tinha feito `set -a; source .env` numa janela antes de o `.env` ser
+> corrigido, e a variavel ficou pendurada naquela sessao. O `up` rodado na mesma
+> janela herdou o valor velho.
+>
+> O sintoma e cruel porque **nao ha erro**: a aplicacao sobe, o health devolve
+> 200 e o painel fica verde. A unica pista esta na primeira linha do log:
+>
+> ```bash
+> docker logs fabiano-backend --tail 40 2>&1 | grep -i "profile is active"
+> ```
+>
+> Antes de qualquer `docker compose up`, confira o que ele vai *mesmo* usar:
+>
+> ```bash
+> echo "shell: [$SPRING_PROFILES_ACTIVE]"     # tem que sair vazio
+> docker compose config | grep -i SPRING_PROFILES   # valor ja resolvido
+> ```
+>
+> Na duvida sobre uma janela de terminal antiga: abra uma nova. Sai mais barato
+> que descobrir isso depois.
+>
+> Nota tranquilizadora: o perfil errado **nao** manda a aplicacao para o banco
+> errado. `DB_HOST`, `DB_NAME` e `APP_*` chegam por variavel de ambiente, que tem
+> precedencia sobre qualquer `.properties`. O estrago fica nos ajustes internos
+> do perfil, nao nos dados.
+
+> [!warning] Existem DOIS arquivos `.env` nesta maquina
+> O que vale e **`/home/ec2-user/fabiano/deploy/.env`** — o Compose le o `.env`
+> que esta ao lado do arquivo dele. Existe tambem um
+> `/home/ec2-user/fabiano/.env`, um nivel acima, que **nao e lido pelo Compose**.
+> Editar o errado produz o pior sintoma possivel: o comando funciona, nao
+> reclama, e nada muda. Confira sempre o caminho completo antes de salvar.
+
+> [!danger] `sed -i` num arquivo bind-mounted congela o container — 08/08/2026
+> O `nginx.conf` e montado como **arquivo unico**:
+> `/home/ec2-user/fabiano/deploy/nginx/nginx.conf -> /etc/nginx/conf.d/default.conf`.
+> Bind mount de arquivo prende o **inode**, nao o caminho.
+>
+> `sed -i` nao edita no lugar: escreve um arquivo temporario e renomeia por cima,
+> criando um inode novo. No instante em que roda, o container passa a enxergar
+> uma copia congelada do conteudo antigo — e toda edicao posterior (inclusive
+> `cat >>`) vai para um arquivo que ele nao le.
+>
+> O sintoma e traicoeiro: `nginx -t` **passa** (ele testou o conteudo velho, que
+> e valido) e o `reload` diz que funcionou. Foi assim que
+> `https://api.nexventa.com.br` respondeu apresentando o certificado de
+> `100-30-35-83.sslip.io`: o bloco novo existia no disco e nao existia para o
+> nginx.
+>
+> Como saber, em dois comandos:
+>
+> ```bash
+> docker exec fabiano-nginx md5sum /etc/nginx/conf.d/default.conf
+> md5sum ~/fabiano/deploy/nginx/nginx.conf
+> ```
+>
+> md5 diferente = o container esta lendo fantasma. `reload` NAO resolve; so
+> recriar:
+>
+> ```bash
+> docker compose up -d --pull never --force-recreate nginx
+> ```
+>
+> Para editar sem cair nisso, prefira o que preserva o inode:
+> `cat >>`, `python3 -c "open(...,'w')"`, ou `sed` com redirecionamento para
+> arquivo temporario e depois `cat tmp > nginx.conf` (`>` trunca e reescreve o
+> mesmo inode; `mv` nao).
+
+> [!danger] Recriou o backend? Recarregue o nginx — sem excecao
+> O `nginx.conf` tem `proxy_pass http://backend:8080`, resolvido **uma unica vez,
+> quando o nginx sobe**. Recriar o container do backend lhe da um IP novo na rede
+> do Docker, e o nginx continua falando com o IP que morreu. Resultado: 502 na
+> cara do usuario com **todos os paineis internos verdes** — foi o FABIANO-67.
+>
+> ```bash
+> docker compose up -d --pull never backend
+> sleep 25
+> docker exec fabiano-nginx nginx -s reload
+> ```
+>
+> O `--pull never` e obrigatorio: o GHCR nao esta autenticado nesta maquina e sem
+> ele o comando falha com `denied: denied`.
+
+> [!note] Nenhuma porta interna e publicada no host
+> So o nginx expoe portas (`80` e `443`). Grafana, Prometheus, Loki e blackbox
+> falam apenas pela rede interna do Docker — nao ha como alcanca-los da internet
+> sem passar pelo nginx. Isso e proposital. Para abrir o Grafana sem certificado,
+> use o tunel SSH da secao 8.
+
+> [!note] Nao existe homologacao hoje — e a esteira sabe disso
+> A maquina que era homolog virou producao em 08/08/2026. Ate o FABIANO-33
+> recriar uma, o job `deploy-homolog` do `develop.yml` fica **pulado**, por
+> `if: vars.HOMOLOG_ATIVO == 'true'` — variavel que nao existe.
+>
+> O que um push na `develop` faz hoje: compila, roda a suite, publica a imagem
+> no GHCR, abre o PR para a `master` e **emite um aviso visivel** dizendo que
+> nao houve deploy de homologacao. Nada fica vermelho, e nada fica escondido.
+>
+> Para religar, os tres passos juntos — esquecer um deixa a homolog surda:
+>
+> 1. criar a maquina (FABIANO-33)
+> 2. atualizar o secret `HOMOLOG_EC2_HOST`
+> 3. criar a variavel `HOMOLOG_ATIVO=true` em
+>    *Settings -> Secrets and variables -> Actions -> **Variables***
+>
+> A trava do `-ensaio.` continua valendo e nao foi enfraquecida: se alguem
+> religar a variavel apontando para producao, o deploy aborta antes de escrever.
+
+> [!warning] `EC2_HOST` e `HOMOLOG_EC2_HOST` apontam para a mesma maquina agora
+> Ate a homolog sob demanda existir (FABIANO-33), um deploy da `develop` cairia
+> em cima de producao. A trava do `develop.yml` — que barra a maquina quando
+> `DB_HOST` e o de producao — e o que impede isso. Nao a remova.
 
 ### Nomes DNS e certificados
 
@@ -105,15 +294,23 @@ da Vercel: **registro** se edita la; **trocar de nameserver** exige o registrado
 |---|---|---|
 | `nexventa.com.br` / `www` | Vercel (producao) | Vercel, automatico |
 | `hml.nexventa.com.br` | Vercel, Preview da branch `develop` | Vercel, automatico |
-| `api-hml.nexventa.com.br` | `54.197.175.159` | Let's Encrypt, expira **03/11/2026** |
-| `grafana-hml.nexventa.com.br` | `54.197.175.159` | Let's Encrypt, expira **03/11/2026** |
+| `api.nexventa.com.br` | `100.30.35.83` | **a emitir** (FABIANO-47) |
+| `grafana.nexventa.com.br` | `100.30.35.83` | **a emitir** (FABIANO-47) |
 | `100-30-35-83.sslip.io` | `100.30.35.83` | Let's Encrypt, expira **08/10/2026** |
+| `api-hml.nexventa.com.br` | `54.197.175.159` — **endereco morto** apos a virada | Let's Encrypt, expira 03/11/2026 |
+| `grafana-hml.nexventa.com.br` | `54.197.175.159` — **endereco morto** apos a virada | Let's Encrypt, expira 03/11/2026 |
+
+> [!danger] Nunca crie um registro A com o nome em branco
+> Nome vazio significa o **apex** (`nexventa.com.br`), que pertence a Vercel e
+> serve o frontend. Aponta-lo para a EC2 derruba o site inteiro. Aconteceu em
+> 08/08/2026 e foi desfeito em minutos. Os nomes da EC2 sao `api` e `grafana`,
+> sempre preenchidos.
 
 Ha registros CAA na zona autorizando `letsencrypt.org`. Se alguem mexer neles, a
 emissao passa a falhar com erro de CAA — sintoma nada obvio.
 
 **Nenhuma credencial de produção está no repositório.** O `application-prod.properties`
-só lê variáveis; os valores vivem no `/etc/poc-fabiano.env`.
+só lê variáveis; os valores vivem no `.env` da máquina.
 
 ---
 
@@ -124,7 +321,7 @@ Disparado por **push na `master`**. Workflow: `.github/workflows/prod.yml`.
 | Etapa | O que faz | Duração típica |
 |---|---|---|
 | `build-and-test` | compila e roda a suíte contra um MySQL 8.4 efêmero | 3 a 5 min |
-| SCP | envia jar e scripts para `/home/ec2-user/deploy/` | segundos |
+| SCP | envia jar e scripts para `/home/ec2-user/fabiano/deploy/` | segundos |
 | `deploy-safe.sh` | backup, troca do jar, health-gate, rollback se falhar | 1 a 3 min |
 
 Acompanhar em **GitHub → Actions**. Na EC2, ao vivo:
@@ -493,11 +690,43 @@ associa a mudança de autenticação. O `application-prod.properties` traz
 
 ## 8. Observabilidade (maquina nova)
 
-Subiu em 06/08/2026. Painel: **https://grafana-hml.nexventa.com.br**, usuario `admin`.
+Subiu em 06/08/2026. Usuario `admin`. Os paineis ficam na pasta **Fabiano**.
 
-Prometheus e Loki **nao publicam porta no host** — so existem na rede
-`fabiano-internal`. O Grafana chega pela internet unicamente pelo nginx, que
-termina o TLS. Os quatro paineis ficam na pasta **Fabiano**.
+**Nenhum servico de observabilidade publica porta no host** — Grafana,
+Prometheus, Loki, blackbox e node-exporter existem so na rede
+`fabiano-internal`. Quem expoe porta e apenas o nginx (`80` e `443`), que
+termina o TLS. Isso e proposital: nao ha superficie de ataque direta.
+
+### Como abrir o Grafana
+
+| Situacao | Endereco |
+|---|---|
+| Ate 08/08/2026 | `https://grafana-hml.nexventa.com.br` — **morreu na virada**, o nome aponta para o EIP antigo |
+| Depois do FABIANO-47 concluido | `https://grafana.nexventa.com.br` |
+| **Enquanto o certificado nao existe** | tunel SSH, abaixo |
+
+> [!tip] Tunel SSH — funciona sem certificado, sem DNS e sem abrir porta nenhuma
+> Como a 3000 nao esta publicada, o tunel precisa apontar para o **IP do
+> container** na rede do Docker. Na maquina, descubra-o:
+>
+> ```bash
+> docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' fabiano-grafana
+> ```
+>
+> Depois, numa janela nova do PowerShell (troque o IP pelo que apareceu):
+>
+> ```powershell
+> ssh -i $HOME\.ssh\poc-fabiano -L 3000:172.18.0.5:3000 ec2-user@100.30.35.83
+> ```
+>
+> Com essa janela aberta, `http://localhost:3000` no navegador e o Grafana da
+> EC2. Fechar a janela fecha o tunel. O IP do container **muda** a cada
+> recriacao — se o tunel parar de funcionar, redescubra.
+>
+> Detalhe: com `GRAFANA_ROOT_URL` apontando para `grafana.nexventa.com.br`,
+> alguns redirecionamentos internos tentam ir para esse nome. Login e paineis
+> funcionam normalmente pelo tunel; se algum botao te jogar para fora, volte
+> para `http://localhost:3000` na barra de endereco.
 
     cd ~/fabiano/deploy
     docker compose -f docker-compose.observability.yml ps
@@ -562,23 +791,64 @@ termina o TLS. Os quatro paineis ficam na pasta **Fabiano**.
 
 ---
 
-## 9. Checklist da virada (FABIANO-47)
+## 9. A virada (FABIANO-47) — executada em 08/08/2026
 
-Itens faceis de esquecer, quase todos no `.env` da maquina nova:
+Reassociacao do Elastic IP `eipalloc-025082e8787508bb8` da instancia
+`i-0987e63c336e202b9` (antiga) para `i-008f8d272588845ef` (nova), as ~13h de
+08/08/2026. Resultado: `eipassoc-0241dd3379a562d08`, e
+`curl https://100-30-35-83.sslip.io/actuator/health` = **200**.
 
-- [ ] `APP_FRONTEND_URL` -> `https://www.nexventa.com.br` (hoje aponta para `hml`)
-- [ ] `MAIL_TO` -> e-mail do Fabiano (hoje `contato@resultatec.com.br`)
-- [ ] **Remover `https://*.vercel.app`** do `CORS_ALLOWED_ORIGINS` — o curinga e so de ensaio
-- [ ] `GRAFANA_ROOT_URL` -> `https://grafana.nexventa.com.br`
-- [ ] `ALERTA_SUBMISSAO_PAUSADO` -> `false`
-- [ ] `DB_HOST` -> `poc-fabiano-db`; a partir dai a trava do `develop.yml` barra
-      esta maquina, de proposito
-- [ ] Criar `api.nexventa.com.br` e `grafana.nexventa.com.br` apontando para o Elastic IP
-- [ ] Emitir os certificados dos dois **antes** de o nginx.conf com os blocos deles chegar —
-      bloco `ssl_certificate` apontando para arquivo inexistente derruba o nginx inteiro
-- [ ] Remover o bloco `100-30-35-83.sslip.io` so **depois** que o EIP migrar
-- [ ] Upgrade do RDS de producao para 8.4 — ensaiado em 05/08: 2 min 41 s, e a
-      aplicacao se recuperou **sozinha**, sem restart (o HikariCP reconstruiu o pool)
+### O que foi feito antes (portoes)
+
+- [x] Snapshot manual do RDS de producao, 100% disponivel antes de qualquer passo
+- [x] Contagem de migrations conferida dos dois lados: prod 59, ensaio 62 —
+      V60/V61/V62 analisadas uma a uma e todas seguras para rollback
+      (V61 e idempotente e ja era no-op em producao)
+- [x] `.env` da maquina nova apontado para `poc-fabiano-db` (producao), com
+      copia de seguranca em `.env.backup-pre-virada`
+- [x] `APP_FRONTEND_URL` -> `https://www.nexventa.com.br` (fecha o FABIANO-52)
+- [x] Curinga `https://*.vercel.app` removido do `CORS_ALLOWED_ORIGINS`
+- [x] `GRAFANA_ROOT_URL` -> `https://grafana.nexventa.com.br`
+- [x] `ALERTA_SUBMISSAO_PAUSADO` -> `false`
+- [x] `SPRING_PROFILES_ACTIVE=prod`
+- [x] Portao 1 conferido com a nova ja no banco de producao, **antes** de mover o
+      IP: health `UP`, 0 erros no log, 62 migrations, e leitura correta
+      (13 clientes, 13 templates, 63 submissoes)
+- [x] Registros `api` e `grafana` criados na Vercel apontando para `100.30.35.83`
+
+### Validacao pos-virada (mesma tarde)
+
+- [x] EIP confirmado pela propria maquina (metadata IMDSv2 devolveu `100.30.35.83`)
+- [x] Zero linhas `ERROR`/`FATAL` no log do backend desde a virada
+- [x] nginx recebendo trafego real e a sonda blackbox respondendo 200 a cada 30s
+- [x] Login e dashboard abertos no navegador em `https://www.nexventa.com.br`,
+      lendo os numeros do banco de **producao** (13 registros, 63 submissoes)
+- [x] Uma escrita real pelo navegador confirmada no banco de producao — template
+      criado com sucesso as 13:57 UTC, ja com o perfil `prod` ativo
+
+> [!warning] A primeira validacao de leitura foi feita com o perfil errado
+> Entre 13:29 e 13:53 UTC o backend rodou com `SPRING_PROFILES_ACTIVE=homolog`
+> (ver a armadilha da variavel de shell, secao 1). A leitura conferida naquela
+> janela — 13 clientes, 13 templates, 63 submissoes — apontava para o banco
+> **certo**, porque `DB_HOST` vem do ambiente. Mas a validacao foi refeita depois
+> do restart com `prod`, e so a segunda conta.
+
+> [!note] Ruido esperado no log do nginx
+> Varreduras automatizadas batendo em `/function.php`, `/json.php`,
+> `/wp-links-opml.php` e afins aparecem o tempo todo, respondidas com 301/401.
+> Isso e a internet, nao invasao. So vira assunto se algum desses devolver 2xx.
+
+### O que ainda falta
+
+- [ ] Emitir os certificados de `api.nexventa.com.br` e `grafana.nexventa.com.br`
+      **antes** de o nginx.conf com os blocos deles chegar — bloco
+      `ssl_certificate` apontando para arquivo inexistente derruba o nginx inteiro
+- [ ] Remover o bloco `100-30-35-83.sslip.io` so **depois** que `api` estiver no ar
+- [ ] Upgrade do RDS de producao para 8.4, em dois passos (FABIANO-9). Ensaiado em
+      05/08: 2 min 41 s, e a aplicacao se recuperou **sozinha**, sem restart — o
+      HikariCP reconstruiu o pool
+- [ ] Desativar os crons e **parar** a maquina antiga (FABIANO-48)
+- [ ] Decidir o destino do EIP orfao `eipalloc-053acd67132fed0af`
 
 ---
 
@@ -602,6 +872,35 @@ a arquitetura de antes do Docker.
 > Ele devolveria a maquina errada, do tipo errado, com o sistema errado — e
 > **desligaria o backup automatico do banco de producao** no caminho. O plano de
 > recuperacao esta pior que nao ter plano, porque parece que existe.
+
+### As travas das esteiras — o que elas protegem, e o que nao
+
+> [!note] Correcao de 08/08/2026
+> Este runbook chegou a afirmar que o `prod.yml` faria deploy de `.jar` com
+> `systemd` numa maquina Docker. **Era falso** — afirmacao feita de memoria, sem
+> abrir o arquivo. O `prod.yml` usa `deploy-safe.sh` com `BACKEND_TAG` e
+> `docker compose` desde o FABIANO-49. Fica registrado porque o erro custou uma
+> recomendacao errada ("nao faca merge na master") por algumas horas.
+
+As duas esteiras conferem o alvo **antes de escrever qualquer coisa nele**, pelo
+`DB_HOST` do `.env` da maquina. O de ensaio traz `-ensaio.`; o de producao nao.
+
+| Esteira | Aborta quando | Mensagem |
+|---|---|---|
+| `prod.yml` (master) | o `.env` **e** de ensaio | `Este job e o de PRODUCAO. Confira o segredo EC2_HOST.` |
+| `develop.yml` (develop) | o `.env` **nao e** de ensaio | `Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina ja virou producao.` |
+
+Hoje `EC2_HOST` e `HOMOLOG_EC2_HOST` apontam para a **mesma maquina**, porque a
+homolog deixou de existir na virada. E justamente por isso a trava do
+`develop.yml` importa: um push na `develop` bate na maquina de producao, le o
+`.env`, nao encontra `-ensaio.` e **para antes de enviar arquivo**. A protecao
+existe e funciona.
+
+> [!warning] O que a trava NAO protege
+> Ela olha o banco, nao a arquitetura. Se um dia a homolog voltar
+> (FABIANO-33) e alguem esquecer de atualizar `HOMOLOG_EC2_HOST`, o deploy de
+> homologacao continua abortando corretamente — mas ninguem e avisado de que a
+> homolog nao esta recebendo nada. Falha segura, e ainda assim silenciosa.
 
 ### Antes de qualquer comando destrutivo na AWS
 

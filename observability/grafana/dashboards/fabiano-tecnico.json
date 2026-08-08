@@ -107,7 +107,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__rate_interval]))",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval]))",
           "refId": "A",
           "editorMode": "code",
           "legendFormat": "{{status}}"
@@ -169,7 +169,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
           "refId": "A",
           "editorMode": "code",
           "legendFormat": "p50"
@@ -179,7 +179,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
           "refId": "B",
           "editorMode": "code",
           "legendFormat": "p95"
@@ -189,7 +189,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
           "refId": "C",
           "editorMode": "code",
           "legendFormat": "p99"
@@ -254,7 +254,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "topk(10, histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__range]))) > 0)",
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))) > 0)",
           "refId": "A",
           "editorMode": "code",
           "instant": true,
@@ -331,7 +331,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "topk(10, sum by (uri, method, status) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range])))",
+          "expr": "topk(10, sum by (uri, method, status) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range])))",
           "refId": "A",
           "editorMode": "code",
           "instant": true,
@@ -422,7 +422,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__range]))",
+          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))",
           "refId": "A",
           "editorMode": "code",
           "instant": true,
@@ -434,7 +434,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range]))",
+          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range]))",
           "refId": "B",
           "editorMode": "code",
           "instant": true,
@@ -446,7 +446,7 @@
             "type": "prometheus",
             "uid": "prometheus-fabiano"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri=~\"${rota:regex}\"}[$__range]))) > 0",
+          "expr": "histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))) > 0",
           "refId": "C",
           "editorMode": "code",
           "instant": true,

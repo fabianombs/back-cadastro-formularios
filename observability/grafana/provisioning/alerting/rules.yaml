@@ -83,7 +83,7 @@ groups:
         aplicacao caiu, ou o Prometheus perdeu acesso a ela (token, rede, timeout). Comece por http://localhost:9091/targets,
         que diz o motivo exato. Sem dado nenhum tambem dispara - de proposito, porque silencio aqui e
         indistinguivel de queda.'
-      runbook_url: http://localhost:3000/d/fabiano-overview
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
     labels:
       severidade: critico
     isPaused: false
@@ -103,8 +103,8 @@ groups:
       datasourceUid: prometheus-fabiano
       model:
         refId: A
-        expr: 100 * sum(rate(http_server_requests_seconds_count{job="fabiano-back",status=~"5.."}[5m]))
-          / clamp_min(sum(rate(http_server_requests_seconds_count{job="fabiano-back"}[5m])), 0.001)
+        expr: 100 * sum(rate(http_server_requests_seconds_count{job="fabiano-back",uri!="UNKNOWN",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count{job="fabiano-back",uri!="UNKNOWN"}[5m])), 0.001)
         instant: true
         editorMode: code
         range: false
@@ -150,7 +150,7 @@ groups:
       description: Erro 5xx e falha que o sistema nao tratou. Abra a tela Tecnico e veja a tabela 'Rotas
         com mais erro' para saber onde. Depois use a tela Logs filtrando por ERROR no mesmo intervalo
         - o rastro completo esta la.
-      runbook_url: http://localhost:3000/d/fabiano-tecnico
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
     labels:
       severidade: alto
     isPaused: false
@@ -165,7 +165,7 @@ groups:
       datasourceUid: prometheus-fabiano
       model:
         refId: A
-        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="fabiano-back",uri!~"/actuator.*"}[5m])))
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="fabiano-back",uri!~"/actuator.*",uri!="UNKNOWN"}[5m])))
         instant: true
         editorMode: code
         range: false
@@ -208,7 +208,7 @@ groups:
       description: 'Sem o /actuator na conta, entao mede o que o usuario sente. Cheque nesta ordem: ''Conexoes
         do HikariCP'' (fila de espera acima de zero indica banco), ''Threads do Tomcat'' (pool cheio trava
         tudo) e ''Pausa de GC'' (memoria).'
-      runbook_url: http://localhost:3000/d/fabiano-tecnico
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
     labels:
       severidade: alto
     isPaused: false
@@ -273,7 +273,7 @@ groups:
         instancia por uma maior NAO muda este numero. Heap encostando no teto por tempo prolongado e o
         quadro que antecede a queda. Se acontecer junto com pausa de GC subindo, e vazamento de memoria,
         nao pico de uso.'
-      runbook_url: http://localhost:3000/d/fabiano-tecnico
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
     labels:
       severidade: alto
     isPaused: false
@@ -331,7 +331,7 @@ groups:
       description: Fila acima de zero por 5 minutos significa que o pool nao esta dando conta. Ou o pool
         e pequeno demais, ou existe consulta lenta segurando conexao. O painel 'Tempo para obter conexao'
         separa os dois casos.
-      runbook_url: http://localhost:3000/d/fabiano-tecnico
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
     labels:
       severidade: alto
     isPaused: false
@@ -391,7 +391,7 @@ groups:
       description: 'Pode ser forca bruta. Abra a tela Logs, escolha AuthService em Origem, e veja os nomes
         de usuario tentados: se forem nomes que nao existem (admin, root, teste), e varredura automatizada.
         Se for sempre o mesmo usuario real, provavelmente e alguem que esqueceu a senha.'
-      runbook_url: http://localhost:3000/d/fabiano-logs
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
     labels:
       severidade: alto
     isPaused: false
@@ -460,7 +460,7 @@ groups:
       description: ERROR e o unico nivel que deveria ficar permanentemente em zero. Diferente do alerta
         de 5xx, este pega tambem erro que nao virou resposta HTTP - falha em tarefa de fundo, por exemplo.
         A tela Logs mostra a linha completa com o rastro.
-      runbook_url: http://localhost:3000/d/fabiano-logs
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
     labels:
       severidade: alto
     isPaused: false
@@ -526,7 +526,7 @@ groups:
         o sistema responde 200 em tudo mas ninguem consegue mais enviar. Confirme na tela Produto, no
         painel ''Funil: aberturas x envios'' - se as aberturas continuam e os envios estao em zero, o
         formulario quebrou. Se os dois estao em zero, foi so um periodo parado.'
-      runbook_url: http://localhost:3000/d/fabiano-produto
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-produto
     labels:
       severidade: medio
     isPaused: $ALERTA_SUBMISSAO_PAUSADO
@@ -705,7 +705,7 @@ groups:
         cheio deixa de poder disparar. Conferir com "docker compose -f docker-compose.observability.yml
         ps" e "docker logs fabiano-node-exporter". Enquanto isto estiver aberto, a ausencia de alerta de
         infraestrutura nao significa nada.'
-      runbook_url: http://localhost:3000/d/fabiano-tecnico
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
     labels:
       severidade: alto
     isPaused: false
@@ -719,11 +719,24 @@ groups:
       datasourceUid: loki-fabiano
       model:
         refId: A
-        # Nao mede erro: mede se CHEGA log. A aplicacao no ar sempre produz
-        # alguma linha — nem que seja o access log de uma sonda de saude.
-        # Zero por 10 minutos, com a aplicacao respondendo, significa que o
-        # caminho Promtail -> Loki quebrou.
-        expr: sum(count_over_time({application="fabiano-back"}[10m]))
+        # Nao mede erro: mede se CHEGA log.
+        #
+        # O seletor e 'ambiente', e nao 'application' — corrigido em 08/08/2026.
+        # A premissa do comentario original estava certa ("sempre chega alguma
+        # linha, nem que seja o access log de uma sonda"), mas aquele access log
+        # e do NGINX, e leva container="fabiano-nginx". Com
+        # application="fabiano-back" a regra vigiava justamente o unico fluxo
+        # sem batimento: o Spring Boot nao registra requisicao por padrao, e o
+        # backend parado passa 10 minutos calado sem nada de errado.
+        #
+        # Resultado medido: numa hora com a coleta 100% saudavel, chegaram 1190
+        # linhas do nginx e 12 do backend — e o alerta disparou por e-mail.
+        # Alerta que grita sem motivo ensina a ignorar o alerta.
+        #
+        # Com 'ambiente' o batimento e garantido: a sonda blackbox bate em
+        # /actuator/health a cada 30s e o nginx registra cada uma delas. Zero
+        # por 10 minutos passa a significar mesmo que Promtail -> Loki quebrou.
+        expr: sum(count_over_time({ambiente="prod"}[10m]))
         # queryType e o campo que o datasource do Loki le; 'instant' abaixo e
         # do Prometheus e e ignorado aqui. Sem ele a consulta volta como serie
         # temporal e a expressao de limiar recusa, deixando a regra em Error
@@ -759,7 +772,7 @@ groups:
       description: 'A tela de Logs esta cega, e com ela o alerta "Erros aparecendo no log". Conferir
         "docker logs fabiano-promtail" — o erro classico e "final error sending batch ... at least one
         label pair is required per stream". Atencao: painel de log vazio parece calmaria e e apagao.'
-      runbook_url: http://localhost:3000/d/fabiano-logs
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
     labels:
       severidade: alto
     isPaused: false
@@ -825,10 +838,10 @@ groups:
       summary: Um certificado HTTPS vence em menos de 14 dias.
       description: 'O dominio esta na etiqueta instance. Conferir na maquina com
         "sudo certbot certificates" e "sudo certbot renew --dry-run". Atencao ao
-        grafana-hml: se for o dele, o painel que mostra este alerta e o primeiro a
+        grafana.nexventa.com.br: se for o dele, o painel que mostra este alerta e o primeiro a
         ficar inacessivel. Este alerta mede a data que o servidor REALMENTE
         apresenta, nao se o cron rodou.'
-      runbook_url: http://localhost:3000/d/fabiano-overview
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
     labels:
       severidade: critico
     isPaused: false
@@ -876,7 +889,7 @@ groups:
         certificado, DNS ou Security Group. Comece por "docker compose ps" no
         nginx e por "curl -v" no dominio da etiqueta instance. Se os dois alertas
         estiverem abertos, a aplicacao caiu mesmo.'
-      runbook_url: http://localhost:3000/d/fabiano-overview
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
     labels:
       severidade: critico
     isPaused: false
