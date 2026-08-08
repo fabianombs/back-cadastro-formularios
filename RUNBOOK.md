@@ -649,8 +649,10 @@ ser considerado documentado. Ainda não é o caso de todos:
 | Recuperação manual (seção 5) | **não** |
 | Restauração de dump (6.2) | **não** |
 | Point-in-time recovery (6.1) | **não** — mas o PITR **existe**, confirmado 05/08 (7 dias) |
-| Envio de alerta por e-mail | **não** — SMTP do Grafana não configurado |
+| Envio de alerta por e-mail | **sim**, 06/08 (alerta de erro no log) e 07/08 ("Site fora do ar visto de fora", com `grafana_state_reason: NoData`) — SMTP entregando |
 | Recriação da máquina do zero | **não** — e hoje a Terraform impede (seção 10) |
+| Sonda externa (blackbox) pelo endereço público | **sim**, 07/08 — `probe_success=1` nos 3 domínios |
+| Deploy aplicando config de observabilidade sozinho | **sim**, 07/08 — deploy #39 (FABIANO-63/68) |
 
 Procedimento não executado é hipótese. As seções 5 e 6, o caminho de falha do
 deploy e a recriação da máquina ainda são hipótese — e é justamente neles que se
