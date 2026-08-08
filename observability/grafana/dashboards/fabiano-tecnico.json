@@ -1,0 +1,1187 @@
+{
+  "uid": "fabiano-tecnico",
+  "title": "Fabiano - Tecnico",
+  "description": "Onde doi. HTTP por rota, mapa de endpoints, JVM, Tomcat, banco e autenticacao. O seletor Rota, no topo, filtra a tela inteira.",
+  "tags": [
+    "fabiano"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Fabiano",
+      "tags": [
+        "fabiano"
+      ],
+      "asDropdown": false,
+      "targetBlank": false,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "external link",
+      "url": "",
+      "tooltip": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "rota",
+        "label": "Rota",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-fabiano"
+        },
+        "query": {
+          "qryType": 1,
+          "refId": "PrometheusVariableQueryEditor-VariableQuery",
+          "query": "label_values(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\"}, uri)"
+        },
+        "definition": "label_values(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\"}, uri)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "HTTP",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 2,
+      "title": "Requisicoes por segundo, por status",
+      "description": "Empilhado: altura total e trafego, faixa de 5xx e falha.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 3,
+      "title": "Latencia",
+      "description": "p99 muito acima do p95 aponta para uma minoria de chamadas presa em algo - quase sempre banco ou upload.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__rate_interval])))",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "id": 4,
+      "title": "Rotas mais lentas (p95 no periodo)",
+      "description": "O '> 0' descarta NaN: rota sem observacao no intervalo faz histogram_quantile devolver NaN, e NaN entrava no topk ordenado acima de rotas realmente lentas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))) > 0)",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "align": "auto"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "application": true,
+              "environment": true,
+              "outcome": true,
+              "exception": true,
+              "error": true
+            },
+            "renameByName": {
+              "Value": "p95",
+              "uri": "rota",
+              "method": "metodo"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "id": 5,
+      "title": "Rotas com mais erro (4xx e 5xx no periodo)",
+      "description": "Vazio aqui e boa noticia, nao consulta quebrada: significa nenhum 4xx nem 5xx no intervalo.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "topk(10, sum by (uri, method, status) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range])))",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "align": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "application": true,
+              "environment": true,
+              "outcome": true,
+              "exception": true,
+              "error": true
+            },
+            "renameByName": {
+              "Value": "ocorrencias",
+              "uri": "rota",
+              "method": "metodo",
+              "status": "codigo"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 6,
+      "title": "Mapa de endpoints",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      }
+    },
+    {
+      "type": "table",
+      "id": 7,
+      "title": "Mapa de endpoints",
+      "description": "A fonte de verdade: toda rota que o Prometheus conhece, com volume, erros e p95 lado a lado. E aqui que se confere se os grupos de acao da tela Produto estao casando com as rotas reais. p95 vazio quer dizer rota sem chamada suficiente no intervalo.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (uri, method) (increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\",status=~\"[45]..\"}[$__range]))",
+          "refId": "B",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, uri, method) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",uri=~\"${rota:regex}\"}[$__range]))) > 0",
+          "refId": "C",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "erros"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "requisicoes",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "application": true,
+              "environment": true,
+              "outcome": true,
+              "exception": true,
+              "error": true,
+              "status": true,
+              "le": true
+            },
+            "renameByName": {
+              "uri": "rota",
+              "method": "metodo",
+              "Value #A": "requisicoes",
+              "Value #B": "erros",
+              "Value #C": "p95"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 8,
+      "title": "JVM, Tomcat e banco",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "Heap",
+      "description": "Usado encostando no maximo por tempo prolongado antecede o OOM. O maximo vem do teto do container (700m), nao da RAM da maquina.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(jvm_memory_used_bytes{job=\"fabiano-back\",area=\"heap\"})",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "usado"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(jvm_memory_max_bytes{job=\"fabiano-back\",area=\"heap\"})",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "maximo"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 10,
+      "title": "Pausa de GC",
+      "description": "Pausa de GC chega ao usuario como latencia.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(jvm_gc_pause_seconds_sum{job=\"fabiano-back\"}[$__rate_interval])) / clamp_min(sum(rate(jvm_gc_pause_seconds_count{job=\"fabiano-back\"}[$__rate_interval])), 0.001)",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "media"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "max(jvm_gc_pause_seconds_max{job=\"fabiano-back\"})",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "maior pausa"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 11,
+      "title": "Threads do Tomcat",
+      "description": "Ocupadas encostando no limite trava a aplicacao antes de qualquer erro aparecer no log. Depende de server.tomcat.mbeanregistry.enabled=true.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "tomcat_threads_busy_threads{job=\"fabiano-back\"}",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "ocupadas"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "tomcat_threads_current_threads{job=\"fabiano-back\"}",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "criadas"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "tomcat_threads_config_max_threads{job=\"fabiano-back\"}",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "limite"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 12,
+      "title": "Conexoes do HikariCP",
+      "description": "Fila de espera acima de zero significa requisicao parada aguardando conexao livre com o RDS.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "hikaricp_connections_active{job=\"fabiano-back\"}",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "em uso"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "hikaricp_connections_idle{job=\"fabiano-back\"}",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "ociosas"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "hikaricp_connections_pending{job=\"fabiano-back\"}",
+          "refId": "C",
+          "editorMode": "code",
+          "legendFormat": "esperando"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "hikaricp_connections_max{job=\"fabiano-back\"}",
+          "refId": "D",
+          "editorMode": "code",
+          "legendFormat": "limite"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 13,
+      "title": "Tempo para obter conexao",
+      "description": "Subida aqui aponta para pool pequeno ou consulta lenta segurando conexao.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(hikaricp_connections_acquire_seconds_sum{job=\"fabiano-back\"}[$__rate_interval])) / clamp_min(sum(rate(hikaricp_connections_acquire_seconds_count{job=\"fabiano-back\"}[$__rate_interval])), 0.001)",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "media"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "max(hikaricp_connections_acquire_seconds_max{job=\"fabiano-back\"})",
+          "refId": "B",
+          "editorMode": "code",
+          "legendFormat": "maior"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 14,
+      "title": "Autenticacao",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "Logins por minuto, por resultado",
+      "description": "Rotulos vindos do AuthService: sucesso, falha_credenciais, falha_usuario_inexistente e falha_usuario_inativo. Tudo que comeca com falha_ conta como falha nos paineis de proporcao.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (resultado) (rate(auth_login_total{job=\"fabiano-back\"}[$__rate_interval])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{resultado}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "id": 16,
+      "title": "Proporcao de falha no login",
+      "description": "Uma pessoa erra a senha as vezes; proporcao alta e sustentada nao e distracao.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "100 * sum(rate(auth_login_total{job=\"fabiano-back\",resultado=~\"falha.*\"}[5m])) / clamp_min(sum(rate(auth_login_total{job=\"fabiano-back\"}[5m])), 0.001)",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "table",
+      "id": 17,
+      "title": "Cadastros no periodo",
+      "description": "Contador do Micrometer so passa a existir depois do primeiro incremento: sem cadastro no periodo a tabela fica vazia, e isso e o esperado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (resultado) (increase(auth_registro_total{job=\"fabiano-back\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "align": "auto"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ]
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true,
+              "instance": true,
+              "application": true,
+              "environment": true,
+              "outcome": true,
+              "exception": true,
+              "error": true
+            },
+            "renameByName": {
+              "Value": "quantidade"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

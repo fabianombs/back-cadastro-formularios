@@ -1,0 +1,587 @@
+{
+  "uid": "fabiano-logs",
+  "title": "Fabiano - Logs",
+  "description": "O que aconteceu, e nao so o que falhou. Filtros no topo; a caixa Busca e expressao regular sobre o texto da linha - cole ali o X-Request-Id de uma resposta para ver a requisicao inteira.",
+  "tags": [
+    "fabiano"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Fabiano",
+      "tags": [
+        "fabiano"
+      ],
+      "asDropdown": false,
+      "targetBlank": false,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "external link",
+      "url": "",
+      "tooltip": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "nivel",
+        "label": "Nivel",
+        "type": "custom",
+        "query": "ERROR,WARN,INFO,DEBUG,TRACE",
+        "options": [],
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "logger",
+        "label": "Origem",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki-fabiano"
+        },
+        "query": {
+          "label": "logger",
+          "type": 1,
+          "refId": "LokiVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "busca",
+        "label": "Busca no texto",
+        "type": "textbox",
+        "query": "",
+        "options": [],
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "id": 1,
+      "title": "Linhas de log / min",
+      "description": "Cair a zero com a aplicacao no ar significa que o Promtail parou, nao que o sistema ficou quieto. Vermelho no zero de proposito: com a aplicacao no ar, zero linha por minuto nao e calmaria, e o Promtail parado (FABIANO-62). O alerta 'Parei de receber log da aplicacao' cobre o mesmo caso para quem nao esta olhando.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "sum(rate({application=\"fabiano-back\"}[5m])) * 60",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "ERROR no periodo",
+      "description": "Contagem no intervalo do topo.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "sum(count_over_time({application=\"fabiano-back\", nivel=\"ERROR\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "WARN no periodo",
+      "description": "Aviso nao derruba nada, mas mudanca brusca no numero costuma preceder o erro.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "sum(count_over_time({application=\"fabiano-back\", nivel=\"WARN\"}[$__range]))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "stat",
+      "id": 4,
+      "title": "Classes reclamando",
+      "description": "Uma classe sozinha gritando muito e bug; dez classes ao mesmo tempo e infraestrutura.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "count(sum by (logger) (count_over_time({application=\"fabiano-back\", nivel=~\"ERROR|WARN\"}[$__range])))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "Volume de log por nivel",
+      "description": "Salto no volume costuma anteceder o incidente.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "sum by (nivel) (count_over_time({application=\"fabiano-back\"}[$__auto]))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "{{nivel}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 6,
+      "title": "Classes com ERROR ou WARN no periodo",
+      "description": "O caminho mais curto entre 'algo esta errado' e o arquivo que precisa ser aberto. Nome encurtado para a classe; o pacote completo aparece no tooltip.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "topk(10, sum by (logger) (count_over_time({application=\"fabiano-back\", nivel=~\"ERROR|WARN\"}[$__range])))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range",
+          "legendFormat": "{{logger}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "0",
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "minVizWidth": 8,
+        "minVizHeight": 10,
+        "sizing": "auto"
+      },
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": ".*[.$]([^.$]+)$",
+            "renamePattern": "$1"
+          }
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "id": 7,
+      "title": "Erros e avisos",
+      "description": "Painel fixo, sem filtro: o que se olha primeiro quando algo quebrou. Expandindo a linha aparecem requestId, userId, metodo, rota, status e duracao como metadado estruturado.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "{application=\"fabiano-back\", nivel=~\"ERROR|WARN\"}",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "type": "logs",
+      "id": 8,
+      "title": "Todos os logs do backend",
+      "description": "Navegacao livre com os filtros do topo. Escolha 'acesso' em Origem para ver uma linha por requisicao, com status e duracao. Busca vazia nao filtra nada.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "{application=\"fabiano-back\", nivel=~\"${nivel:regex}\", logger=~\"${logger:regex}\"} |~ \"${busca}\"",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

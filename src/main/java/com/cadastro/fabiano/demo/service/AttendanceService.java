@@ -7,6 +7,7 @@ import com.cadastro.fabiano.demo.dto.request.MarkCompanionAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceCompanionResponse;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
 import com.cadastro.fabiano.demo.entity.AttendanceCompanion;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.entity.AttendanceRecord;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.AttendanceCompanionRepository;
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,13 +36,16 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRepository;
     private final AttendanceCompanionRepository companionRepository;
     private final FormTemplateRepository templateRepository;
+    private final MetricasDeNegocio metricas;
 
     public AttendanceService(AttendanceRecordRepository attendanceRepository,
                              AttendanceCompanionRepository companionRepository,
-                             FormTemplateRepository templateRepository) {
+                             FormTemplateRepository templateRepository,
+                             MetricasDeNegocio metricas) {
         this.attendanceRepository = attendanceRepository;
         this.companionRepository = companionRepository;
         this.templateRepository = templateRepository;
+        this.metricas = metricas;
     }
 
     /**
@@ -92,12 +98,25 @@ public class AttendanceService {
 
         templateRepository.save(template);
 
-        return attendanceRepository.saveAll(records)
+        // A importacao apaga a lista anterior e cria registros novos, entao
+        // nenhum deles tem acompanhante. Consultar o banco por registro aqui
+        // custava uma consulta por linha importada — 9000 linhas, 9000
+        // consultas, todas devolvendo vazio (FABIANO-38).
+        List<AttendanceRecordResponse> importados = attendanceRepository.saveAll(records)
                 .stream()
-                .map(this::toResponse)
+                .map(r -> toResponse(r, List.of()))
                 .toList();
+
+        // O tamanho da importacao entra como distribuicao, nao como contador:
+        // vinte importacoes de 5 linhas e uma de 9000 sao situacoes bem
+        // diferentes para o banco, e um contador nao distingue as duas.
+        metricas.importacaoDePresenca(importados.size());
+        return importados;
     }
 
+    // Ver FABIANO-37: com open-in-view=false a sessao fecha ao voltar do
+    // repositorio, e o DTO e montado depois disso.
+    @Transactional(readOnly = true)
     public Page<AttendanceRecordResponse> getByTemplate(Long templateId, Pageable pageable) {
         FormTemplate template = findTemplate(templateId);
         Pageable sorted = PageRequest.of(
@@ -105,8 +124,20 @@ public class AttendanceService {
                 pageable.getPageSize(),
                 Sort.by(Sort.Order.asc("rowOrder"), Sort.Order.asc("createdAt"))
         );
-        return attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template, sorted)
-                .map(this::toResponse);
+        Page<AttendanceRecord> pagina =
+                attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(template, sorted);
+
+        // Os acompanhantes da pagina inteira vem numa consulta so, indexados
+        // por registro. Antes o toResponse consultava um a um — o custo crescia
+        // junto com o tamanho da pagina, e esta e a tela que o cliente do
+        // Fabiano usa no tablet durante o evento (FABIANO-38).
+        List<Long> ids = pagina.getContent().stream().map(AttendanceRecord::getId).toList();
+        Map<Long, List<AttendanceCompanion>> porRegistro = ids.isEmpty()
+                ? Map.of()
+                : companionRepository.findByAttendanceRecordIdInOrderByCreatedAtAsc(ids).stream()
+                        .collect(Collectors.groupingBy(c -> c.getAttendanceRecord().getId()));
+
+        return pagina.map(r -> toResponse(r, porRegistro.getOrDefault(r.getId(), List.of())));
     }
 
     /**
@@ -132,6 +163,7 @@ public class AttendanceService {
             record.setCompanionsCount(Math.max(0, request.companionsCount()));
         }
 
+        metricas.presencaMarcada();
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -140,6 +172,8 @@ public class AttendanceService {
         AttendanceRecord record = attendanceRepository.findById(recordId)
                 .orElseThrow(() -> new RuntimeException("Registro não encontrado"));
         record.setRowData(rowData);
+        // Marca quando a linha foi preenchida/editada na tabela (coluna "Preenchido em")
+        record.setFilledAt(LocalDateTime.now());
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -198,6 +232,7 @@ public class AttendanceService {
         companion.setAttendedAt(request.attended() ? LocalDateTime.now() : null);
         companionRepository.save(companion);
 
+        metricas.presencaDeAcompanhanteMarcada();
         return toResponse(companion.getAttendanceRecord());
     }
 
@@ -237,8 +272,10 @@ public class AttendanceService {
                 .attended(false)
                 .companionsCount(0)
                 .rowOrder((int) nextOrder)
+                .filledAt(LocalDateTime.now()) // convidado público preencheu a linha ao se cadastrar
                 .build();
 
+        metricas.convidadoIncluidoPeloPublico();
         return toResponse(attendanceRepository.save(record));
     }
 
@@ -266,9 +303,15 @@ public class AttendanceService {
                 .orElse(0);
     }
 
+    // Caminho de registro unico (marcar presenca, adicionar acompanhante...):
+    // uma consulta a mais nao pesa. Em lista, usar a sobrecarga que recebe os
+    // acompanhantes ja carregados.
     private AttendanceRecordResponse toResponse(AttendanceRecord r) {
-        List<AttendanceCompanionResponse> companions = companionRepository
-                .findByAttendanceRecordOrderByCreatedAtAsc(r)
+        return toResponse(r, companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(r));
+    }
+
+    private AttendanceRecordResponse toResponse(AttendanceRecord r, List<AttendanceCompanion> acompanhantes) {
+        List<AttendanceCompanionResponse> companions = acompanhantes
                 .stream()
                 .map(c -> new AttendanceCompanionResponse(
                         c.getId(),
@@ -284,14 +327,15 @@ public class AttendanceService {
         return new AttendanceRecordResponse(
                 r.getId(),
                 r.getFormTemplate().getId(),
-                r.getRowData(),
+                ColecaoDeSaida.mapa(r.getRowData()),
                 r.isAttended(),
                 r.getAttendedAt(),
                 r.getNotes(),
                 companions.size(),
                 companions,
                 r.getRowOrder(),
-                r.getCreatedAt()
+                r.getCreatedAt(),
+                r.getFilledAt()
         );
     }
 }

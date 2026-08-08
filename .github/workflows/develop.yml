@@ -12,7 +12,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: testpassword
           MYSQL_DATABASE: testdb
@@ -46,6 +46,17 @@ jobs:
             sleep 2
           done
 
+      # O 'cache: maven' do setup-java guarda ~/.m2/repository, mas NAO o
+      # Maven em si: o wrapper baixa o apache-maven-*.zip do repositorio
+      # central a cada execucao. Uma instabilidade la derruba o build inteiro
+      # sem nenhuma relacao com o codigo — aconteceu em 05/08/2026,
+      # 'wget: Failed to fetch .../apache-maven-3.9.12-bin.zip'.
+      - name: Cache do Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Make mvnw executable
         run: chmod +x mvnw
 
@@ -63,6 +74,366 @@ jobs:
       - name: Verify JAR was generated
         run: ls -la target/*.jar
 
+
+  # ===========================================================================
+  # PACOTE DE DEPLOY NO S3 (FABIANO-58)
+  #
+  # A esteira entrega os arquivos por scp para uma maquina que JA EXISTE. Uma
+  # instancia criada pelo Auto Scaling as 3h da manha nao tem endereco conhecido
+  # nem chave autorizada — ninguem faz scp para ela. Ela precisa BUSCAR o
+  # pacote, e este job e quem o publica.
+  #
+  # Nao substitui o scp: enquanto a maquina for fixa, o scp continua sendo o
+  # caminho do deploy. Este job so garante que exista um pacote para uma maquina
+  # que ainda nao nasceu. Por isso NAO e dependencia do job de deploy — se o
+  # bucket estiver fora, o deploy do dia nao pode parar por causa disso.
+  # ===========================================================================
+  publicar-bundle:
+    name: Publicar pacote de deploy (S3)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: credencial temporaria, nenhuma chave guardada
+
+    env:
+      AMBIENTE: homologacao
+      BUCKET: fabiano-artefatos-135133927228
+      # 'secrets' nao pode ser lido no 'if' de um job — o GitHub resolve o if
+      # antes de montar o contexto de segredos. Por isso a role passa por env e
+      # a decisao de pular fica em cada passo.
+      ROLE: ${{ secrets.AWS_ROLE_DEPLOY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Montar o pacote
+        run: |
+          chmod +x infra/montar-bundle.sh
+          ./infra/montar-bundle.sh deploy-bundle.tar.gz
+
+      # Anexar a execucao vale mesmo com o S3 no ar: da para baixar e conferir o
+      # conteudo de qualquer build passado sem precisar de credencial da AWS.
+      - name: Anexar o pacote a execucao
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-bundle-${{ github.sha }}
+          path: deploy-bundle.tar.gz
+          retention-days: 14
+
+      - name: Sem credencial da AWS — publicacao pulada
+        if: env.ROLE == ''
+        run: |
+          echo "::notice::AWS_ROLE_DEPLOY nao configurado. O pacote foi montado e anexado a execucao, mas NAO foi para o S3."
+          echo "Depende da liberacao de IAM: criar a role OIDC do GitHub Actions e gravar o ARN no segredo AWS_ROLE_DEPLOY."
+
+      - name: Assumir a role de deploy
+        if: env.ROLE != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: us-east-1
+
+      - name: Publicar no S3
+        if: env.ROLE != ''
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA::7}"
+
+          # A copia com SHA e o historico; 'latest' e o que a maquina nova le no
+          # boot. A versionada vai PRIMEIRO de proposito: se o job morrer no
+          # meio, o latest continua sendo um pacote que ja subiu uma maquina.
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz"
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz"
+
+          echo "### Pacote publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz\` (o que a maquina nova le)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz\` (historico)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Imagem da branch develop, para o ambiente de homologacao do FABIANO-33.
+  # Tag fixa 'develop': homologacao sempre roda o ultimo develop, sem precisar
+  # descobrir sha nenhum.
+  build-push-develop:
+    name: Publicar imagem develop no GHCR
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    # A tag por SHA e o que o deploy usa. A tag 'develop' e movel: aponta
+    # sempre para a ultima, entao nao serve para rollback nem para promover
+    # a mesma imagem para producao depois (FABIANO-49).
+    outputs:
+      tag: ${{ steps.nomes.outputs.tag }}
+      owner: ${{ steps.nomes.outputs.owner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O GHCR recusa nome de imagem com maiuscula.
+      - name: Normalizar owner e definir a tag
+        id: nomes
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:develop
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ steps.nomes.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================================================
+  # DEPLOY EM HOMOLOGACAO
+  #
+  # Enquanto a migracao blue-green nao termina, 'homologacao' e a EC2 nova
+  # (FABIANO-13), que depois vira producao. Terminada a virada, o segredo
+  # HOMOLOG_EC2_HOST passa a apontar para a instancia clonada (FABIANO-33) e
+  # este job continua identico — muda o valor, nao o desenho.
+  # ===========================================================================
+  # ---------------------------------------------------------------------------
+  # HOMOLOG SOB DEMANDA (FABIANO-33) — este job so roda se ela existir
+  # ---------------------------------------------------------------------------
+  # Desde a virada de 08/08/2026 nao ha maquina de homologacao: a que era
+  # homolog virou producao, e HOMOLOG_EC2_HOST aponta para ela.
+  #
+  # Sem esta condicao, todo push na develop rodava o deploy, batia na trava do
+  # '-ensaio.' e ABORTAVA — deixando a esteira vermelha por comportamento
+  # correto. Vermelho esperado e pior que vermelho nenhum: ensina a ignorar
+  # vermelho, e o dia em que ele for de verdade ninguem olha.
+  #
+  # O padrao e "desligado ate alguem dizer o contrario": variavel ausente
+  # significa homolog inexistente, e o job e pulado. Para religar, criar a
+  # variavel de repositorio HOMOLOG_ATIVO com valor 'true' em
+  # Settings -> Secrets and variables -> Actions -> Variables, JUNTO com a
+  # atualizacao do HOMOLOG_EC2_HOST.
+  #
+  # A trava do '-ensaio.' continua no lugar e nao foi enfraquecida: ela e a
+  # ultima barreira se alguem religar a variavel apontando para producao.
+  deploy-homolog:
+    name: Deploy em homologacao
+    needs: build-push-develop
+    if: vars.HOMOLOG_ATIVO == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # Os arquivos de deploy (compose, nginx.conf, scripts) vivem no repo, mas
+      # NADA os levava ate a maquina: o job so fazia 'cd ~/fabiano/deploy' e
+      # rodava o que ja estava la. Uma correcao no nginx.conf entrava no git, o
+      # pipeline passava verde, e a maquina continuava com a versao antiga — a
+      # divergencia so apareceria no dia em que alguem dependesse dela.
+      #
+      # SCP a partir do runner, e nao 'git pull' na maquina: evita instalar git
+      # e guardar credencial do repositorio dentro de um servidor.
+      #
+      # O .env NAO e versionado, entao nao ha risco de sobrescrever as
+      # credenciais da maquina. O que esta no repo sobrescreve o resto — o repo
+      # e a fonte da verdade, e ajuste feito a mao no servidor deve sumir mesmo.
+      - uses: actions/checkout@v4
+
+      # Conferir o alvo ANTES de escrever qualquer coisa nele.
+      #
+      # Esta checagem ja existiu dentro do script de deploy, e estava tarde
+      # demais: o scp abaixo ja teria sobrescrito arquivos na maquina errada
+      # antes de alguem descobrir que era a maquina errada. Abortar depois de
+      # ter mexido em coisa nao e abortar.
+      #
+      # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+      - name: Conferir que o alvo e a maquina certa
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+            # A regra e uma NEGACAO do nome exato de producao, e nao uma lista
+            # de nomes permitidos.
+            #
+            # Ate 08/08/2026 ela exigia '-ensaio.' no DB_HOST — o nome do banco
+            # temporario do blue-green (FABIANO-46). Esse banco morre no
+            # FABIANO-48, e o da homolog vai se chamar 'poc-fabiano-homolog-db'
+            # (FABIANO-33): a trava abortaria um deploy LEGITIMO, e o sintoma
+            # apareceria no meio do primeiro ciclo de homolog.
+            #
+            # Ancorado em '^DB_HOST=' para nao casar com comentario dentro do
+            # arquivo. 'poc-fabiano-db\.' com o ponto literal casa SO com producao —
+            # 'poc-fabiano-db-ensaio.' e 'poc-fabiano-homolog-db.' nao batem,
+            # porque tem outro caractere onde o ponto deveria estar. Qualquer
+            # banco futuro passa sem alguem precisar lembrar de editar isto.
+            if grep -qE '^DB_HOST=.*poc-fabiano-db\.' .env; then
+              echo "ABORTADO: o .env desta maquina aponta para o banco de PRODUCAO."
+              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina e producao."
+              echo "NADA foi enviado."
+              exit 1
+            fi
+            echo "Alvo confirmado: nao e o banco de producao."
+
+      - name: Enviar arquivos de deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          # observability/** vai junto: os paineis, as regras de alerta e a
+          # config do Loki sao compartilhados com o ambiente de dev e vivem
+          # fora de deploy/. Sem esta linha o compose de observabilidade sobe
+          # na maquina apontando para arquivo que nao existe.
+          source:   "deploy/**,observability/**"
+          target:   "/home/ec2-user/fabiano/"
+          strip_components: 0
+          overwrite: true
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+
+            # O scp nao preserva o bit de execucao.
+            chmod +x scripts/*.sh
+
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Deploy pela tag de SHA, nao pela tag 'develop': e a mesma imagem
+            # que sera promovida para producao depois de validada.
+            ./scripts/deploy-safe.sh "${{ needs['build-push-develop'].outputs.tag }}"
+
+      # A stack de observabilidade le configuracao no BOOT: o Grafana carrega
+      # provisioning/ ao subir, e Prometheus, Loki e Promtail leem os proprios
+      # arquivos ao subir. O scp acima entrega painel e regra novos, mas sem
+      # recriar o container eles ficam no disco SEM EFEITO NENHUM — e o
+      # pipeline verde afirma que estao no ar (FABIANO-63).
+      #
+      # O caso mais perigoso e o do alerta: a unica forma de perceber que ele
+      # nao foi aplicado seria um incidente em que ele deveria tocar e nao toca.
+      #
+      # Passo separado, DEPOIS do deploy, e que NUNCA derruba a execucao.
+      # Observabilidade fora do ar e ruim; derrubar o deploy da aplicacao por
+      # causa dela e pior. A falha vira aviso visivel, nao silencio.
+      - name: Recarregar a observabilidade e o nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.HOMOLOG_EC2_HOST }}
+          username: ${{ secrets.HOMOLOG_EC2_USER }}
+          key:      ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/fabiano/deploy || {
+              echo "::warning::Nao achei ~/fabiano/deploy nesta maquina. Observabilidade nao recarregada."
+              exit 0
+            }
+
+            # 'up -d' recria SOMENTE os servicos cuja definicao ou configuracao
+            # mudou; os demais continuam de pe. Nao e restart cego da stack.
+            #
+            # Roda depois do deploy-safe.sh de proposito: o compose de
+            # observabilidade usa a rede externa 'fabiano-internal', criada pelo
+            # compose da aplicacao. Antes dele, a rede nao existe.
+            if docker compose -f docker-compose.observability.yml up -d; then
+              echo "observabilidade recarregada"
+              docker compose -f docker-compose.observability.yml ps
+            else
+              echo "::warning::A stack de observabilidade NAO subiu. Painel e alerta continuam com a versao ANTERIOR, mesmo com este deploy verde. Causa mais comum: variaveis SMTP_HOST/SMTP_USER/SMTP_PASS ausentes no .env da maquina — elas sao obrigatorias no compose e travam o arquivo inteiro (ver FABIANO-28)."
+            fi
+
+            # ---- FABIANO-68 -------------------------------------------------
+            # 'up -d' compara a DEFINICAO do servico, nao o conteudo dos
+            # arquivos montados por bind. Prometheus, Loki e Promtail leem a
+            # propria configuracao no BOOT: alterar prometheus.yml,
+            # promtail-config.yml ou loki-config.yml NAO muda a definicao do
+            # servico, entao o Compose nao recria nada e o processo continua
+            # rodando com a versao anterior.
+            #
+            # Aconteceu em 07/08/2026: o job do blackbox entrou no
+            # prometheus.yml, o deploy passou verde, e o container seguiu 47h
+            # com a config antiga. Como as regras novas usam
+            # noDataState: Alerting, o resultado foi alarme falso por e-mail.
+            #
+            # Restart incondicional, e nao recarga condicional, de proposito:
+            # custa ~10 segundos e nao tem como errar. Este projeto ja foi
+            # mordido quatro vezes pelo mesmo padrao — mecanismo esperto que
+            # falha calado (FABIANO-29, 62, 63 e este).
+            #
+            # O GRAFANA entrou nesta lista em 08/08/2026, e a ausencia dele era
+            # a versao mais cara do mesmo bug: o Grafana le provisioning/ —
+            # datasources, paineis e REGRAS DE ALERTA — apenas no boot. Alterar
+            # rules.yaml no repositorio passava verde no deploy e o alerta
+            # continuava com a versao anterior, indefinidamente.
+            #
+            # A unica forma de perceber seria um incidente em que o alerta novo
+            # deveria tocar e nao toca — ou seja, descobrir pelo pior caminho
+            # possivel, que e exatamente o que esta epica existe para evitar.
+            #
+            # Recriar o Grafana troca o IP do container: por isso o reload do
+            # nginx logo abaixo (FABIANO-67) nao e opcional, e vem DEPOIS.
+            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana; then
+              echo "prometheus, loki, promtail e grafana releram a configuracao"
+            else
+              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail/grafana. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana (FABIANO-68)."
+            fi
+
+            # ---- FABIANO-67 -------------------------------------------------
+            # O nginx resolve os nomes de 'proxy_pass' (backend, grafana) uma
+            # UNICA vez, quando carrega a configuracao. Todo container recriado
+            # nos passos acima ganhou IP novo na rede do Docker, e o nginx
+            # continuaria falando com o IP de antes — devolvendo 502 para
+            # sempre, com o container Up (healthy) e nenhum sinal interno
+            # acusando. Foi o que derrubou o grafana-hml em 07/08/2026.
+            #
+            # 'reload' e graceful: sobe workers novos e drena os antigos, sem
+            # derrubar conexao em andamento. Roda por ultimo, depois de tudo
+            # que podia ter sido recriado.
+            if docker exec fabiano-nginx nginx -s reload; then
+              echo "nginx recarregado — enderecos dos containers re-resolvidos"
+            else
+              echo "::warning::Nao consegui recarregar o nginx. Se algum container foi recriado neste deploy, o dominio dele pode estar respondendo 502 agora, mesmo com o container saudavel. Conferir de fora com curl e, se preciso: docker exec fabiano-nginx nginx -s reload (FABIANO-67)."
+            fi
+
+            # Nunca propaga falha: ver o comentario do passo.
+            exit 0
+
+      - name: Tag validada
+        run: |
+          echo "Imagem em homologacao: ${{ needs['build-push-develop'].outputs.tag }}"
+          echo "E ESTA a tag que deve ir para producao depois de validada."
+
+  # Um job pulado aparece cinza na interface e e facil de nao ver. Este existe
+  # so para deixar a ausencia da homologacao ESCRITA no resumo da execucao —
+  # ninguem deveria precisar lembrar por que o deploy nao rodou.
+  homolog-desativada:
+    name: Homologacao desativada (aviso)
+    needs: build-and-test
+    if: vars.HOMOLOG_ATIVO != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::warning::Nenhum deploy de homologacao foi feito: a variavel HOMOLOG_ATIVO nao esta em 'true'. Desde 08/08/2026 nao existe maquina de homologacao — a antiga virou producao (FABIANO-47). Para religar: criar a maquina (FABIANO-33), atualizar HOMOLOG_EC2_HOST e definir HOMOLOG_ATIVO=true nas Variables do repositorio."
+
   create-pr-to-master:
     name: Create PR to Master
     runs-on: ubuntu-latest
@@ -77,8 +448,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create Pull Request to master
+        # O autor do PR e quem assina este token. Com o GITHUB_TOKEN padrao o
+        # autor e o github-actions[bot], e todo workflow com gatilho
+        # 'pull_request' nesse PR nasce em "Action required", esperando alguem
+        # clicar "Approve and run" — foi o que travou o terraform no PR #63.
+        #
+        # PR_CREATE_TOKEN e OPCIONAL: se o secret nao existir, cai no token
+        # padrao e tudo continua funcionando como antes. Definindo-o (PAT de
+        # usuario, escopo repo), o PR passa a ter autor humano e o gate
+        # acidental desaparece para qualquer workflow futuro de pull_request.
+        # O terraform-plan.yml ja nao depende disso: mudou para gatilho push.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PR_CREATE_TOKEN || github.token }}
         run: |
           PR_TITLE="release: develop → master"
           PR_BODY="## Release PR\n\nBranch \`develop\` passou em todos os testes e está pronta para produção.\n\n**Merge para master irá disparar deploy automático no Railway.**"

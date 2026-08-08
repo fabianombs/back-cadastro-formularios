@@ -20,6 +20,7 @@ Backend para gerenciamento de **formulários dinâmicos**, **agendamentos** e **
 7. [Segurança — Rotas Públicas e Protegidas](#segurança--rotas-públicas-e-protegidas)
 8. [Testes e Cobertura](#testes-e-cobertura)
 9. [Migrações de Banco de Dados](#migrações-de-banco-de-dados)
+10. [Operação: deploy, rollback e recuperação](#operação-deploy-rollback-e-recuperação)
 
 ---
 
@@ -101,7 +102,7 @@ A API estará disponível em `http://localhost:8080`.
 | `SPRING_DATASOURCE_URL` | URL JDBC do MySQL | — (ver `application-dev.properties`) |
 | `SPRING_DATASOURCE_USERNAME` | Usuário do banco | — |
 | `SPRING_DATASOURCE_PASSWORD` | Senha do banco | — |
-| `JWT_SECRET` | Chave HMAC-256 para assinar tokens | `MinhaChaveSuperSecretaMuitoForte123456` |
+| `JWT_SECRET` | Chave HMAC-256 para assinar tokens. **Obrigatória fora do perfil `dev`** | só no perfil `dev` |
 | `JWT_EXPIRATION` | Validade do token em ms | `86400000` (24h) |
 | `CORS_ALLOWED_ORIGINS` | Origens permitidas para o painel admin | `http://localhost:4200` |
 | `UPLOAD_DIR` | Diretório de upload de imagens | `uploads` |
@@ -366,3 +367,24 @@ Gerenciadas automaticamente pelo **Flyway** em `src/main/resources/db/migration/
 | V23 | Opções de campos select |
 
 Para criar uma nova migração, adicione um arquivo `V{N}__{descricao}.sql` no diretório de migrações. O Flyway aplicará automaticamente na próxima inicialização.
+
+---
+
+## Operação: deploy, rollback e recuperação
+
+Tudo que é operação — subir, derrubar, voltar atrás, restaurar banco, diagnosticar
+incidente — mora no **[RUNBOOK.md](RUNBOOK.md)**, não aqui.
+
+| Preciso de... | Seção do RUNBOOK |
+| --- | --- |
+| Fazer deploy, ou entender o que a esteira faz | 3 |
+| Voltar uma versão que quebrou | 4 |
+| A máquina não sobe / recuperação manual | 5 |
+| Restaurar o banco (dump ou point-in-time) | 6 |
+| Painéis, alertas e o que cada métrica significa | 8 |
+| A virada da máquina nova para produção | 9 |
+| **O que ainda é hipótese** — procedimentos nunca executados | 12 |
+
+A seção 12 é a mais importante para quem for operar de madrugada: ela diz, com
+data, o que já foi exercitado de verdade e o que ainda é só documentação.
+Procedimento não executado é hipótese.

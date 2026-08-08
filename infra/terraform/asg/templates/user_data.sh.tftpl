@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Provisionamento da maquina de aplicacao — Docker (FABIANO-10)
+# =============================================================================
+# Substitui o user_data.sh antigo, que instalava Java 21 e um servico systemd.
+#
+# Cobre exatamente o que o card levantou como "instalado a mao e em lugar nenhum
+# do codigo": docker, compose, mysqldump, cronie, certbot, os scripts de /app e
+# a linha do cron. Cada um desses, faltando, quebra algo que NAO grita:
+#
+#   sem mysqldump -> GUARDA 0 do deploy-safe.sh aborta todo deploy
+#   sem cronie    -> o backup diario nunca roda, e nada avisa (foi o que
+#                    aconteceu de verdade em 05/08)
+#
+# Roda uma vez, no primeiro boot. Log em /var/log/cloud-init-output.log.
+# =============================================================================
+set -euxo pipefail
+
+REGIAO="${regiao}"
+AMBIENTE="${ambiente}"
+PROJETO="${project_name}"
+EIP_ALLOC="${eip_allocation_id}"
+BUCKET_ARTEFATOS="${bucket_artefatos}"
+BUCKET_BACKUP="${bucket_backup}"
+BACKEND_TAG="${backend_tag}"
+GHCR_OWNER="${ghcr_owner}"
+
+DEPLOY_DIR=/home/ec2-user/fabiano
+export AWS_DEFAULT_REGION="$REGIAO"
+
+# -----------------------------------------------------------------------------
+# 1. Assumir o endereco fixo, antes de qualquer coisa que dependa de DNS
+# -----------------------------------------------------------------------------
+# O certificado do Let's Encrypt e emitido por desafio HTTP: o nome precisa
+# resolver para ESTA maquina no momento da emissao. Associar o Elastic IP depois
+# de pedir o certificado inverte a ordem e a emissao falha.
+TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+
+aws ec2 associate-address \
+  --instance-id "$INSTANCE_ID" \
+  --allocation-id "$EIP_ALLOC" \
+  --allow-reassociation
+
+# -----------------------------------------------------------------------------
+# 2. Pacotes
+# -----------------------------------------------------------------------------
+dnf update -y
+
+# mariadb105 e quem traz o mysqldump no AL2023. Nao e o cliente da Oracle, e
+# funciona para gerar e restaurar dump do MySQL 8.x — que e o uso aqui.
+dnf install -y docker mariadb105 cronie tar gzip jq
+
+# O plugin do compose nao esta nos repositorios do AL2023: instalacao manual, em
+# versao FIXA. Sem fixar, uma maquina recriada daqui a seis meses nasce com um
+# compose diferente do que foi testado — e "recriar identico" era o objetivo.
+COMPOSE_VERSAO=v2.29.7
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -fsSL -o /usr/libexec/docker/cli-plugins/docker-compose \
+  "https://github.com/docker/compose/releases/download/$COMPOSE_VERSAO/docker-compose-linux-x86_64"
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+# --now sobe agora; enable garante o proximo boot. Sem o enable, tudo funciona
+# ate o primeiro reboot e para em silencio depois dele.
+systemctl enable --now docker
+systemctl enable --now crond
+usermod -aG docker ec2-user
+
+# certbot pelo pip, em ambiente virtual proprio: o AL2023 nao empacota certbot,
+# e o EPEL nao vale para ele. E o metodo que a propria Let's Encrypt documenta
+# para distribuicao sem pacote.
+dnf install -y python3-pip
+python3 -m venv /opt/certbot
+/opt/certbot/bin/pip install --upgrade pip certbot
+ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+
+# -----------------------------------------------------------------------------
+# 3. Segredos, lidos do Parameter Store
+# -----------------------------------------------------------------------------
+# Aqui esta a diferenca entre uma maquina substituivel e uma insubstituivel.
+# Hoje o .env existe em UM lugar no mundo: o disco da instancia. Perdeu a
+# maquina, perdeu as credenciais, e a recuperacao vira remontagem de memoria.
+mkdir -p "$DEPLOY_DIR/deploy"
+aws ssm get-parameters-by-path \
+  --path "/$PROJETO/$AMBIENTE/env" \
+  --with-decryption \
+  --recursive \
+  --query 'Parameters[].[Name,Value]' \
+  --output text \
+| while IFS=$'\t' read -r nome valor; do
+    echo "$(basename "$nome")=$valor"
+  done > "$DEPLOY_DIR/deploy/.env"
+
+# A tag da imagem vem do Terraform, nao do Parameter Store: e ela que define
+# QUAL versao sobe, e isso pertence ao deploy, nao a configuracao.
+echo "BACKEND_TAG=$BACKEND_TAG" >> "$DEPLOY_DIR/deploy/.env"
+echo "GHCR_OWNER=$GHCR_OWNER"   >> "$DEPLOY_DIR/deploy/.env"
+echo "FABIANO_BACKUP_BUCKET=$BUCKET_BACKUP" >> "$DEPLOY_DIR/deploy/.env"
+
+chown -R ec2-user:ec2-user "$DEPLOY_DIR"
+chmod 600 "$DEPLOY_DIR/deploy/.env"
+
+# -----------------------------------------------------------------------------
+# 4. Arquivos de deploy
+# -----------------------------------------------------------------------------
+# PRE-REQUISITO: a esteira precisa publicar este pacote a cada deploy. Hoje ela
+# so faz scp para uma maquina que ja existe — o que nao serve para uma maquina
+# que acabou de nascer. Ver o card aberto para essa mudanca no CI.
+aws s3 cp "s3://$BUCKET_ARTEFATOS/$AMBIENTE/deploy-bundle.tar.gz" /tmp/bundle.tar.gz
+tar -xzf /tmp/bundle.tar.gz -C "$DEPLOY_DIR"
+chown -R ec2-user:ec2-user "$DEPLOY_DIR"
+chmod +x "$DEPLOY_DIR"/deploy/scripts/*.sh || true
+
+# -----------------------------------------------------------------------------
+# 5. Backup: scripts, log e agendamento
+# -----------------------------------------------------------------------------
+install -m 0755 -o root -g root "$DEPLOY_DIR/infra/backup-db.sh"          /app/backup-db.sh
+install -m 0755 -o root -g root "$DEPLOY_DIR/infra/enviar-backup-email.py" /app/enviar-backup-email.py
+mkdir -p /app/backups/diario /app/backups/semanal /app/backups/mensal
+mkdir -p /var/lib/node_exporter/textfile_collector
+touch /var/log/backup-db.log
+
+# 06:30 UTC = 03:30 em Brasilia. A maquina roda em UTC; o script gera o nome do
+# arquivo com TZ=America/Sao_Paulo, entao o nome e o `ls` divergem por 3h — e
+# isso e esperado, nao defeito.
+cat > /etc/cron.d/fabiano-backup <<'CRON'
+30 6 * * * root /app/backup-db.sh >> /var/log/backup-db.log 2>&1
+CRON
+chmod 0644 /etc/cron.d/fabiano-backup
+
+# /etc/fabiano-backup.env guarda a senha do SMTP e NAO vem do bundle — vem do
+# Parameter Store, pelo mesmo motivo do .env.
+aws ssm get-parameters-by-path \
+  --path "/$PROJETO/$AMBIENTE/backup" \
+  --with-decryption --recursive \
+  --query 'Parameters[].[Name,Value]' --output text \
+| while IFS=$'\t' read -r nome valor; do
+    echo "$(basename "$nome")=$valor"
+  done > /etc/fabiano-backup.env
+chmod 600 /etc/fabiano-backup.env
+
+# -----------------------------------------------------------------------------
+# 6. Subir a aplicacao
+# -----------------------------------------------------------------------------
+cd "$DEPLOY_DIR"
+sudo -u ec2-user docker compose -f deploy/docker-compose.yml up -d
+
+# -----------------------------------------------------------------------------
+# 7. Auto-verificacao — o teste de aceite do card, rodando sozinho
+# -----------------------------------------------------------------------------
+# Sem isto, uma maquina que nasceu sem mysqldump ou sem cron parece saudavel:
+# responde ping, responde HTTP, e so falha na madrugada em que o backup deveria
+# rodar. O resultado fica no log do cloud-init e vira metrica no CloudWatch.
+FALHAS=0
+for cmd in mysqldump docker crontab certbot aws; do
+  command -v "$cmd" >/dev/null || { echo "PROVISIONAMENTO: falta $cmd"; FALHAS=$((FALHAS+1)); }
+done
+systemctl is-enabled crond  >/dev/null || { echo "PROVISIONAMENTO: crond nao habilitado";  FALHAS=$((FALHAS+1)); }
+systemctl is-enabled docker >/dev/null || { echo "PROVISIONAMENTO: docker nao habilitado"; FALHAS=$((FALHAS+1)); }
+grep -q backup-db /etc/cron.d/fabiano-backup || { echo "PROVISIONAMENTO: cron do backup ausente"; FALHAS=$((FALHAS+1)); }
+
+aws cloudwatch put-metric-data \
+  --namespace "Fabiano/$AMBIENTE" \
+  --metric-name ProvisionamentoFalhas \
+  --value "$FALHAS" \
+  --unit Count || true
+
+echo "PROVISIONAMENTO CONCLUIDO — falhas: $FALHAS"

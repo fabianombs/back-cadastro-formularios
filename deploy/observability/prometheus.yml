@@ -1,0 +1,99 @@
+# =============================================================================
+# Prometheus — versao de SERVIDOR (EC2). FABIANO-23
+# =============================================================================
+# Diferencas para observability/prometheus/prometheus.yml, que e a de dev:
+#   - o alvo e o container 'backend' na rede fabiano-internal, nao
+#     host.docker.internal (em dev a aplicacao roda fora do Docker)
+#   - o token vem de arquivo com permissao restrita, nao inline
+#   - existe node-exporter, que em dev nao faz sentido
+#   - retencao e ambiente diferentes
+# =============================================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    # Vira rotulo em toda serie. Quando o Grafana passar a ver producao e
+    # homologacao ao mesmo tempo, e por aqui que se separa uma da outra.
+    ambiente: homolog
+
+scrape_configs:
+  - job_name: fabiano-back
+    metrics_path: /actuator/prometheus
+    scheme: http
+
+    # O tipo NAO e Bearer de proposito: o JwtAuthenticationFilter so reage a
+    # "Bearer " e ignoraria... o contrario. Ver SecurityConfig.coletorAutorizado.
+    # credentials_file e nao credentials inline: o token nao entra no Git nem
+    # aparece em 'docker inspect'.
+    authorization:
+      type: Metrics-Token
+      credentials_file: /etc/prometheus/metrics-token
+
+    static_configs:
+      - targets: ["backend:8080"]
+        labels:
+          application: fabiano-back
+
+  # ---------------------------------------------------------------------------
+  # Metricas da maquina + o dead man's switch do backup
+  # ---------------------------------------------------------------------------
+  # O backup-db.sh escreve backup_fabiano_* em
+  # /var/lib/node_exporter/textfile_collector/. Ate hoje ninguem lia esse
+  # arquivo — o switch existia e nao estava ligado a coisa nenhuma.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          application: fabiano-host
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ---------------------------------------------------------------------------
+  # Sonda externa: o sistema visto de fora, pelo endereco publico (FABIANO-64)
+  # ---------------------------------------------------------------------------
+  # Todo job acima raspa o container pela rede interna do Docker. Isso mede a
+  # aplicacao, e nao o caminho ate ela: nginx, TLS, DNS e Security Group ficam
+  # de fora da conta. Este job fecha essa lacuna — e e o unico lugar do projeto
+  # de onde sai probe_ssl_earliest_cert_expiry, a data de validade do
+  # certificado que o servidor REALMENTE apresenta.
+  #
+  # O alvo aqui nao e um host: e a URL a sondar. O relabel abaixo a transforma
+  # em parametro do blackbox e devolve o endereco do proprio exporter como
+  # destino da coleta. Sem esse desvio o Prometheus tentaria raspar a URL
+  # diretamente, esperando formato de metrica onde ha HTML.
+  - job_name: blackbox-https
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    # 30s e nao 15s: sonda externa custa uma conexao TLS completa por alvo, e
+    # certificado nao muda de minuto a minuto.
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - https://100-30-35-83.sslip.io/actuator/health
+          - https://api.nexventa.com.br/actuator/health
+          # /api/health do Grafana responde sem autenticacao. Este alvo importa
+          # em dobro: se o certificado DELE vencer, o painel que deveria avisar
+          # e o primeiro a ficar inacessivel.
+          - https://grafana.nexventa.com.br/api/health
+        labels:
+          application: fabiano-externo
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      # 'instance' passa a ser a URL sondada, e nao 'blackbox:9115' — sem isto
+      # as tres sondas colidiriam na mesma serie.
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # O vigia do vigia: se o proprio blackbox morrer, probe_success some e as
+  # regras que dependem dele ficam sem dado. Ver FABIANO-65.
+  - job_name: blackbox
+    static_configs:
+      - targets: ["blackbox:9115"]
+        labels:
+          application: fabiano-host

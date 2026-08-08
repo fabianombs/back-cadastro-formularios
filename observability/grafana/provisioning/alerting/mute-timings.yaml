@@ -1,0 +1,24 @@
+# =============================================================================
+# Janelas de silencio (FABIANO-28)
+# =============================================================================
+# Usado pelo alerta de ausencia de submissao: fora do horario comercial,
+# nenhum envio de formulario e o esperado, nao um problema. Sem esta janela
+# o alerta dispararia toda madrugada e seria desligado na primeira semana.
+# =============================================================================
+apiVersion: 1
+muteTimes:
+- orgId: 1
+  name: fora-do-horario-comercial
+  time_intervals:
+  - times:
+    - start_time: 00:00
+      end_time: 08:00
+    - start_time: '18:00'
+      end_time: '24:00'
+    weekdays:
+    - monday:friday
+    location: America/Sao_Paulo
+  - weekdays:
+    - saturday
+    - sunday
+    location: America/Sao_Paulo

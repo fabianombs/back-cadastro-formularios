@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.FormFieldRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
@@ -61,6 +62,9 @@ class FormTemplateServiceTest {
 
     @Mock
     private ImageStorageService imageStorageService;
+
+    @Mock
+    private MetricasDeNegocio metricas;
 
     @InjectMocks
     private FormTemplateService service;

@@ -3,12 +3,12 @@ package com.cadastro.fabiano.demo.controller;
 import com.cadastro.fabiano.demo.dto.request.BookAppointmentRequest;
 import com.cadastro.fabiano.demo.dto.response.AppointmentResponse;
 import com.cadastro.fabiano.demo.dto.response.AvailableSlotsResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.AppointmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -77,10 +77,10 @@ public class AppointmentController {
 
     @GetMapping("/template/{templateId}")
     @Operation(summary = "Listar agendamentos do template", description = "Retorna todos os agendamentos de um template paginados")
-    public ResponseEntity<Page<AppointmentResponse>> getByTemplate(
+    public ResponseEntity<PaginaResponse<AppointmentResponse>> getByTemplate(
             @PathVariable Long templateId,
             Pageable pageable) {
-        return ResponseEntity.ok(appointmentService.getByTemplate(templateId, pageable));
+        return ResponseEntity.ok(PaginaResponse.de(appointmentService.getByTemplate(templateId, pageable)));
     }
 
     @DeleteMapping("/{id}")

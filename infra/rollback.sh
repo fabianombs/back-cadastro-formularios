@@ -34,7 +34,7 @@ if [ "$WITH_DB" = "--with-db" ]; then
   }
   DB_HOST=$(get DB_HOST); DB_PORT=$(get DB_PORT); [ -z "$DB_PORT" ] && DB_PORT=3306
   DB_NAME=$(get DB_NAME); DB_USER=$(get DB_USER); DB_PASSWORD=$(get DB_PASSWORD)
-  mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction "$DB_NAME" \
+  mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --set-gtid-purged=OFF "$DB_NAME" \
     | gzip > "$RELEASES/db_safety_$(date +%Y%m%d_%H%M%S).sql.gz"
   gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
 fi

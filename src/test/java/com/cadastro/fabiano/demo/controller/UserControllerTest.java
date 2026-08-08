@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.controller;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.config.JwtService;
 import com.cadastro.fabiano.demo.dto.request.UpdateUserRequest;
 import com.cadastro.fabiano.demo.dto.response.UserResponse;
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAut
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,6 +33,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class}
 )
 class UserControllerTest {
+
+    // O GlobalExceptionHandler e @RestControllerAdvice e entra na fatia
+    // do @WebMvcTest. Desde o FABIANO-25 ele depende de MetricasDeNegocio:
+    // sem este bean o contexto do teste nem sobe.
+    @MockitoBean
+    private MetricasDeNegocio metricasDeNegocio;
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,6 +75,39 @@ class UserControllerTest {
 
         mockMvc.perform(get("/users/clients"))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * Contrato do JSON de pagina (FABIANO-36).
+     *
+     * O front Angular le exatamente estes sete campos. Trocar PageImpl por
+     * PaginaResponse so e seguro enquanto o JSON continuar identico - este teste
+     * e o que garante isso, e vai quebrar se alguem mexer no envelope.
+     */
+    @Test
+    @DisplayName("GET /users: o JSON de página tem os 7 campos que o front lê, e só eles")
+    void findAll_contratoDoJsonDePagina() throws Exception {
+        // 87 elementos em paginas de 20, posicionado na pagina 1: assim nenhum
+        // campo cai em valor default e um erro de mapeamento fica visivel.
+        when(userService.findAll(any())).thenReturn(
+                new PageImpl<>(List.of(buildUser(1L)), PageRequest.of(1, 20), 87));
+
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(1))
+                .andExpect(jsonPath("$.totalElements").value(87))
+                .andExpect(jsonPath("$.totalPages").value(5))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(false))
+                // Campos que o PageImpl emitia e ninguem consumia. Se voltarem,
+                // e porque alguem devolveu Page direto de novo.
+                .andExpect(jsonPath("$.pageable").doesNotExist())
+                .andExpect(jsonPath("$.sort").doesNotExist())
+                .andExpect(jsonPath("$.numberOfElements").doesNotExist())
+                .andExpect(jsonPath("$.empty").doesNotExist());
     }
 
     @Test

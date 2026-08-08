@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -24,7 +25,12 @@ public class AttendanceRecord {
     @JoinColumn(name = "form_template_id", nullable = false)
     private FormTemplate formTemplate;
 
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(
         name = "attendance_record_data",
         joinColumns = @JoinColumn(name = "record_id")
@@ -54,6 +60,11 @@ public class AttendanceRecord {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // Quando a linha foi efetivamente preenchida (editada na tabela ou cadastrada pelo público).
+    // NULL em linhas só importadas — a coluna "Preenchido em" fica em branco até preencherem.
+    @Column(name = "filled_at")
+    private LocalDateTime filledAt;
 
     @PrePersist
     public void prePersist() {

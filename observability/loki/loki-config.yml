@@ -1,0 +1,45 @@
+# =============================================================================
+# Loki - armazenamento e busca dos logs (FABIANO-23)
+# =============================================================================
+# Configuracao de instancia unica, sem dependencia externa. Suficiente para
+# desenvolvimento e para a EC2 atual, que roda um servidor so.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Sem isso, log com carimbo de tempo antigo e recusado em silencio - e o
+  # arquivo de log local pode ter linhas de horas atras.
+  reject_old_samples: false
+  # Retencao de 7 dias em desenvolvimento. Em producao vale subir.
+  retention_period: 168h
+  volume_enabled: true
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true

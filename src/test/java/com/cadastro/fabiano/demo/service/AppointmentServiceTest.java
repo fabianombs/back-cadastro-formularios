@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.BookAppointmentRequest;
 import com.cadastro.fabiano.demo.dto.response.AppointmentResponse;
 import com.cadastro.fabiano.demo.dto.response.AvailableSlotsResponse;
@@ -42,6 +43,9 @@ class AppointmentServiceTest {
 
     @Mock
     private FormTemplateRepository formTemplateRepository;
+
+    @Mock
+    private MetricasDeNegocio metricas;
 
     @InjectMocks
     private AppointmentService service;

@@ -12,7 +12,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: testpassword
           MYSQL_DATABASE: testdb
@@ -46,6 +46,17 @@ jobs:
             sleep 2
           done
 
+      # O 'cache: maven' do setup-java guarda ~/.m2/repository, mas NAO o
+      # Maven em si: o wrapper baixa o apache-maven-*.zip do repositorio
+      # central a cada execucao. Uma instabilidade la derruba o build inteiro
+      # sem nenhuma relacao com o codigo — aconteceu em 05/08/2026,
+      # 'wget: Failed to fetch .../apache-maven-3.9.12-bin.zip'.
+      - name: Cache do Maven Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Make mvnw executable
         run: chmod +x mvnw
 
@@ -63,54 +74,417 @@ jobs:
       - name: Verify JAR was generated
         run: ls -la target/*.jar
 
-      - name: Upload JAR as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-jar
-          path: target/*.jar
-          retention-days: 1
 
-  deploy:
-    name: Deploy to EC2 (safe)
+  # ===========================================================================
+  # PACOTE DE DEPLOY NO S3 (FABIANO-58)
+  #
+  # A esteira entrega os arquivos por scp para uma maquina que JA EXISTE. Uma
+  # instancia criada pelo Auto Scaling as 3h da manha nao tem endereco conhecido
+  # nem chave autorizada — ninguem faz scp para ela. Ela precisa BUSCAR o
+  # pacote, e este job e quem o publica.
+  #
+  # Nao substitui o scp: enquanto a maquina for fixa, o scp continua sendo o
+  # caminho do deploy. Este job so garante que exista um pacote para uma maquina
+  # que ainda nao nasceu. Por isso NAO e dependencia do job de deploy — se o
+  # bucket estiver fora, o deploy do dia nao pode parar por causa disso.
+  # ===========================================================================
+  publicar-bundle:
+    name: Publicar pacote de deploy (S3)
     needs: build-and-test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: credencial temporaria, nenhuma chave guardada
+
+    env:
+      AMBIENTE: producao
+      BUCKET: fabiano-artefatos-135133927228
+      # 'secrets' nao pode ser lido no 'if' de um job — o GitHub resolve o if
+      # antes de montar o contexto de segredos. Por isso a role passa por env e
+      # a decisao de pular fica em cada passo.
+      ROLE: ${{ secrets.AWS_ROLE_DEPLOY }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Gerar versao automatica (data + commit)
-        id: ver
+      - name: Montar o pacote
         run: |
-          VER="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "Versao deste deploy: $VER"
+          chmod +x infra/montar-bundle.sh
+          ./infra/montar-bundle.sh deploy-bundle.tar.gz
 
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
+      # Anexar a execucao vale mesmo com o S3 no ar: da para baixar e conferir o
+      # conteudo de qualquer build passado sem precisar de credencial da AWS.
+      - name: Anexar o pacote a execucao
+        uses: actions/upload-artifact@v4
         with:
-          name: app-jar
-          path: target/
+          name: deploy-bundle-${{ github.sha }}
+          path: deploy-bundle.tar.gz
+          retention-days: 14
 
-      - name: Enviar JAR + scripts via SCP
-        uses: appleboy/scp-action@v0.1.7
+      - name: Sem credencial da AWS — publicacao pulada
+        if: env.ROLE == ''
+        run: |
+          echo "::notice::AWS_ROLE_DEPLOY nao configurado. O pacote foi montado e anexado a execucao, mas NAO foi para o S3."
+          echo "Depende da liberacao de IAM: criar a role OIDC do GitHub Actions e gravar o ARN no segredo AWS_ROLE_DEPLOY."
+
+      - name: Assumir a role de deploy
+        if: env.ROLE != ''
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host:     ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          source:   "target/*.jar,infra/deploy-safe.sh,infra/rollback.sh"
-          target:   "/home/ec2-user/deploy/"
-          strip_components: 0
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: us-east-1
 
-      - name: Deploy seguro (backup + health-gate + rollback)
+      - name: Publicar no S3
+        if: env.ROLE != ''
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA::7}"
+
+          # A copia com SHA e o historico; 'latest' e o que a maquina nova le no
+          # boot. A versionada vai PRIMEIRO de proposito: se o job morrer no
+          # meio, o latest continua sendo um pacote que ja subiu uma maquina.
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz"
+          aws s3 cp deploy-bundle.tar.gz "s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz"
+
+          echo "### Pacote publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle.tar.gz\` (o que a maquina nova le)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`s3://$BUCKET/$AMBIENTE/deploy-bundle-$SHA.tar.gz\` (historico)" >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # A IMAGEM DE PRODUCAO (FABIANO-49)
+  #
+  # Este job PROMOVE a imagem que ja foi validada em homologacao, em vez de
+  # construir uma nova a partir da master.
+  #
+  # A diferenca importa. Reconstruir produz um artefato que NUNCA foi testado:
+  # mesmo codigo-fonte, outra imagem, outro instante, outras camadas base
+  # resolvidas. "Subir para producao o que foi validado" viraria "rebuildar e
+  # torcer" - e a validacao inteira do FABIANO-15 perderia o sentido.
+  #
+  # O merge de develop em master gera um commit de merge cujo SEGUNDO pai e a
+  # ponta da develop, que e exatamente o commit cuja imagem rodou em
+  # homologacao. Em merge fast-forward nao existe segundo pai, e o proprio HEAD
+  # ja e esse commit.
+  # ===========================================================================
+  imagem:
+    name: Promover imagem validada
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      tag: ${{ steps.saida.outputs.tag }}
+      owner: ${{ steps.nomes.outputs.owner }}
+      promovida: ${{ steps.alvo.outputs.promovida }}
+
+    steps:
+      # fetch-depth 0 porque o padrao traz um clone raso, e num clone raso o
+      # segundo pai do commit de merge simplesmente nao existe - a deteccao
+      # falharia sempre, silenciosamente, caindo no rebuild toda vez.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # O GHCR recusa nome de imagem com maiuscula, e o erro so apareceria no
+      # push, depois do build inteiro.
+      - name: Normalizar owner
+        id: nomes
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # GITHUB_TOKEN e nao PAT: nasce e morre com a execucao, tem escopo so
+      # deste repositorio e ninguem precisa rotacionar a mao.
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Descobrir qual imagem foi validada
+        id: alvo
+        run: |
+          set -uo pipefail
+          IMAGEM="ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back"
+
+          if PAI2=$(git rev-parse --verify -q HEAD^2); then
+            CAND="${PAI2::7}"
+            echo "Commit de merge: a develop entrou pelo segundo pai ($CAND)."
+          else
+            CAND="${GITHUB_SHA::7}"
+            echo "Sem segundo pai (fast-forward ou commit direto na master)."
+          fi
+          echo "candidata=$CAND" >> "$GITHUB_OUTPUT"
+
+          # imagetools inspect le o manifesto no registry sem baixar a imagem.
+          if docker buildx imagetools inspect "$IMAGEM:$CAND" >/dev/null 2>&1; then
+            echo "promovida=true" >> "$GITHUB_OUTPUT"
+            echo "ACHEI $IMAGEM:$CAND - esta imagem ja passou por homologacao."
+          else
+            echo "promovida=false" >> "$GITHUB_OUTPUT"
+            echo "NAO existe $IMAGEM:$CAND no GHCR."
+          fi
+
+      # Copia de manifesto, nao rebuild: os bytes da imagem sao exatamente os
+      # mesmos que rodaram em homologacao.
+      - name: Promover
+        if: steps.alvo.outputs.promovida == 'true'
+        run: |
+          IMAGEM="ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back"
+          CAND="${{ steps.alvo.outputs.candidata }}"
+          docker buildx imagetools create \
+            -t "$IMAGEM:latest" \
+            -t "$IMAGEM:prod-$CAND" \
+            "$IMAGEM:$CAND"
+          echo "$IMAGEM:$CAND promovida para :latest e :prod-$CAND"
+
+      # Caminho de excecao: hotfix direto na master, ou merge cuja imagem de
+      # develop expirou. Nao bloqueia o deploy - bloquear um hotfix urgente e
+      # pior - mas NUNCA pode parecer igual a uma promocao. Ver o resumo.
+      - name: Construir (imagem validada nao encontrada)
+        if: steps.alvo.outputs.promovida != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:latest
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:${{ github.sha }}
+            ghcr.io/${{ steps.nomes.outputs.owner }}/fabiano-back:prod-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Definir a tag do deploy
+        id: saida
+        run: |
+          if [ "${{ steps.alvo.outputs.promovida }}" = "true" ]; then
+            echo "tag=${{ steps.alvo.outputs.candidata }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resumo
+        run: |
+          {
+            if [ "${{ steps.alvo.outputs.promovida }}" = "true" ]; then
+              echo "### Imagem PROMOVIDA de homologacao"
+              echo ""
+              echo "Tag \`${{ steps.alvo.outputs.candidata }}\` - os mesmos bytes que rodaram em homologacao."
+            else
+              echo "### ATENCAO: imagem construida agora, NAO promovida"
+              echo ""
+              echo "Nao existe imagem publicada para \`${{ steps.alvo.outputs.candidata }}\`."
+              echo "A imagem que vai para producao foi construida nesta execucao e"
+              echo "**nunca passou por homologacao**."
+              echo ""
+              echo "Isso e esperado num hotfix direto na master. Em qualquer outro"
+              echo "caso, investigue antes de confiar neste deploy."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # DEPLOY EM PRODUCAO
+  #
+  # Sem SCP de JAR: a imagem vem do registry. O que trafega por SSH e um
+  # comando, nao um artefato.
+  #
+  # A instalacao da cron de backup saiu daqui de proposito. Ela e coisa de
+  # provisionamento (FABIANO-47), feita uma vez - nao algo reinstalado a cada
+  # deploy da aplicacao.
+  # ===========================================================================
+  deploy:
+    name: Deploy em producao
+    needs: [build-and-test, imagem]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # Os arquivos de deploy (compose, nginx.conf, scripts) vivem no repo, mas
+      # NADA os levava ate a maquina: o job so fazia 'cd ~/fabiano/deploy' e
+      # rodava o que ja estava la. Uma correcao no nginx.conf entrava no git, o
+      # pipeline passava verde, e a maquina continuava com a versao antiga — a
+      # divergencia so apareceria no dia em que alguem dependesse dela.
+      #
+      # SCP a partir do runner, e nao 'git pull' na maquina: evita instalar git
+      # e guardar credencial do repositorio dentro de um servidor.
+      #
+      # O .env NAO e versionado, entao nao ha risco de sobrescrever as
+      # credenciais da maquina. O que esta no repo sobrescreve o resto — o repo
+      # e a fonte da verdade, e ajuste feito a mao no servidor deve sumir mesmo.
+      - uses: actions/checkout@v4
+
+      # Conferir o alvo ANTES de escrever qualquer coisa nele.
+      #
+      # Esta checagem ja existiu dentro do script de deploy, e estava tarde
+      # demais: o scp abaixo ja teria sobrescrito arquivos na maquina errada
+      # antes de alguem descobrir que era a maquina errada. Abortar depois de
+      # ter mexido em coisa nao e abortar.
+      #
+      # O .env de ensaio traz '-ensaio.' no DB_HOST. O de producao nao.
+      - name: Conferir que o alvo e a maquina certa
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e
-            sudo mkdir -p /app
-            sudo cp /home/ec2-user/deploy/infra/deploy-safe.sh /app/deploy-safe.sh
-            sudo cp /home/ec2-user/deploy/infra/rollback.sh   /app/rollback.sh
-            sudo chmod +x /app/deploy-safe.sh /app/rollback.sh
-            JAR=$(ls -t /home/ec2-user/deploy/target/*.jar | head -1)
-            sudo /app/deploy-safe.sh "$JAR" "${{ steps.ver.outputs.version }}"
+            set -euo pipefail
+            cd ~/fabiano/deploy
+            # Espelho da trava do develop.yml: la aborta se FOR producao,
+            # aqui aborta se NAO for. As duas juntas fecham o cerco.
+            #
+            # Reescrita em 08/08/2026 pelo mesmo motivo (ver develop.yml): a
+            # versao anterior procurava '-ensaio.', o nome de um banco
+            # temporario. Passou a exigir o nome de producao, que e o unico que
+            # nao muda.
+            if ! grep -qE '^DB_HOST=.*poc-fabiano-db\.' .env; then
+              echo "ABORTADO: o .env desta maquina NAO aponta para o banco de PRODUCAO."
+              echo "Este job e o de PRODUCAO. Confira o segredo EC2_HOST."
+              echo "NADA foi enviado."
+              exit 1
+            fi
+            echo "Alvo confirmado: banco de producao."
+
+      - name: Enviar arquivos de deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          # observability/** vai junto pelo mesmo motivo do develop.yml: os
+          # paineis, as regras de alerta e a config do Loki vivem fora de
+          # deploy/. Na virada (FABIANO-47) esta maquina passa a rodar a stack
+          # de observabilidade, e sem isto o compose subiria apontando para
+          # arquivo que nao existe.
+          source:   "deploy/**,observability/**"
+          target:   "/home/ec2-user/fabiano/"
+          strip_components: 0
+          overwrite: true
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/fabiano/deploy
+
+            # O scp nao preserva o bit de execucao.
+            chmod +x scripts/*.sh
+
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            ./scripts/deploy-safe.sh "${{ needs.imagem.outputs.tag }}"
+
+      # A stack de observabilidade le configuracao no BOOT: o Grafana carrega
+      # provisioning/ ao subir, e Prometheus, Loki e Promtail leem os proprios
+      # arquivos ao subir. O scp acima entrega painel e regra novos, mas sem
+      # recriar o container eles ficam no disco SEM EFEITO NENHUM — e o
+      # pipeline verde afirma que estao no ar (FABIANO-63).
+      #
+      # O caso mais perigoso e o do alerta: a unica forma de perceber que ele
+      # nao foi aplicado seria um incidente em que ele deveria tocar e nao toca.
+      #
+      # Passo separado, DEPOIS do deploy, e que NUNCA derruba a execucao.
+      # Observabilidade fora do ar e ruim; derrubar o deploy da aplicacao por
+      # causa dela e pior. A falha vira aviso visivel, nao silencio.
+      - name: Recarregar a observabilidade e o nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/fabiano/deploy || {
+              echo "::warning::Nao achei ~/fabiano/deploy nesta maquina. Observabilidade nao recarregada."
+              exit 0
+            }
+
+            # 'up -d' recria SOMENTE os servicos cuja definicao ou configuracao
+            # mudou; os demais continuam de pe. Nao e restart cego da stack.
+            #
+            # Roda depois do deploy-safe.sh de proposito: o compose de
+            # observabilidade usa a rede externa 'fabiano-internal', criada pelo
+            # compose da aplicacao. Antes dele, a rede nao existe.
+            if docker compose -f docker-compose.observability.yml up -d; then
+              echo "observabilidade recarregada"
+              docker compose -f docker-compose.observability.yml ps
+            else
+              echo "::warning::A stack de observabilidade NAO subiu. Painel e alerta continuam com a versao ANTERIOR, mesmo com este deploy verde. Causa mais comum: variaveis SMTP_HOST/SMTP_USER/SMTP_PASS ausentes no .env da maquina — elas sao obrigatorias no compose e travam o arquivo inteiro (ver FABIANO-28)."
+            fi
+
+            # ---- FABIANO-68 -------------------------------------------------
+            # 'up -d' compara a DEFINICAO do servico, nao o conteudo dos
+            # arquivos montados por bind. Prometheus, Loki e Promtail leem a
+            # propria configuracao no BOOT: alterar prometheus.yml,
+            # promtail-config.yml ou loki-config.yml NAO muda a definicao do
+            # servico, entao o Compose nao recria nada e o processo continua
+            # rodando com a versao anterior.
+            #
+            # Aconteceu em 07/08/2026: o job do blackbox entrou no
+            # prometheus.yml, o deploy passou verde, e o container seguiu 47h
+            # com a config antiga. Como as regras novas usam
+            # noDataState: Alerting, o resultado foi alarme falso por e-mail.
+            #
+            # Restart incondicional, e nao recarga condicional, de proposito:
+            # custa ~10 segundos e nao tem como errar. Este projeto ja foi
+            # mordido quatro vezes pelo mesmo padrao — mecanismo esperto que
+            # falha calado (FABIANO-29, 62, 63 e este).
+            #
+            # O GRAFANA entrou nesta lista em 08/08/2026, e a ausencia dele era
+            # a versao mais cara do mesmo bug: o Grafana le provisioning/ —
+            # datasources, paineis e REGRAS DE ALERTA — apenas no boot. Alterar
+            # rules.yaml no repositorio passava verde no deploy e o alerta
+            # continuava com a versao anterior, indefinidamente.
+            #
+            # A unica forma de perceber seria um incidente em que o alerta novo
+            # deveria tocar e nao toca — ou seja, descobrir pelo pior caminho
+            # possivel, que e exatamente o que esta epica existe para evitar.
+            #
+            # Recriar o Grafana troca o IP do container: por isso o reload do
+            # nginx logo abaixo (FABIANO-67) nao e opcional, e vem DEPOIS.
+            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana; then
+              echo "prometheus, loki, promtail e grafana releram a configuracao"
+            else
+              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail/grafana. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana (FABIANO-68)."
+            fi
+
+            # ---- FABIANO-67 -------------------------------------------------
+            # O nginx resolve os nomes de 'proxy_pass' (backend, grafana) uma
+            # UNICA vez, quando carrega a configuracao. Todo container recriado
+            # nos passos acima ganhou IP novo na rede do Docker, e o nginx
+            # continuaria falando com o IP de antes — devolvendo 502 para
+            # sempre, com o container Up (healthy) e nenhum sinal interno
+            # acusando. Foi o que derrubou o grafana-hml em 07/08/2026.
+            #
+            # 'reload' e graceful: sobe workers novos e drena os antigos, sem
+            # derrubar conexao em andamento. Roda por ultimo, depois de tudo
+            # que podia ter sido recriado.
+            if docker exec fabiano-nginx nginx -s reload; then
+              echo "nginx recarregado — enderecos dos containers re-resolvidos"
+            else
+              echo "::warning::Nao consegui recarregar o nginx. Se algum container foi recriado neste deploy, o dominio dele pode estar respondendo 502 agora, mesmo com o container saudavel. Conferir de fora com curl e, se preciso: docker exec fabiano-nginx nginx -s reload (FABIANO-67)."
+            fi
+
+            # Nunca propaga falha: ver o comentario do passo.
+            exit 0
+
+      - name: Resumo do deploy
+        run: |
+          {
+            echo "### Producao"
+            echo ""
+            echo "Tag no ar: \`${{ needs.imagem.outputs.tag }}\`"
+            echo "Promovida de homologacao: \`${{ needs.imagem.outputs.promovida }}\`"
+            echo ""
+            echo "Para voltar, na EC2: \`./scripts/rollback.sh <tag>\`"
+          } >> "$GITHUB_STEP_SUMMARY"

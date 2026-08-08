@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.controller;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.service.ImageStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,9 +18,11 @@ import java.util.Map;
 public class ImageUploadController {
 
     private final ImageStorageService service;
+    private final MetricasDeNegocio metricas;
 
-    public ImageUploadController(ImageStorageService service) {
+    public ImageUploadController(ImageStorageService service, MetricasDeNegocio metricas) {
         this.service = service;
+        this.metricas = metricas;
     }
 
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -28,10 +31,15 @@ public class ImageUploadController {
     @ApiResponse(responseCode = "200", description = "Upload realizado — retorna { url: '...' }")
     @ApiResponse(responseCode = "400", description = "Tipo de arquivo inválido ou tamanho excedido")
     public ResponseEntity<?> uploadImage(@RequestPart("file") MultipartFile file) {
+        long inicio = System.nanoTime();
         try {
             String url = service.store(file);
+            // O tamanho vai junto com a duracao: sem ele, uma subida no tempo
+            // de upload e ambigua entre armazenamento degradado e arquivo maior.
+            metricas.uploadConcluido(System.nanoTime() - inicio, file.getSize());
             return ResponseEntity.ok(Map.of("url", url));
         } catch (Exception e) {
+            metricas.uploadFalhou(System.nanoTime() - inicio);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

@@ -5,12 +5,12 @@ import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkCompanionAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.AttendanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -42,10 +42,10 @@ public class AttendanceController {
 
     @GetMapping("/template/{templateId}")
     @Operation(summary = "Listar registros de presença", description = "Retorna os registros paginados, ordenados pela ordem de importação")
-    public ResponseEntity<Page<AttendanceRecordResponse>> getByTemplate(
+    public ResponseEntity<PaginaResponse<AttendanceRecordResponse>> getByTemplate(
             @PathVariable Long templateId,
             Pageable pageable) {
-        return ResponseEntity.ok(attendanceService.getByTemplate(templateId, pageable));
+        return ResponseEntity.ok(PaginaResponse.de(attendanceService.getByTemplate(templateId, pageable)));
     }
 
     @GetMapping("/template/existence")

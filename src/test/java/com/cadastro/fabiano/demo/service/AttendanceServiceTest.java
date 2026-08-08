@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.ImportAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.request.MarkAttendanceRequest;
 import com.cadastro.fabiano.demo.dto.response.AttendanceRecordResponse;
@@ -45,6 +46,9 @@ class AttendanceServiceTest {
     @Mock
     private AttendanceCompanionRepository companionRepository;
 
+    @Mock
+    private MetricasDeNegocio metricas;
+
     @InjectMocks
     private AttendanceService service;
 
@@ -79,12 +83,14 @@ class AttendanceServiceTest {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
         when(attendanceRepository.saveAll(any())).thenReturn(List.of(r1, r2));
         when(templateRepository.save(any())).thenReturn(template);
-        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         List<AttendanceRecordResponse> result = service.importAttendance(1L, request);
 
         assertThat(result).hasSize(2);
         verify(attendanceRepository).deleteByFormTemplate(template);
+        // A importacao apaga tudo e cria registros novos: nao existe acompanhante
+        // para buscar. Consultar aqui era uma consulta por linha importada.
+        verify(companionRepository, never()).findByAttendanceRecordOrderByCreatedAtAsc(any());
         assertThat(template.isHasAttendance()).isTrue();
     }
 
@@ -129,11 +135,16 @@ class AttendanceServiceTest {
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
         when(attendanceRepository.findByFormTemplateOrderByRowOrderAscCreatedAtAsc(eq(template), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(r)));
-        when(companionRepository.findByAttendanceRecordOrderByCreatedAtAsc(any())).thenReturn(List.of());
+        when(companionRepository.findByAttendanceRecordIdInOrderByCreatedAtAsc(List.of(1L)))
+                .thenReturn(List.of());
 
         Page<AttendanceRecordResponse> result = service.getByTemplate(1L, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
+        // Trava do FABIANO-38: os acompanhantes da pagina vem numa consulta so.
+        // Se alguem voltar a montar o DTO buscando por registro, o teste quebra.
+        verify(companionRepository).findByAttendanceRecordIdInOrderByCreatedAtAsc(any());
+        verify(companionRepository, never()).findByAttendanceRecordOrderByCreatedAtAsc(any());
     }
 
     // ─── markAttendance ───────────────────────────────────────────────────────

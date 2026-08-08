@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,7 +49,12 @@ public class Appointment {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(
         name = "appointment_extra_values",
         joinColumns = @JoinColumn(name = "appointment_id")

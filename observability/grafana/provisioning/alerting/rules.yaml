@@ -1,0 +1,895 @@
+# =============================================================================
+# Alertas do Grafana (FABIANO-28)
+# =============================================================================
+# Provisionado por arquivo: alerta criado pela tela some quando o volume
+# some, e nao passa por revisao de codigo.
+#
+# ATENCAO ao job: o card FABIANO-28 escreveu job="fabiano-backend", mas o
+# job real no prometheus.yml e "fabiano-back". Regra com job errado nunca
+# dispara - e nunca avisa que nao esta disparando.
+#
+# Alertas do card que ainda NAO da para escrever, e o motivo:
+#   - RDS com CPU alta: precisa do CloudWatch, bloqueado por falta de credencial AWS
+#
+# Ja resolvidos, e vale registrar por que demoraram:
+#   - "Backup atrasado" e "Disco enchendo" (06/08/2026): dependiam do
+#     node-exporter, que so entrou na stack de servidor naquele dia.
+#   - "Certificado expirando" e "Site fora do ar visto de fora" (07/08/2026):
+#     dependiam de um coletor de certificado. O blackbox_exporter entrou no
+#     compose e trouxe os dois de uma vez — grupo fabiano-externo, ao final
+#     deste arquivo (FABIANO-64).
+#
+# Alerta apoiado em metrica inexistente fica eternamente em No Data. Como
+# No Data dispara nas regras criticas, ele viraria alarme falso perpetuo -
+# o jeito mais rapido de fazer todo mundo ignorar os alertas.
+# =============================================================================
+apiVersion: 1
+groups:
+- orgId: 1
+  name: fabiano-critico
+  folder: Fabiano
+  interval: 1m
+  rules:
+  - uid: fabiano-aplicacao-fora
+    title: Aplicacao fora do ar
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: max(up{job="fabiano-back"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 2m
+    annotations:
+      summary: A aplicacao parou de responder a coleta de metricas.
+      description: 'A metrica up esta em 0 ha mais de 2 minutos. Isso significa UMA de duas coisas: a
+        aplicacao caiu, ou o Prometheus perdeu acesso a ela (token, rede, timeout). Comece por http://localhost:9091/targets,
+        que diz o motivo exato. Sem dado nenhum tambem dispara - de proposito, porque silencio aqui e
+        indistinguivel de queda.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
+    labels:
+      severidade: critico
+    isPaused: false
+- orgId: 1
+  name: fabiano-alto
+  folder: Fabiano
+  interval: 1m
+  rules:
+  - uid: fabiano-erro-5xx
+    title: Taxa de erro 5xx acima de 5%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * sum(rate(http_server_requests_seconds_count{job="fabiano-back",uri!="UNKNOWN",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count{job="fabiano-back",uri!="UNKNOWN"}[5m])), 0.001)
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK, e a pergunta e sempre a mesma: silencio aqui e saude ou cegueira?
+    # Aqui e saude. A conta e uma PROPORCAO de requisicoes; sem requisicao
+    # nenhuma nao existe 5xx, e madrugada sem trafego nao e incidente. E se a
+    # ausencia for de coleta, e nao de trafego, quem avisa e
+    # 'Aplicacao fora do ar', que dispara sem dado.
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: Mais de 5% das requisicoes estao falhando por erro do sistema.
+      description: Erro 5xx e falha que o sistema nao tratou. Abra a tela Tecnico e veja a tabela 'Rotas
+        com mais erro' para saber onde. Depois use a tela Logs filtrando por ERROR no mesmo intervalo
+        - o rastro completo esta la.
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-latencia
+    title: Latencia p95 acima de 3 segundos
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="fabiano-back",uri!~"/actuator.*",uri!="UNKNOWN"}[5m])))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 3
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK: mesma logica do 5xx. Percentil sem amostra nao existe, e periodo sem
+    # acesso e o caso comum. Coleta morta e coberta por 'Aplicacao fora do ar'.
+    noDataState: OK
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: 95% das requisicoes estao levando mais de 3 segundos.
+      description: 'Sem o /actuator na conta, entao mede o que o usuario sente. Cheque nesta ordem: ''Conexoes
+        do HikariCP'' (fila de espera acima de zero indica banco), ''Threads do Tomcat'' (pool cheio trava
+        tudo) e ''Pausa de GC'' (memoria).'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-heap
+    title: Memoria da aplicacao acima de 85%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * sum(jvm_memory_used_bytes{job="fabiano-back",area="heap"}) / clamp_min(sum(jvm_memory_max_bytes{job="fabiano-back",area="heap"}),
+          1)
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 85
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK, com ressalva registrada: heap sem dado NAO e saude — e sinal de que o
+    # backend parou de ser coletado. So nao vira alerta aqui porque isso ja tem
+    # dono: 'Aplicacao fora do ar' usa noDataState Alerting sobre o mesmo alvo.
+    # Duas regras disparando pelo mesmo motivo dobram o e-mail e nao a
+    # informacao. Se aquela regra for removida um dia, esta precisa virar
+    # Alerting junto.
+    noDataState: OK
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: A memoria da aplicacao esta perto do limite.
+      description: 'O limite que vale e o do CONTAINER, e nao a RAM da maquina. BACKEND_MEM_LIMIT poe teto
+        de 700m e a JVM dimensiona o heap por ele (MaxRAMPercentage=70 no Dockerfile), entao trocar a
+        instancia por uma maior NAO muda este numero. Heap encostando no teto por tempo prolongado e o
+        quadro que antecede a queda. Se acontecer junto com pausa de GC subindo, e vazamento de memoria,
+        nao pico de uso.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-pool-banco
+    title: Requisicoes esperando conexao com o banco
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: max(hikaricp_connections_pending{job="fabiano-back"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK: mesma dependencia do heap — a cobertura de "parei de coletar" mora em
+    # 'Aplicacao fora do ar'.
+    noDataState: OK
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: Ha requisicoes paradas na fila esperando conexao com o RDS.
+      description: Fila acima de zero por 5 minutos significa que o pool nao esta dando conta. Ou o pool
+        e pequeno demais, ou existe consulta lenta segurando conexao. O painel 'Tempo para obter conexao'
+        separa os dois casos.
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-forca-bruta
+    title: Muitas falhas de login em pouco tempo
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: sum(increase(auth_login_total{job="fabiano-back",resultado=~"falha.*"}[5m]))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 20
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK, e este e o caso mais claro de todos: auth_login_total so passa a
+    # existir depois da primeira tentativa de login desde o boot. Sem dado
+    # significa literalmente "ninguem tentou entrar" — ausencia de ataque, nao
+    # ausencia de medicao.
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: Mais de 20 tentativas de login recusadas em 5 minutos.
+      description: 'Pode ser forca bruta. Abra a tela Logs, escolha AuthService em Origem, e veja os nomes
+        de usuario tentados: se forem nomes que nao existem (admin, root, teste), e varredura automatizada.
+        Se for sempre o mesmo usuario real, provavelmente e alguem que esqueceu a senha.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
+  - uid: fabiano-erro-no-log
+    title: Erros aparecendo no log
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: loki-fabiano
+      model:
+        refId: A
+        expr: sum(count_over_time({application="fabiano-back", nivel="ERROR"}[5m]))
+        # queryType e o campo que o datasource do LOKI le. O 'instant: true'
+        # abaixo e do Prometheus e o Loki ignora — sem esta linha a consulta
+        # volta como serie temporal, e a expressao de limiar recusa:
+        # "looks like time series data, only reduced data can be alerted on".
+        # A regra ficava em Error permanente, mandando e-mail de DatasourceError
+        # em vez de avisar sobre erro no log (FABIANO-62).
+        queryType: instant
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: loki
+          uid: loki-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    # OK: zero linha de ERROR e o estado desejado, e Loki sem resultado para o
+    # filtro de nivel e indistinguivel dele. A cegueira que ESTE OK poderia
+    # esconder — Promtail morto, log nao chegando — deixou de ficar sem dono:
+    # 'Parei de receber log da aplicacao', no grupo fabiano-infra, vigia a
+    # chegada de log com noDataState Alerting. Sem aquela regra, este OK seria
+    # exatamente o defeito do FABIANO-62.
+    noDataState: OK
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: A aplicacao registrou erro no log.
+      description: ERROR e o unico nivel que deveria ficar permanentemente em zero. Diferente do alerta
+        de 5xx, este pega tambem erro que nao virou resposta HTTP - falha em tarefa de fundo, por exemplo.
+        A tela Logs mostra a linha completa com o rastro.
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
+- orgId: 1
+  name: fabiano-medio
+  folder: Fabiano
+  interval: 1m
+  rules:
+  # Ausencia de envio so e sintoma onde alguem usa o sistema. Em homologacao
+  # ninguem usa, entao esta regra viveria acesa — e alerta que sempre toca e
+  # alerta que todo mundo aprende a ignorar. ALERTA_SUBMISSAO_PAUSADO vem do
+  # .env: true em homologacao, false em producao.
+  - uid: fabiano-sem-submissao
+    title: Nenhum formulario enviado em horario comercial
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: sum(increase(formulario_submissao_total{job="fabiano-back",resultado="sucesso"}[2h]))
+        instant: true
+        editorMode: code
+        range: false
+        datasource:
+          type: prometheus
+          uid: prometheus-fabiano
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource:
+          type: __expr__
+          uid: __expr__
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+          operator:
+            type: and
+          query:
+            params:
+            - B
+          reducer:
+            type: last
+            params: []
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 0s
+    annotations:
+      summary: Duas horas sem nenhum envio de formulario, em horario util.
+      description: 'O alerta mais sutil e um dos mais valiosos: detecta o fracasso silencioso, quando
+        o sistema responde 200 em tudo mas ninguem consegue mais enviar. Confirme na tela Produto, no
+        painel ''Funil: aberturas x envios'' - se as aberturas continuam e os envios estao em zero, o
+        formulario quebrou. Se os dois estao em zero, foi so um periodo parado.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-produto
+    labels:
+      severidade: medio
+    isPaused: $ALERTA_SUBMISSAO_PAUSADO
+    notification_settings:
+      receiver: email-equipe
+      mute_time_intervals:
+      - fora-do-horario-comercial
+- orgId: 1
+  name: fabiano-infra
+  folder: Fabiano
+  interval: 5m
+  rules:
+  # ---------------------------------------------------------------------------
+  # O dead man's switch do backup, finalmente ligado em alguma coisa
+  # ---------------------------------------------------------------------------
+  # O backup-db.sh escreve backup_fabiano_timestamp_seconds a cada execucao bem
+  # sucedida. A metrica existia desde 05/08 e nao era lida por ninguem — o
+  # switch estava instalado e desconectado.
+  #
+  # O alerta mede IDADE, nao sucesso. Backup que falha grava sucesso=0 e avisa;
+  # backup que simplesmente PARA DE RODAR nao grava nada — e foi exatamente o
+  # que aconteceu quando descobrimos que a maquina nao tinha cron.
+  - uid: fabiano-backup-atrasado
+    title: Backup do banco atrasado
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: (time() - max(backup_fabiano_timestamp_seconds)) / 3600
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [26] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # 26h e nao 24h: o backup roda uma vez ao dia e a folga evita alarme por
+    # atraso de minutos. Sem dado nenhum DISPARA de proposito — metrica ausente
+    # e indistinguivel de backup que nunca rodou, e essa e a falha que importa.
+    noDataState: Alerting
+    execErrState: Error
+    for: 10m
+    annotations:
+      summary: O ultimo backup do banco tem mais de 26 horas.
+      description: 'Nenhum backup bem sucedido nas ultimas 26h. Conferir nesta ordem: "sudo crontab -l"
+        (a maquina ja ficou sem cron instalado), o fim de /var/log/backup-db.log, e se
+        /var/lib/node_exporter/textfile_collector/backup_fabiano.prom esta sendo atualizado. Alerta sem
+        dado tambem cai aqui: metrica que sumiu e backup que parou sao a mesma emergencia.'
+    labels:
+      severidade: critico
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
+  # Disco da EC2
+  # ---------------------------------------------------------------------------
+  # O disco desta maquina ja encheu de log do proprio json-file. Prometheus e
+  # Loki agora escrevem nela tambem, entao o risco subiu, nao desceu.
+  - uid: fabiano-disco-cheio
+    title: Disco da maquina acima de 85%
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: 100 * (1 - node_filesystem_avail_bytes{job="node",mountpoint="/",fstype!~"tmpfs|vfat"} / node_filesystem_size_bytes{job="node",mountpoint="/",fstype!~"tmpfs|vfat"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [85] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # Alerting, e nao OK. O raciocinio anterior ("disco sem dado e falha de
+    # coleta, nao emergencia") parecia razoavel e produziu o pior resultado
+    # possivel: o seletor estava errado — mountpoint="/host" nao existe, o
+    # node-exporter expoe "/" porque o collector remove o prefixo de
+    # --path.rootfs — entao a consulta nunca devolveu nada, o noDataState: OK
+    # traduziu isso como saude, e a regra ficou em Normal verde desde que foi
+    # escrita. Nunca disparou e nunca reclamou (FABIANO-65).
+    #
+    # Medido em 06/08/2026 na maquina de homologacao:
+    #   mountpoint=/           fstype=xfs    device=/dev/nvme0n1p1
+    #   mountpoint=/boot/efi   fstype=vfat
+    #   mountpoint=/run,/tmp   fstype=tmpfs
+    #
+    # A regra geral que fica: se a metrica sumir significa que voce parou de
+    # enxergar, e nao que o problema acabou, entao Alerting.
+    noDataState: Alerting
+    execErrState: Error
+    for: 15m
+    annotations:
+      summary: O disco da EC2 passou de 85% de uso.
+      description: 'Espaco acabando em /. Candidatos habituais, em ordem de tamanho: os volumes do
+        Prometheus e do Loki (docker system df -v), os dumps em /var/backups, e o log json-file dos
+        containers. Disco cheio derruba o banco de log e o TSDB juntos — e a observabilidade morre
+        calada bem quando seria mais util.'
+    labels:
+      severidade: alto
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
+  # Quem vigia os vigias (FABIANO-65)
+  # ---------------------------------------------------------------------------
+  # Todo alerta acima depende de uma fonte de dado continuar viva. Se a fonte
+  # morre, a consulta nao falha: ela devolve vazio. E vazio, para um alerta de
+  # limiar, e indistinguivel de "esta tudo bem".
+  #
+  # Foi assim que o Loki ficou recebendo lixo sem ninguem notar (FABIANO-62): o
+  # painel mostrava zero erro em verde, que e exatamente o que ele mostraria
+  # se tudo estivesse bem. As duas regras abaixo existem para que a proxima
+  # vez seja um e-mail, e nao uma descoberta por acaso.
+  - uid: fabiano-coleta-host-parada
+    title: Parei de coletar metricas da maquina
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        # 'up' e sintetica: o Prometheus a escreve a cada coleta, 1 se
+        # respondeu, 0 se nao. Se o alvo sumir da configuracao, ela deixa de
+        # existir — dai o noDataState abaixo.
+        expr: min(up{job="node"})
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [1] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    noDataState: Alerting
+    execErrState: Error
+    for: 5m
+    annotations:
+      summary: O node-exporter parou de responder.
+      description: 'Sem ele nao ha metrica de disco, CPU nem memoria da EC2 — e o alerta de disco
+        cheio deixa de poder disparar. Conferir com "docker compose -f docker-compose.observability.yml
+        ps" e "docker logs fabiano-node-exporter". Enquanto isto estiver aberto, a ausencia de alerta de
+        infraestrutura nao significa nada.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-tecnico
+    labels:
+      severidade: alto
+    isPaused: false
+
+  - uid: fabiano-coleta-log-parada
+    title: Parei de receber log da aplicacao
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 1800, to: 0 }
+      datasourceUid: loki-fabiano
+      model:
+        refId: A
+        # Nao mede erro: mede se CHEGA log.
+        #
+        # O seletor e 'ambiente', e nao 'application' — corrigido em 08/08/2026.
+        # A premissa do comentario original estava certa ("sempre chega alguma
+        # linha, nem que seja o access log de uma sonda"), mas aquele access log
+        # e do NGINX, e leva container="fabiano-nginx". Com
+        # application="fabiano-back" a regra vigiava justamente o unico fluxo
+        # sem batimento: o Spring Boot nao registra requisicao por padrao, e o
+        # backend parado passa 10 minutos calado sem nada de errado.
+        #
+        # Resultado medido: numa hora com a coleta 100% saudavel, chegaram 1190
+        # linhas do nginx e 12 do backend — e o alerta disparou por e-mail.
+        # Alerta que grita sem motivo ensina a ignorar o alerta.
+        #
+        # Com 'ambiente' o batimento e garantido: a sonda blackbox bate em
+        # /actuator/health a cada 30s e o nginx registra cada uma delas. Zero
+        # por 10 minutos passa a significar mesmo que Promtail -> Loki quebrou.
+        expr: sum(count_over_time({ambiente="prod"}[10m]))
+        # queryType e o campo que o datasource do Loki le; 'instant' abaixo e
+        # do Prometheus e e ignorado aqui. Sem ele a consulta volta como serie
+        # temporal e a expressao de limiar recusa, deixando a regra em Error
+        # permanente — foi o que aconteceu com a regra de erro no log
+        # (FABIANO-62).
+        queryType: instant
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: loki, uid: loki-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 1800, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [1] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # Alerting de proposito, e aqui a escolha e quase tautologica: se a regra
+    # nao consegue consultar o Loki, o Loki esta fora — que e exatamente o que
+    # ela deveria avisar.
+    noDataState: Alerting
+    execErrState: Alerting
+    for: 10m
+    annotations:
+      summary: Nenhuma linha de log chegou nos ultimos 10 minutos.
+      description: 'A tela de Logs esta cega, e com ela o alerta "Erros aparecendo no log". Conferir
+        "docker logs fabiano-promtail" — o erro classico e "final error sending batch ... at least one
+        label pair is required per stream". Atencao: painel de log vazio parece calmaria e e apagao.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-logs
+    labels:
+      severidade: alto
+    isPaused: false
+
+- orgId: 1
+  name: fabiano-externo
+  folder: Fabiano
+  interval: 1m
+  rules:
+  # ---------------------------------------------------------------------------
+  # O sistema visto de fora, pelo endereco publico (FABIANO-64)
+  # ---------------------------------------------------------------------------
+  # Todo alerta acima mede a aplicacao POR DENTRO: o Prometheus fala com
+  # 'backend:8080' pela rede do Docker. Nginx, TLS, DNS e Security Group ficam
+  # fora da conta — e foi por isso que o incidente de 10/07/2026 (certificado
+  # expirado, sistema inacessivel) nao teria acendido nenhuma luz vermelha.
+  #
+  # As duas regras abaixo COMPLEMENTAM 'Aplicacao fora do ar'; nao a
+  # substituem. Uma mede a aplicacao, a outra mede o caminho inteiro ate ela —
+  # e a diferenca entre as duas e justamente o diagnostico.
+  - uid: fabiano-certificado-expirando
+    title: Certificado HTTPS expirando
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        # Sem agregacao de proposito: a consulta devolve uma serie por dominio
+        # sondado, entao o alerta nasce ja dizendo QUAL certificado esta
+        # vencendo. Um max() aqui daria um numero sem nome.
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [14] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # 14 dias: o certbot renova aos 30. Se aos 14 ainda nao renovou, a
+    # renovacao automatica falhou — que e exatamente o que ninguem soube em
+    # julho. Monitorar o RESULTADO (a data que o servidor apresenta) e
+    # diferente de confiar no PROCESSO (o cron que deveria renovar).
+    #
+    # Alerting sem dado, e aqui e literal: certificado que some da sonda ou e
+    # servidor fora do ar, ou e blackbox morto. Nenhum dos dois e boa noticia.
+    noDataState: Alerting
+    execErrState: Error
+    for: 15m
+    annotations:
+      summary: Um certificado HTTPS vence em menos de 14 dias.
+      description: 'O dominio esta na etiqueta instance. Conferir na maquina com
+        "sudo certbot certificates" e "sudo certbot renew --dry-run". Atencao ao
+        grafana.nexventa.com.br: se for o dele, o painel que mostra este alerta e o primeiro a
+        ficar inacessivel. Este alerta mede a data que o servidor REALMENTE
+        apresenta, nao se o cron rodou.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
+    labels:
+      severidade: critico
+    isPaused: false
+
+  - uid: fabiano-fora-visto-de-fora
+    title: Site fora do ar visto de fora
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        # 1 se a URL publica respondeu 2xx com TLS valido, 0 caso contrario.
+        # Uma serie por alvo, pelo mesmo motivo da regra acima.
+        expr: probe_success
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: lt, params: [1] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # Alerting sem dado: silencio aqui e indistinguivel de queda, que e a regra
+    # geral que o FABIANO-65 fixou.
+    noDataState: Alerting
+    execErrState: Error
+    for: 2m
+    annotations:
+      summary: O endereco publico parou de responder, mesmo com a aplicacao no ar.
+      description: 'A sonda externa falhou e a aplicacao pode estar perfeitamente
+        viva — e essa diferenca E o diagnostico. Se este alerta esta aberto e
+        "Aplicacao fora do ar" nao esta, o problema NAO e a aplicacao: e nginx,
+        certificado, DNS ou Security Group. Comece por "docker compose ps" no
+        nginx e por "curl -v" no dominio da etiqueta instance. Se os dois alertas
+        estiverem abertos, a aplicacao caiu mesmo.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
+    labels:
+      severidade: critico
+    isPaused: false

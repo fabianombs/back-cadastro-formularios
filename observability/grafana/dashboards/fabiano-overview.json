@@ -1,0 +1,1725 @@
+{
+  "uid": "fabiano-overview",
+  "title": "Fabiano - Visao geral",
+  "description": "Responde 'esta tudo bem?' em cinco segundos. Saude, uso do produto e o que esta gritando, sem rolagem. Para aprofundar, use a barra de navegacao no topo. Provisionado por arquivo (FABIANO-27).",
+  "tags": [
+    "fabiano"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m"
+    ]
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "title": "Fabiano",
+      "tags": [
+        "fabiano"
+      ],
+      "asDropdown": false,
+      "targetBlank": false,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "external link",
+      "url": "",
+      "tooltip": ""
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "id": 1,
+      "title": "Coleta de metricas",
+      "description": "Este painel mede a metrica up: se o Prometheus conseguiu ler o /actuator/prometheus na ultima raspagem. Vermelho significa UMA de duas coisas - a aplicacao caiu, ou o Prometheus perdeu acesso a ela (token, rede, timeout). As duas exigem acao, mas acoes diferentes, e daqui nao da para distinguir: por isso o painel se chama Coleta, e nao Aplicacao. O diagnostico esta em /targets do Prometheus. Enquanto isso, os demais numeros da tela podem continuar mostrando a ultima amostra coletada, e parecerem normais.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "max(up{job=\"fabiano-back\"})",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "PARADA",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "ATIVA",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "Erro 5xx",
+      "description": "Percentual de respostas 5xx nos ultimos 5 minutos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "100 * sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!=\"UNKNOWN\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!=\"UNKNOWN\"}[5m])), 0.001)",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "Latencia p95",
+      "description": "Ja sem o /actuator: mede o que o usuario sente.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\"}[$__rate_interval])))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 4,
+      "title": "Requisicoes / min",
+      "description": "Media dos ultimos 5 minutos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!=\"UNKNOWN\"}[5m])) * 60",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 5,
+      "title": "Heap usado",
+      "description": "Encostar no teto por tempo prolongado e o quadro que antecede o OOM. O teto e o do container (700m), nao os 4 GB da maquina.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "100 * sum(jvm_memory_used_bytes{job=\"fabiano-back\",area=\"heap\"}) / clamp_min(sum(jvm_memory_max_bytes{job=\"fabiano-back\",area=\"heap\"}), 1)",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 6,
+      "title": "Threads do Tomcat",
+      "description": "Pool cheio trava a aplicacao antes de qualquer erro aparecer no log.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "100 * max(tomcat_threads_busy_threads{job=\"fabiano-back\"}) / clamp_min(max(tomcat_threads_config_max_threads{job=\"fabiano-back\"}), 1)",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 7,
+      "title": "Formularios abertos",
+      "description": "Ultima hora. Cliente abrindo o formulario pelo link.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"GET\",uri=\"/form-templates/slug/{slug}\",status=~\"2..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 8,
+      "title": "Formularios enviados",
+      "description": "Ultima hora. Compare com o numero ao lado: abertura normal com envio em zero e formulario quebrado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/form-submissions\",status=~\"2..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 9,
+      "title": "Agendamentos",
+      "description": "Ultima hora.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=\"/appointments/book\",status=~\"2..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 10,
+      "title": "Presencas marcadas",
+      "description": "Ultima hora, titulares e acompanhantes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"PATCH\",uri=~\"/attendance/.*mark\",status=~\"2..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 11,
+      "title": "Quiz e enquete",
+      "description": "Ultima hora, respostas enviadas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",method=\"POST\",uri=~\"/quizzes/sessions/.*|/surveys/slug/.*responses\",status=~\"2..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 12,
+      "title": "Logins",
+      "description": "Ultima hora, apenas os bem-sucedidos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(auth_login_total{job=\"fabiano-back\",resultado=\"sucesso\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 13,
+      "title": "Erros no log",
+      "description": "Ultima hora. Um so ja merece olhada.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "sum(count_over_time({application=\"fabiano-back\", nivel=\"ERROR\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Logs",
+          "url": "/d/fabiano-logs?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 14,
+      "title": "Respostas 5xx",
+      "description": "Ultima hora. Erro que o sistema nao tratou.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",status=~\"5..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 15,
+      "title": "Respostas 4xx",
+      "description": "Ultima hora. Volume alto costuma ser token expirado no front, nao ataque - mas vale conferir de onde vem.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\",status=~\"4..\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 16,
+      "title": "Falhas de login",
+      "description": "Ultima hora. Pico aqui sem pico de sucesso e sinal de forca bruta.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(auth_login_total{job=\"fabiano-back\",resultado=~\"falha.*\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 17,
+      "title": "Agendamentos recusados",
+      "description": "Ultima hora. O motivo esta na tela Produto - 'slot_lotado' recorrente e conversa comercial.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(agendamento_recusado_total{job=\"fabiano-back\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Produto",
+          "url": "/d/fabiano-produto?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 18,
+      "title": "Conexoes esperando",
+      "description": "Maior fila de espera pelo pool na ultima hora. Acima de zero significa requisicao parada aguardando o RDS.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "max_over_time(hikaricp_connections_pending{job=\"fabiano-back\"}[1h])",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 22,
+      "title": "Site visto de fora",
+      "description": "A sonda do blackbox bate no endereco PUBLICO, igual a um navegador: passa por DNS, Security Group, nginx e TLS. O painel \"Coleta de metricas\" ao lado mede a aplicacao por dentro, pela rede do Docker. A diferenca entre os dois e o diagnostico: este vermelho com aquele verde significa que a aplicacao esta viva e o caminho ate ela quebrou — nginx, certificado, DNS ou Security Group. Foi essa combinacao que ninguem enxergou em 10/07/2026 (FABIANO-64).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "probe_success",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FORA",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "NO AR",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 23,
+      "title": "Certificado HTTPS — dias restantes",
+      "description": "Dias ate expirar o certificado que cada dominio REALMENTE apresenta — nao o que o certbot deveria ter renovado. A diferenca importa: renovacao automatica ja falhou neste projeto e o jeito de descobrir foi o cliente ligando. O certbot renova aos 30 dias; abaixo de 14 o alerta dispara, porque a essa altura a renovacao automatica ja falhou. Atencao ao grafana.nexventa.com.br: se for o dele que vencer, esta tela e a primeira a ficar inacessivel (FABIANO-64).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 8,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "sizing": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "id": 24,
+      "title": "Varredura externa",
+      "description": "Requisicoes que NAO casaram com nenhuma rota da aplicacao — o Spring as agrupa no rotulo uri=\"UNKNOWN\" para nao criar uma serie de metrica a cada caminho inventado. Na pratica: varredura automatizada procurando WordPress, .env e paineis administrativos, barrada pelo Spring Security antes de tocar em qualquer coisa. Medido em 08/08/2026: 221 de 221 responderam 401.\n\nTodo servidor com IP publico recebe isso. Numero subindo sozinho e a internet batendo na porta, nao defeito — por isso este painel e cinza e fica separado do \"Respostas 4xx\", que agora conta so rota real.\n\nQuando OLHAR com atencao: se um dia aparecer 5xx aqui, alguem achou um caminho que chega na aplicacao. Esse caso NAO passa despercebido — o painel \"Respostas 5xx\" foi deixado de proposito SEM o filtro de UNKNOWN.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"fabiano-back\",uri=\"UNKNOWN\"}[1h]))",
+          "refId": "A",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 19,
+      "title": "Trafego e erro",
+      "description": "Empilhado: a altura total e o trafego, e a faixa de 5xx mostra quanto dele esta falhando.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"fabiano-back\",uri!~\"/actuator.*\",uri!=\"UNKNOWN\"}[$__rate_interval]))",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "opacity",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Tecnico",
+          "url": "/d/fabiano-tecnico?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "id": 21,
+      "title": "Erros e avisos recentes",
+      "description": "Sem filtro, de proposito. Para buscar e filtrar, va para a tela Logs pela barra no topo.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki-fabiano"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki-fabiano"
+          },
+          "expr": "{application=\"fabiano-back\", nivel=~\"ERROR|WARN\"}",
+          "refId": "A",
+          "editorMode": "code",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "links": [
+        {
+          "title": "Ver detalhe na tela Logs",
+          "url": "/d/fabiano-logs?${__url_time_range}",
+          "targetBlank": false
+        }
+      ]
+    }
+  ]
+}

@@ -5,12 +5,12 @@ import com.cadastro.fabiano.demo.dto.request.SelectEquipmentRequest;
 import com.cadastro.fabiano.demo.dto.response.EquipmentCatalogResponse;
 import com.cadastro.fabiano.demo.dto.response.EquipmentOptionResponse;
 import com.cadastro.fabiano.demo.dto.response.EquipmentSelectionResponse;
+import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.EquipmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -48,12 +48,13 @@ public class EquipmentController {
     @GetMapping("/catalog/{catalogId}/options")
     @Operation(summary = "Buscar opcoes (autocomplete paginado)",
             description = "Filtra por trecho do nome. onlyAvailable=true retorna apenas opcoes com estoque disponivel")
-    public ResponseEntity<Page<EquipmentOptionResponse>> searchOptions(
+    public ResponseEntity<PaginaResponse<EquipmentOptionResponse>> searchOptions(
             @PathVariable Long catalogId,
             @RequestParam(defaultValue = "") String q,
             @RequestParam(defaultValue = "false") boolean onlyAvailable,
             Pageable pageable) {
-        return ResponseEntity.ok(equipmentService.searchOptions(catalogId, q, onlyAvailable, pageable));
+        return ResponseEntity.ok(PaginaResponse.de(
+                equipmentService.searchOptions(catalogId, q, onlyAvailable, pageable)));
     }
 
     @PatchMapping("/catalog/{catalogId}/stock-control")

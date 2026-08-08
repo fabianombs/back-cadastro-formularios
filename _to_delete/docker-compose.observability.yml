@@ -1,0 +1,116 @@
+# =============================================================================
+# Stack de observabilidade - Prometheus, Loki, Promtail e Grafana (FABIANO-23)
+# =============================================================================
+# Sobe separado do docker-compose.dev.yml de proposito: da para derrubar a
+# observabilidade sem derrubar o banco de desenvolvimento, e vice-versa.
+#
+# Uso:
+#   docker compose -f docker-compose.observability.yml up -d
+#   docker compose -f docker-compose.observability.yml down          (mantem dados)
+#   docker compose -f docker-compose.observability.yml down -v       (apaga tudo)
+#
+# Grafana:     http://localhost:3000   (admin / admin)
+# Prometheus:  http://localhost:9091
+# Loki:        http://localhost:3100
+#
+# A porta do Prometheus e 9091 no host, nao 9090: a 9090 costuma estar ocupada
+# e a 3000 do Grafana ja e o padrao esperado por quem usa a ferramenta.
+# =============================================================================
+
+name: fabiano-observabilidade
+
+networks:
+  observabilidade:
+    driver: bridge
+
+volumes:
+  prometheus-dados:
+  grafana-dados:
+  loki-dados:
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: fabiano-prometheus
+    restart: unless-stopped
+    networks: [observabilidade]
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-dados:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 15 dias em desenvolvimento. Sem teto, o volume cresce sem parar.
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    extra_hosts:
+      # Necessario no Linux; no Docker Desktop ja existe, mas declarar nao atrapalha.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: fabiano-loki
+    restart: unless-stopped
+    networks: [observabilidade]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-dados:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: fabiano-promtail
+    restart: unless-stopped
+    networks: [observabilidade]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      # A aplicacao roda fora do Docker e escreve o log em ./logs/app.json.
+      # Somente leitura: o Promtail nunca precisa escrever no log.
+      - ./logs:/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: fabiano-grafana
+    restart: unless-stopped
+    networks: [observabilidade]
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-dados:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      # Credencial de DESENVOLVIMENTO. Em producao isto vem de variavel de
+      # ambiente com senha real, e o Grafana fica atras do nginx.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Sem cadastro publico e sem acesso anonimo, mesmo em desenvolvimento.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Desliga a chamada externa de checagem de versao: o ambiente sobe mais
+      # rapido e nao depende de internet.
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    depends_on:
+      prometheus:
+        condition: service_healthy

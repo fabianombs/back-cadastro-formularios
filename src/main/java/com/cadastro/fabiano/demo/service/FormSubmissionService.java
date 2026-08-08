@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.service;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormSubmissionRequest;
 import com.cadastro.fabiano.demo.dto.response.FormSubmissionResponse;
+import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.entity.FormSubmission;
 import com.cadastro.fabiano.demo.entity.FormTemplate;
 import com.cadastro.fabiano.demo.repository.FormSubmissionRepository;
@@ -11,16 +12,21 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
+
 @Service
 public class FormSubmissionService {
 
     private final FormSubmissionRepository submissionRepository;
     private final FormTemplateRepository templateRepository;
+    private final MetricasDeNegocio metricas;
 
     public FormSubmissionService(FormSubmissionRepository submissionRepository,
-                                 FormTemplateRepository templateRepository) {
+                                 FormTemplateRepository templateRepository,
+                                 MetricasDeNegocio metricas) {
         this.submissionRepository = submissionRepository;
         this.templateRepository = templateRepository;
+        this.metricas = metricas;
     }
 
     // =========================
@@ -28,18 +34,26 @@ public class FormSubmissionService {
     // =========================
     @Transactional
     public FormSubmissionResponse submitForm(CreateFormSubmissionRequest request) {
+        try {
+            FormTemplate template = templateRepository.findById(request.templateId())
+                    .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
-        FormTemplate template = templateRepository.findById(request.templateId())
-                .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+            FormSubmission submission = FormSubmission.builder()
+                    .template(template)
+                    .values(request.values())
+                    .build();
 
-        FormSubmission submission = FormSubmission.builder()
-                .template(template)
-                .values(request.values())
-                .build();
+            submissionRepository.save(submission);
 
-        submissionRepository.save(submission);
-
-        return toResponse(submission);
+            metricas.submissaoRecebida();
+            return toResponse(submission);
+        } catch (RuntimeException e) {
+            // Conta e relanca: o comportamento visto de fora continua identico,
+            // so passa a deixar rastro. Queda de submissao com abertura normal
+            // e o sinal de formulario quebrado.
+            metricas.submissaoFalhou();
+            throw e;
+        }
     }
 
     // =========================
@@ -79,7 +93,7 @@ public class FormSubmissionService {
         return new FormSubmissionResponse(
                 s.getId(),
                 s.getTemplate().getId(),
-                s.getValues(),
+                ColecaoDeSaida.mapa(s.getValues()),
                 s.getCreatedAt()
         );
     }

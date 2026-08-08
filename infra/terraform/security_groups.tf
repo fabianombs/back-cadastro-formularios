@@ -1,7 +1,21 @@
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-ec2-sg"
-  description = "Security group para EC2 - SSH, HTTP, HTTPS e porta 8080"
+  name   = "${var.project_name}-ec2-sg"
+  vpc_id = data.aws_vpc.default.id
 
+  # NAO "arrumar" este texto. A AWS nao permite alterar a descricao de um
+  # security group depois de criado — o provider trata description como
+  # ForceNew, entao qualquer mudanca aqui faz o plan propor DESTRUIR e
+  # RECRIAR o SG da EC2 em producao.
+  #
+  # A string abaixo e a que esta de fato na AWS (conferida em 04/08/2026).
+  # Ela ficou datada quando a porta 8080 foi removida no FABIANO-45, mas
+  # divergir dela custa mais caro do que o texto desatualizado.
+  description = "Security group para EC2 - SSH e porta 8080"
+
+  # ATENCAO: ssh_allowed_cidr tem default 0.0.0.0/0, e e assim que esta na AWS
+  # hoje. Com passwordauthentication=no na EC2 a forca bruta nao funciona, mas
+  # a superficie existe — ha 70 tentativas registradas em /var/log/secure.
+  # Restringir exige combinar quais IPs precisam entrar (FABIANO-45).
   ingress {
     description = "SSH restrito"
     from_port   = 22
@@ -26,13 +40,14 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "API Spring Boot (porta direta - usar apenas para debug)"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # A porta 8080 NAO e exposta. Existia uma regra liberando 8080 para
+  # 0.0.0.0/0 "apenas para debug" — ela deixava a aplicacao acessivel em HTTP
+  # puro pelo IP, contornando o nginx e o certificado: login trafegando em
+  # texto claro. Removida da AWS e daqui em 04/08/2026 (FABIANO-45).
+  #
+  # O nginx alcanca a aplicacao por localhost:8080, dentro da propria
+  # instancia, e security group nao filtra loopback — nada quebra sem esta
+  # regra.
 
   egress {
     from_port   = 0
@@ -44,10 +59,18 @@ resource "aws_security_group" "ec2" {
   tags = {
     Name = "${var.project_name}-ec2-sg"
   }
+
+  lifecycle {
+    # Segunda rede de seguranca contra a armadilha descrita acima. Se alguem
+    # "melhorar" a description mesmo assim, o destroy e recusado com erro claro
+    # em vez de derrubar o SG da EC2 de producao no meio de um apply.
+    prevent_destroy = true
+  }
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
+  name   = "${var.project_name}-rds-sg"
+  vpc_id = data.aws_vpc.default.id
   description = "Security group para RDS MySQL - acessivel apenas pela EC2"
 
   ingress {
@@ -67,5 +90,9 @@ resource "aws_security_group" "rds" {
 
   tags = {
     Name = "${var.project_name}-rds-sg"
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }

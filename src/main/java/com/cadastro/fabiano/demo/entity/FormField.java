@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +40,12 @@ public class FormField {
      * Opções disponíveis para campos do tipo "select".
      * Armazenadas em tabela separada (form_field_options).
      */
+    // O projeto ja agrupa toda colecao lazy globalmente
+    // (hibernate.default_batch_fetch_size=50, application.properties:92).
+    // Este @BatchSize so eleva o lote desta colecao para 100, cobrindo a
+    // maior pagina que o front pede sem partir em dois lotes.
     @ElementCollection
+    @BatchSize(size = 100)
     @CollectionTable(name = "form_field_options", joinColumns = @JoinColumn(name = "form_field_id"))
     @Column(name = "option_value")
     @OrderColumn(name = "option_order")

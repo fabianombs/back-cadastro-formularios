@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -62,6 +63,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             null, userDetails.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    // Identificador numerico no MDC, nunca e-mail: o log estruturado
+                    // publica o MDC inteiro, e o id nao identifica a pessoa sozinho.
+                    // O RequestIdFilter limpa o MDC no fim da requisicao.
+                    Object userId = jwtService.extractClaim(jwt, c -> c.get("userId"));
+                    if (userId != null) {
+                        MDC.put("userId", String.valueOf(userId));
+                    }
                 }
             }
         } catch (Exception e) {
