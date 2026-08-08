@@ -116,10 +116,29 @@ atravessa a troca nos dois sentidos sem ajuste. Detalhes no FABIANO-47.
 ### Elastic IP orfao
 
 `eipalloc-053acd67132fed0af` (`54.197.175.159`) ficou **sem associacao** apos a
-virada. EIP parado e cobrado (~US$ 3,65/mes). Duas saidas: guardar para a
-maquina de homolog sob demanda (FABIANO-33) ou liberar com
-`aws ec2 release-address --allocation-id eipalloc-053acd67132fed0af`.
-Liberar **perde o endereco** e invalida o certificado de `api-hml`.
+virada, e EIP parado e cobrado (~US$ 3,65/mes).
+
+> [!danger] NAO liberar este EIP — decidido em 08/08/2026
+> Ele e o endereco da futura homolog (FABIANO-33), e ja vem com o trabalho
+> pronto:
+>
+> * `api-hml.nexventa.com.br` **ja aponta** para ele
+> * `grafana-hml.nexventa.com.br` **ja aponta** para ele
+> * os certificados Let's Encrypt dos dois valem ate **03/11/2026**
+>
+> Associar este EIP a EC2 de homolog faz DNS e HTTPS funcionarem no mesmo
+> instante — sem emitir certificado, sem esperar propagacao, sem tocar na
+> Vercel. `aws ec2 release-address` devolveria o endereco a AWS e jogaria fora
+> os dois certificados junto.
+>
+> Os US$ 3,65/mes compram exatamente isso. E o item mais barato desta conta.
+
+> [!warning] Os certificados vencem em 03/11/2026
+> A renovacao depende do certbot rodando **na maquina que atende aqueles
+> nomes** — e ela so existira durante os ciclos de homologacao. Se nenhum ciclo
+> cair na janela de renovacao (30 dias antes), eles expiram, e o ciclo seguinte
+> comeca com HTTPS quebrado. Decisao pendente no FABIANO-33: `certbot renew` na
+> subida, ou reemitir quando expirar.
 
 ---
 
