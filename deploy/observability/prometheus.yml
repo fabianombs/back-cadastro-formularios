@@ -73,11 +73,11 @@ scrape_configs:
     static_configs:
       - targets:
           - https://100-30-35-83.sslip.io/actuator/health
-          - https://api-hml.nexventa.com.br/actuator/health
+          - https://api.nexventa.com.br/actuator/health
           # /api/health do Grafana responde sem autenticacao. Este alvo importa
           # em dobro: se o certificado DELE vencer, o painel que deveria avisar
           # e o primeiro a ficar inacessivel.
-          - https://grafana-hml.nexventa.com.br/api/health
+          - https://grafana.nexventa.com.br/api/health
         labels:
           application: fabiano-externo
     relabel_configs:

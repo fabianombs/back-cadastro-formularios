@@ -62,8 +62,18 @@ scrape_configs:
         target_label: 'application'
         replacement: 'fabiano-back'
 
+      # 'prod' desde 08/08/2026: esta maquina assumiu o Elastic IP de producao
+      # (FABIANO-47). Ficou 'homolog' por algumas horas depois da virada, e um
+      # rotulo mentindo e pior que rotulo faltando — a consulta acha, so que a
+      # resposta esta errada.
+      #
+      # Quando a homolog sob demanda nascer (FABIANO-33), este valor precisa
+      # virar variavel: promtail aceita ${VAR} com -config.expand-env=true. NAO
+      # foi feito agora de proposito: sem a variavel definida o rotulo vira
+      # vazio, e fluxo sem par de rotulo faz o Loki recusar o lote inteiro com
+      # 400 — exatamente a falha do FABIANO-69.
       - target_label: 'ambiente'
-        replacement: 'homolog'
+        replacement: 'prod'
 
     pipeline_stages:
       # FABIANO-69. Rede de seguranca: carimba um rotulo em TODA linha, sem
@@ -75,7 +85,7 @@ scrape_configs:
       #
       # Sozinho, este estagio ja tirou a entrega de 0 para 95 linhas em 60s.
       - static_labels:
-          ambiente: homolog
+          ambiente: prod
 
       # NAO usar o estagio 'docker' aqui (FABIANO-62).
       #

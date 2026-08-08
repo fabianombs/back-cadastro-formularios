@@ -336,10 +336,15 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/fabiano/deploy
-            # Espelho da trava do develop.yml: la aborta se NAO for ensaio,
-            # aqui aborta se FOR. As duas juntas fecham o cerco.
-            if grep -q -- '-ensaio\.' .env; then
-              echo "ABORTADO: o .env desta maquina aponta para um banco de ENSAIO."
+            # Espelho da trava do develop.yml: la aborta se FOR producao,
+            # aqui aborta se NAO for. As duas juntas fecham o cerco.
+            #
+            # Reescrita em 08/08/2026 pelo mesmo motivo (ver develop.yml): a
+            # versao anterior procurava '-ensaio.', o nome de um banco
+            # temporario. Passou a exigir o nome de producao, que e o unico que
+            # nao muda.
+            if ! grep -qE '^DB_HOST=.*poc-fabiano-db\.' .env; then
+              echo "ABORTADO: o .env desta maquina NAO aponta para o banco de PRODUCAO."
               echo "Este job e o de PRODUCAO. Confira o segredo EC2_HOST."
               echo "NADA foi enviado."
               exit 1
@@ -434,10 +439,23 @@ jobs:
             # custa ~10 segundos e nao tem como errar. Este projeto ja foi
             # mordido quatro vezes pelo mesmo padrao — mecanismo esperto que
             # falha calado (FABIANO-29, 62, 63 e este).
-            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail; then
-              echo "prometheus, loki e promtail releram a configuracao"
+            #
+            # O GRAFANA entrou nesta lista em 08/08/2026, e a ausencia dele era
+            # a versao mais cara do mesmo bug: o Grafana le provisioning/ —
+            # datasources, paineis e REGRAS DE ALERTA — apenas no boot. Alterar
+            # rules.yaml no repositorio passava verde no deploy e o alerta
+            # continuava com a versao anterior, indefinidamente.
+            #
+            # A unica forma de perceber seria um incidente em que o alerta novo
+            # deveria tocar e nao toca — ou seja, descobrir pelo pior caminho
+            # possivel, que e exatamente o que esta epica existe para evitar.
+            #
+            # Recriar o Grafana troca o IP do container: por isso o reload do
+            # nginx logo abaixo (FABIANO-67) nao e opcional, e vem DEPOIS.
+            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana; then
+              echo "prometheus, loki, promtail e grafana releram a configuracao"
             else
-              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail (FABIANO-68)."
+              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail/grafana. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana (FABIANO-68)."
             fi
 
             # ---- FABIANO-67 -------------------------------------------------

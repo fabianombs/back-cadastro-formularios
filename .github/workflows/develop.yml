@@ -207,9 +207,29 @@ jobs:
   # HOMOLOG_EC2_HOST passa a apontar para a instancia clonada (FABIANO-33) e
   # este job continua identico — muda o valor, nao o desenho.
   # ===========================================================================
+  # ---------------------------------------------------------------------------
+  # HOMOLOG SOB DEMANDA (FABIANO-33) — este job so roda se ela existir
+  # ---------------------------------------------------------------------------
+  # Desde a virada de 08/08/2026 nao ha maquina de homologacao: a que era
+  # homolog virou producao, e HOMOLOG_EC2_HOST aponta para ela.
+  #
+  # Sem esta condicao, todo push na develop rodava o deploy, batia na trava do
+  # '-ensaio.' e ABORTAVA — deixando a esteira vermelha por comportamento
+  # correto. Vermelho esperado e pior que vermelho nenhum: ensina a ignorar
+  # vermelho, e o dia em que ele for de verdade ninguem olha.
+  #
+  # O padrao e "desligado ate alguem dizer o contrario": variavel ausente
+  # significa homolog inexistente, e o job e pulado. Para religar, criar a
+  # variavel de repositorio HOMOLOG_ATIVO com valor 'true' em
+  # Settings -> Secrets and variables -> Actions -> Variables, JUNTO com a
+  # atualizacao do HOMOLOG_EC2_HOST.
+  #
+  # A trava do '-ensaio.' continua no lugar e nao foi enfraquecida: ela e a
+  # ultima barreira se alguem religar a variavel apontando para producao.
   deploy-homolog:
     name: Deploy em homologacao
     needs: build-push-develop
+    if: vars.HOMOLOG_ATIVO == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -247,13 +267,27 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/fabiano/deploy
-            grep -q -- '-ensaio\.' .env || {
-              echo "ABORTADO: o .env desta maquina NAO aponta para um banco de ENSAIO."
-              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina ja virou producao."
+            # A regra e uma NEGACAO do nome exato de producao, e nao uma lista
+            # de nomes permitidos.
+            #
+            # Ate 08/08/2026 ela exigia '-ensaio.' no DB_HOST — o nome do banco
+            # temporario do blue-green (FABIANO-46). Esse banco morre no
+            # FABIANO-48, e o da homolog vai se chamar 'poc-fabiano-homolog-db'
+            # (FABIANO-33): a trava abortaria um deploy LEGITIMO, e o sintoma
+            # apareceria no meio do primeiro ciclo de homolog.
+            #
+            # Ancorado em '^DB_HOST=' para nao casar com comentario dentro do
+            # arquivo. 'poc-fabiano-db\.' com o ponto literal casa SO com producao —
+            # 'poc-fabiano-db-ensaio.' e 'poc-fabiano-homolog-db.' nao batem,
+            # porque tem outro caractere onde o ponto deveria estar. Qualquer
+            # banco futuro passa sem alguem precisar lembrar de editar isto.
+            if grep -qE '^DB_HOST=.*poc-fabiano-db\.' .env; then
+              echo "ABORTADO: o .env desta maquina aponta para o banco de PRODUCAO."
+              echo "Ou o HOMOLOG_EC2_HOST esta errado, ou esta maquina e producao."
               echo "NADA foi enviado."
               exit 1
-            }
-            echo "Alvo confirmado: banco de ensaio."
+            fi
+            echo "Alvo confirmado: nao e o banco de producao."
 
       - name: Enviar arquivos de deploy
         uses: appleboy/scp-action@v0.1.7
@@ -344,10 +378,23 @@ jobs:
             # custa ~10 segundos e nao tem como errar. Este projeto ja foi
             # mordido quatro vezes pelo mesmo padrao — mecanismo esperto que
             # falha calado (FABIANO-29, 62, 63 e este).
-            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail; then
-              echo "prometheus, loki e promtail releram a configuracao"
+            #
+            # O GRAFANA entrou nesta lista em 08/08/2026, e a ausencia dele era
+            # a versao mais cara do mesmo bug: o Grafana le provisioning/ —
+            # datasources, paineis e REGRAS DE ALERTA — apenas no boot. Alterar
+            # rules.yaml no repositorio passava verde no deploy e o alerta
+            # continuava com a versao anterior, indefinidamente.
+            #
+            # A unica forma de perceber seria um incidente em que o alerta novo
+            # deveria tocar e nao toca — ou seja, descobrir pelo pior caminho
+            # possivel, que e exatamente o que esta epica existe para evitar.
+            #
+            # Recriar o Grafana troca o IP do container: por isso o reload do
+            # nginx logo abaixo (FABIANO-67) nao e opcional, e vem DEPOIS.
+            if docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana; then
+              echo "prometheus, loki, promtail e grafana releram a configuracao"
             else
-              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail (FABIANO-68)."
+              echo "::warning::Nao consegui reiniciar prometheus/loki/promtail/grafana. A configuracao nova esta no DISCO da maquina, mas os processos continuam com a ANTERIOR — este deploy verde nao aplicou o que voce mudou. Conserto manual: docker compose -f docker-compose.observability.yml restart prometheus loki promtail grafana (FABIANO-68)."
             fi
 
             # ---- FABIANO-67 -------------------------------------------------
@@ -374,6 +421,18 @@ jobs:
         run: |
           echo "Imagem em homologacao: ${{ needs['build-push-develop'].outputs.tag }}"
           echo "E ESTA a tag que deve ir para producao depois de validada."
+
+  # Um job pulado aparece cinza na interface e e facil de nao ver. Este existe
+  # so para deixar a ausencia da homologacao ESCRITA no resumo da execucao —
+  # ninguem deveria precisar lembrar por que o deploy nao rodou.
+  homolog-desativada:
+    name: Homologacao desativada (aviso)
+    needs: build-and-test
+    if: vars.HOMOLOG_ATIVO != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::warning::Nenhum deploy de homologacao foi feito: a variavel HOMOLOG_ATIVO nao esta em 'true'. Desde 08/08/2026 nao existe maquina de homologacao — a antiga virou producao (FABIANO-47). Para religar: criar a maquina (FABIANO-33), atualizar HOMOLOG_EC2_HOST e definir HOMOLOG_ATIVO=true nas Variables do repositorio."
 
   create-pr-to-master:
     name: Create PR to Master
