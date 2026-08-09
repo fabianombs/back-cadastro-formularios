@@ -639,6 +639,123 @@ groups:
     isPaused: false
 
   # ---------------------------------------------------------------------------
+  # Renovacao de certificado — o segundo dead man's switch (FABIANO-76)
+  # ---------------------------------------------------------------------------
+  # Este alerta existe porque a virada de 08/08 levou o Docker Compose para a
+  # maquina nova e deixou o "certbot renew" do crontab para tras. Ninguem
+  # percebeu por um dia inteiro: renovacao que para de rodar nao gera erro, so
+  # ausencia — e ausencia nao tem cor em painel nenhum.
+  #
+  # POR QUE ELE NAO E REDUNDANTE COM O fabiano-certificado-expirando:
+  #   aquele mede o RESULTADO, olhando de fora quanto falta para o certificado
+  #   vencer. So acende a 20 dias do fim, quando ja se perderam varias janelas
+  #   de renovacao. Este mede o PROCESSO, e acende em 2 dias.
+  #   Um responde "estamos prestes a cair"; o outro, "a maquinaria parou".
+  #
+  # 48h e nao 26h como o do backup: a renovacao roda diariamente, mas o certbot
+  # so age de fato quando faltam menos de 30 dias. Uma noite perdida por reboot
+  # ou manutencao nao e emergencia; duas ja indicam que o agendamento sumiu.
+  - uid: fabiano-renovacao-cert-parada
+    title: Renovacao de certificado parou de rodar
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: (time() - max(certbot_fabiano_timestamp_seconds)) / 3600
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [48] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # Sem dado DISPARA, igual ao do backup: metrica ausente e indistinguivel de
+    # renovacao que nunca rodou, e essa e exatamente a falha que importa.
+    noDataState: Alerting
+    execErrState: Error
+    for: 30m
+    annotations:
+      summary: Nenhuma execucao da renovacao de certificado nas ultimas 48 horas.
+      description: 'Conferir nesta ordem: "sudo crontab -l" deve conter a linha das 03:17 chamando
+        /app/renovar-certificados.sh; o fim de /var/log/renovar-certificados.log; e se
+        /var/lib/node_exporter/textfile_collector/certbot_fabiano.prom esta sendo atualizado. Em 09/08/2026
+        a linha do cron simplesmente nao existia na maquina nova — e os certificados de producao venciam
+        em 06/11 sem ninguem saber.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
+    labels:
+      severidade: critico
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
+  # Renovacao de certificado falhando (FABIANO-76)
+  # ---------------------------------------------------------------------------
+  # Complementar ao de cima: aquele detecta que a renovacao PAROU; este detecta
+  # que ela roda e FALHA. Sao sintomas diferentes com causas diferentes — cron
+  # removido versus DNS errado, porta 80 fechada, webroot quebrado.
+  #
+  # O script so conta como falha o que e dele: certificado que aponta para outra
+  # maquina e PULADO com mensagem explicita, nao contabilizado. Sem isso, a
+  # maquina de producao acusaria falha toda noite por causa dos certificados de
+  # homolog — e alerta que falha todo dia e alerta que se aprende a ignorar.
+  - uid: fabiano-renovacao-cert-falhando
+    title: Renovacao de certificado falhou
+    condition: B
+    data:
+    - refId: A
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: prometheus-fabiano
+      model:
+        refId: A
+        expr: max(certbot_fabiano_falhas)
+        instant: true
+        editorMode: code
+        range: false
+        datasource: { type: prometheus, uid: prometheus-fabiano }
+    - refId: B
+      relativeTimeRange: { from: 3600, to: 0 }
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: threshold
+        expression: A
+        datasource: { type: __expr__, uid: __expr__ }
+        conditions:
+        - evaluator: { type: gt, params: [0] }
+          operator: { type: and }
+          query: { params: [B] }
+          reducer: { type: last, params: [] }
+          type: query
+    # OK e nao Alerting: metrica ausente ja e coberta pelo alerta de cima, e
+    # duas regras gritando pela mesma causa e ruido, nao redundancia.
+    noDataState: OK
+    execErrState: Error
+    for: 30m
+    annotations:
+      summary: A ultima execucao da renovacao de certificado teve falhas.
+      description: 'Ver /var/log/letsencrypt/letsencrypt.log para o motivo. Causas frequentes: DNS do
+        dominio apontando para outra maquina, porta 80 bloqueada no Security Group (o desafio ACME e
+        HTTP, nao HTTPS), ou o webroot /var/www/certbot inacessivel pelo nginx. Diferente do alerta de
+        renovacao parada, aqui a maquinaria roda — ela e que nao consegue concluir.'
+      runbook_url: https://grafana.nexventa.com.br/d/fabiano-overview
+    labels:
+      severidade: alto
+    isPaused: false
+
+  # ---------------------------------------------------------------------------
   # Disco da EC2
   # ---------------------------------------------------------------------------
   # O disco desta maquina ja encheu de log do proprio json-file. Prometheus e
