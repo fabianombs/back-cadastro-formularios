@@ -94,16 +94,23 @@ variable "db_password" {
   default     = ""
 }
 
+# Atualizado em 09/08/2026, DEPOIS do upgrade — que e exatamente a ordem que o
+# comentario anterior deste bloco pedia. Enquanto o default dizia 8.0.45 e a
+# producao ja rodava 8.4.10, um `apply` proporia downgrade de versao maior: a
+# AWS recusa, e o erro travaria qualquer mudanca legitima neste state.
 variable "db_engine_version" {
-  description = "Versao real hoje. O upgrade para 8.4 e o FABIANO-9 — quando acontecer, atualizar aqui DEPOIS, para o plan confirmar."
+  description = "Versao real da producao, conferida via describe-db-instances em 09/08/2026."
   type        = string
-  default     = "8.0.45"
+  default     = "8.4.10"
 }
 
+# O Blue/Green do FABIANO-9 criou a instancia verde ja com este grupo, e ela
+# assumiu o nome de producao no switchover. O 'default.mysql8.0' e da familia
+# 8.0 e nem seria aceito num motor 8.4.
 variable "db_parameter_group" {
-  description = "Parameter group em uso. Existe tambem um 'poc-fabiano-mysql84' criado pela CLI, ainda nao usado (FABIANO-6)."
+  description = "Parameter group em uso na producao, conferido em 09/08/2026."
   type        = string
-  default     = "default.mysql8.0"
+  default     = "poc-fabiano-mysql84"
 }
 
 variable "db_backup_retention" {
