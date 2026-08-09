@@ -7,6 +7,26 @@
 # tela de Alerting, mas ninguem e avisado.
 #
 # O envio depende do SMTP configurado no proprio Grafana (GF_SMTP_*).
+#
+# -----------------------------------------------------------------------------
+# Sobre o 'grafana-default-email' que aparece na tela e NAO esta aqui (09/08/2026)
+# -----------------------------------------------------------------------------
+# O Grafana cria de fabrica um contato chamado 'grafana-default-email' com o
+# endereco literal <example@email.com>. Ele aparece em Alerting > Contact points
+# ao lado deste, sem o selo 'Provisioned' e com "No delivery attempts".
+#
+# Ele esta INERTE e nao precisa ser corrigido: a politica raiz do
+# notification-policies.yaml aponta para 'email-equipe', entao alerta que nao
+# casa com nenhuma rota especifica cai no contato certo, nao nele.
+#
+# Deliberadamente NAO o provisionamos aqui. Se o Grafana recusar um contato com
+# esse nome reservado, o provisionamento de alerting falha INTEIRO — e os 14
+# alertas somem junto. Trocar risco zero por risco pequeno num arquivo que sobe
+# sozinho de madrugada nao compensa.
+#
+# O que fica como cuidado: ao criar rota nova pela TELA, conferir que o receiver
+# e 'email-equipe'. Apontar para o default manda o alerta para <example@email.com>
+# e ele some sem deixar rastro.
 # =============================================================================
 apiVersion: 1
 contactPoints:
