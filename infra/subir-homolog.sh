@@ -52,6 +52,13 @@ CARIMBO=$(date +%Y%m%d-%H%M)
 AMI_NOME="fabiano-homolog-base-${CARIMBO}"
 SNAP_NOME="homolog-base-${CARIMBO}"
 
+# O auto-desligamento vai embutido no user-data em base64. Assim, em vez de um
+# heredoc dentro do heredoc, some o inferno de escapes — e continua havendo UMA
+# fonte da verdade: o arquivo ao lado, versionado e revisavel.
+AUTODESLIGA_ARQ="$(dirname "$0")/homolog-autodesliga.sh"
+[ -f "$AUTODESLIGA_ARQ" ] || { echo "ERRO: nao encontrei ${AUTODESLIGA_ARQ}"; exit 1; }
+AUTODESLIGA_B64=$(base64 -w0 "$AUTODESLIGA_ARQ")
+
 msg() { echo -e "\n=== $* ==="; }
 
 # -----------------------------------------------------------------------------
@@ -305,6 +312,13 @@ if [ "\$RESULTADO_APP" -eq 0 ] && [ "\$RESULTADO_OBS" -eq 0 ]; then
 else
   touch /var/log/homolog-init.FALHOU
 fi
+
+# --- 8. auto-desligamento por inatividade ------------------------------------
+# Instalado POR ULTIMO, de proposito: se o boot falhar antes daqui, a maquina
+# fica de pe para ser investigada em vez de sumir sozinha com a evidencia.
+echo '${AUTODESLIGA_B64}' | base64 -d > /usr/local/bin/homolog-autodesliga.sh
+chmod 755 /usr/local/bin/homolog-autodesliga.sh
+( crontab -l 2>/dev/null; echo "*/15 * * * * /usr/local/bin/homolog-autodesliga.sh" ) | crontab -
 CLOUDINIT
 )
 
@@ -316,6 +330,7 @@ INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --subnet-id "$HML_SUBNET" \
   --user-data "$USER_DATA" \
   --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
+  --instance-initiated-shutdown-behavior terminate \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=poc-fabiano-homolog},{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]" \
   --query 'Instances[0].InstanceId' --output text)
 echo "instancia: $INSTANCIA"
@@ -358,7 +373,13 @@ cat <<FIM
  E-mails: NENHUM sai da maquina. Caixa do Mailpit:
    ssh -L 8025:mailpit:8025 ...   e abrir http://localhost:8025
 
- Para derrubar e zerar o custo:
+ AUTO-DESLIGAMENTO: esta maquina se TERMINA sozinha se ficar
+   - 24h sem nenhuma requisicao real (a sonda do blackbox nao conta), ou
+   - 7 dias de pe, aconteca o que acontecer.
+ Sessao SSH aberta segura o desligamento. Registro em:
+   /var/log/homolog-autodesliga.log
+
+ Para derrubar agora e zerar o custo:
    ./derrubar-homolog.sh
 =============================================================================
 FIM
