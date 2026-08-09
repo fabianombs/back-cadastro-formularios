@@ -4,7 +4,7 @@
 > comando nenhum. Tudo aqui é para copiar e colar. Onde houver valor a
 > preencher, a mesma linha diz onde encontrá-lo.
 
-**Atualizado em:** 08/08/2026 — dia da virada (secao 0 e secao 9)
+**Atualizado em:** 09/08/2026 — virada de maquina e upgrade do banco para MySQL 8.4
 
 ---
 
@@ -96,6 +96,56 @@ Se aparecer outro, **pare**. Ai sim pode ser problema de verdade.
 > esperados neste intervalo, nao defeito. O FABIANO-48 desativa os crons e
 > **para** (nao termina) a instancia — ela e o rollback ate a virada provar-se
 > estavel.
+>
+> O `certbot` dela ja e inutil: o dominio aponta para a maquina nova desde a
+> virada, entao a validacao ACME falha la de qualquer jeito.
+
+### Como entrar em cada uma
+
+**Maquina nova (producao):**
+
+```bash
+ssh -i ~/.ssh/poc-fabiano ec2-user@100.30.35.83
+```
+
+**Maquina antiga:** ela **perdeu o IP publico** na virada. So e alcancavel de
+dentro da VPC, saltando pela nova:
+
+```bash
+ssh -i ~/.ssh/poc-fabiano -J ec2-user@100.30.35.83 ec2-user@172.31.28.215
+```
+
+> [!tip] `-J` (ProxyJump), nao `-A` (agent forwarding)
+> Os dois resolvem o salto. A diferenca esta em onde a chave fica exposta:
+>
+> - `-A` publica o socket do agente **dentro** da maquina do meio. Quem for root
+>   la consegue usar a sua chave enquanto a sessao existir.
+> - `-J` abre um tunel e a chave autentica nas duas pontas **direto do seu PC**.
+>   A maquina do meio nunca ve credencial nenhuma.
+>
+> O `-A` ainda depende de o `sshd` da maquina do meio permitir forwarding, o que
+> nem sempre e o caso. O `-J` nao depende de nada disso.
+
+Para nao decorar, rodar uma vez `infra/conectar.ps1` (PowerShell). Ele escreve os
+atalhos no `~/.ssh/config` e a partir dai basta:
+
+```bash
+ssh fabiano-nova
+ssh fabiano-antiga    # o ProxyJump ja vai embutido
+```
+
+O script e idempotente, faz backup do `config` antes de escrever e corrige
+sozinho a permissao da chave — o OpenSSH do Windows recusa chave legivel por
+outros usuarios, e o erro (`UNPROTECTED PRIVATE KEY FILE`) so aparece na hora de
+conectar.
+
+**Terceiro caminho, se o SSH falhar:** as duas instancias tem a politica
+`AmazonSSMManagedInstanceCore` anexada, entao aceitam **SSM Session Manager** —
+sem chave, sem IP publico, sem porta 22 aberta:
+
+```bash
+aws ssm start-session --target i-008f8d272588845ef --region us-east-1
+```
 
 ### Rollback da virada
 
@@ -238,6 +288,70 @@ virada, e EIP parado e cobrado (~US$ 3,65/mes).
 > `cat >>`, `python3 -c "open(...,'w')"`, ou `sed` com redirecionamento para
 > arquivo temporario e depois `cat tmp > nginx.conf` (`>` trunca e reescreve o
 > mesmo inode; `mv` nao).
+
+> [!danger] Upgrade de RDS por Blue/Green? O pool fica preso no banco ANTIGO
+> Descoberto em 08/08/2026, na troca para MySQL 8.4. **Nao esta na documentacao
+> da AWS**, e morde qualquer aplicacao Java.
+>
+> No switchover, a AWS renomeia: o verde assume o nome `poc-fabiano-db` e o IP
+> dele passa a ser o que o nome resolve; o azul vira `poc-fabiano-db-old1`,
+> **mantem o IP antigo** e fica em somente leitura.
+>
+> O HikariCP reconstroi o pool nos segundos da troca — e a JVM ainda tem o IP
+> antigo em cache. Resultado: as conexoes novas nascem apontando para o banco
+> **abandonado**.
+>
+> ## Por que passa despercebido
+>
+> O `old1` e uma copia exata da producao de segundos atras. **Leitura funciona
+> perfeitamente**: login, dashboard, listas, tudo 200, tudo com os dados certos.
+> `SELECT VERSION()` pelo cliente `mysql` — processo novo, DNS novo — mostra o
+> verde e a versao nova, confirmando um sucesso que a aplicacao nao esta tendo.
+>
+> **So a escrita denuncia**, com esta mensagem:
+>
+> ```
+> The MySQL server is running with the --read-only option
+> so it cannot execute this statement
+> ```
+>
+> ## Como confirmar em dois comandos
+>
+> ```bash
+> getent hosts poc-fabiano-db.cqdguyqqe6d6.us-east-1.rds.amazonaws.com
+> getent hosts poc-fabiano-db-old1.cqdguyqqe6d6.us-east-1.rds.amazonaws.com
+> ```
+>
+> Converta cada IP para hexadecimal com os bytes invertidos (172.31.14.180 ->
+> `B40E1FAC`) e conte as conexoes de dentro do container — `0CEA` e a porta 3306:
+>
+> ```bash
+> docker exec fabiano-backend cat /proc/net/tcp | grep -c "<HEX_VERDE>:0CEA"
+> docker exec fabiano-backend cat /proc/net/tcp | grep -c "<HEX_OLD1>:0CEA"
+> ```
+>
+> `ss` no host **nao serve**: as conexoes vivem no namespace de rede do
+> container.
+>
+> ## A correcao
+>
+> ```bash
+> docker compose up -d --pull never --force-recreate backend
+> sleep 25
+> docker exec fabiano-nginx nginx -s reload
+> ```
+>
+> JVM nova, sem cache de DNS, pool nascendo no lugar certo.
+>
+> ## O que salvou
+>
+> A AWS deixa o azul em **somente leitura**. Foi isso que transformou perda
+> silenciosa de dados — escritas indo para um banco que ninguem vai abrir de
+> novo — num erro visivel na tela. Se o `old1` aceitasse escrita, a descoberta
+> viria dias depois, procurando um cadastro que "com certeza foi feito".
+>
+> **Regra: depois de todo switchover de Blue/Green, recrie a aplicacao ANTES de
+> declarar sucesso — e valide com uma ESCRITA, nunca com uma leitura.**
 
 > [!danger] Recriou o backend? Recarregue o nginx — sem excecao
 > O `nginx.conf` tem `proxy_pass http://backend:8080`, resolvido **uma unica vez,
@@ -479,8 +593,31 @@ Se isso falhar, o problema é o RDS ou a rede, não a aplicação.
 | Dump pré-deploy `db_before_*` | desde aquele deploy | reverter estrago de um deploy específico |
 
 **O PITR só existe se o `backup_retention_period` do RDS for maior que zero.**
-Confirmar isso é o FABIANO-4 e ainda está pendente. Enquanto não for confirmado,
-**assuma que não existe PITR.**
+
+> [!note] Confirmado em 09/08/2026
+> `BackupRetentionPeriod = 7`, `DeletionProtection = true`, `EngineVersion = 8.4.10`.
+> Conferido direto na instância nova criada pelo switchover Blue/Green — ela foi
+> criada do zero pela AWS, e não era óbvio que herdaria essas duas flags do blue.
+>
+> **O PITR existe.** Este runbook afirmava o contrário até esta data.
+>
+> ```bash
+> aws rds describe-db-instances --db-instance-identifier poc-fabiano-db \
+>   --region us-east-1 \
+>   --query 'DBInstances[0].[DeletionProtection,BackupRetentionPeriod,EngineVersion]'
+> ```
+
+### As quatro camadas, e a única que era teoria
+
+| # | Artefato | O que é | Vale para |
+|---|---|---|---|
+| 1 | PITR do RDS (7 dias) | mecanismo da AWS | erro operacional recente — perde ~5 min |
+| 2 | `old1-mysql80-final-20260809` | snapshot da produção real em **8.0**, no instante do switchover | **rollback de versão de engine** |
+| 3 | Dump diário → S3 + e-mail | **SQL em texto**, agnóstico de engine | último recurso; restaura em 8.0 **ou** 8.4 |
+| 4 | Dump pré-deploy `db_before_*` | local, na máquina | desfazer estrago de um deploy específico |
+
+Das quatro, três são mecanismos da AWS. A camada 3 é script nosso — e foi a única
+que nunca tinha sido exercitada. Deixou de ser em 09/08/2026 (ver 6.3).
 
 ### 6.1 — Point-in-time recovery (preferível)
 
@@ -529,8 +666,79 @@ Com o arquivo validado:
 O `mysqldump` antes do `gunzip` é rede de segurança: guarda o estado atual antes
 de sobrescrever.
 
-**RTO medido:** ainda não medido. O teste de restauração é o FABIANO-20 e continua
-pendente. Enquanto ele não for feito, este procedimento é teoria.
+### 6.3 — O ensaio de restauração (FABIANO-20)
+
+**Executado em 09/08/2026.** Antes disso, tudo acima nesta seção era teoria.
+
+```
+ dump testado : fabiano-20260808-220349.sql.gz
+ tabelas      : 24
+ divergentes  : 0
+ RTO medido   : 2s
+```
+
+24 de 24 tabelas com contagem idêntica à produção, incluindo `attendance_records`
+(4241), `attendance_record_data` (8769) e `clients` (14 — o registro criado
+**depois** do upgrade para 8.4).
+
+**Repetir a cada trimestre.** Existe evento recorrente no calendário; o script é
+versionado justamente para o ensaio não depender do histórico do terminal:
+
+```bash
+./infra/testar-restauracao.sh /app/backups/diario/fabiano-AAAAMMDD-HHMMSS.sql.gz
+```
+
+Ele sobe um MySQL 8.4 descartável em container, restaura, cronometra e compara a
+contagem de cada tabela com a produção. Não escreve nada na produção — só
+`SELECT COUNT(*)`.
+
+> [!important] A EC2 não consegue baixar o próprio backup, e isso é de propósito
+> A role `poc-fabiano-producao-ec2` tem `s3:PutObject` e `s3:ListBucket` no bucket
+> de backup, mas **não tem `s3:GetObject`**. Os Sids da política inline `operacao`
+> mostram a intenção: `EscreverBackup`, `ConferirBackup`, e o `GetObject` existe
+> apontado para o bucket de **artefatos**, não o de backup.
+>
+> É backup *append-only*: uma EC2 comprometida sobe lixo, mas não lê nem apaga o
+> que já está lá. Somado ao `NoncurrentVersionExpiration` de 90 dias do bucket,
+> mesmo um upload malicioso por cima deixa o original recuperável.
+>
+> **Consequência operacional: quem restaura é um humano**, com credencial própria
+> e auditada, baixando pela CloudShell ou pelo console. Não tente "consertar" a
+> política — isso desmontaria a proteção.
+
+**Como validar a cópia do S3 sem baixá-la.** O `ETag` de um objeto enviado em
+parte única **é o MD5 do conteúdo**:
+
+```bash
+# CloudShell
+aws s3api head-object --bucket fabiano-db-backups-135133927228 \
+  --key diario/<ARQUIVO> --query '[ETag,ContentLength]' --output text
+
+# na EC2
+sudo md5sum /app/backups/diario/<ARQUIVO>
+```
+
+Batendo hash e tamanho, restaurar a cópia local tem a mesma validade que
+restaurar a do S3.
+
+### 6.4 — RTO real, decomposto
+
+Os 2 segundos são o tempo de **restaurar o arquivo**, não de voltar ao ar:
+
+| Etapa | Tempo |
+|---|---|
+| Baixar do S3 (124 KB) | ~1 s |
+| Provisionar destino — container | ~30 s |
+| Provisionar destino — RDS novo | ~15 min |
+| **Restaurar o dump** | **2 s (medido)** |
+| Repontar a aplicação e subir | ~1 min |
+
+**RTO técnico: ~2 min** com container, **~20 min** com RDS. A meta do FABIANO-20
+era ≤ 1 hora.
+
+> [!tip] O número que realmente domina o RTO
+> Nada disso. É o tempo até **alguém perceber e decidir restaurar**. Esse é o
+> número que os alertas atacam — não o script.
 
 ---
 
@@ -854,24 +1062,62 @@ Reassociacao do Elastic IP `eipalloc-025082e8787508bb8` da instancia
 
 ## 10. ZONA DE PERIGO
 
-### `terraform apply` hoje quebraria producao
+### `terraform apply` — resolvido em 09/08/2026, mas leia o porquê
 
-O `infra/terraform/main.tf` **nao descreve a realidade**:
+> [!note] Este bloco dizia o contrario ate 09/08/2026
+> A versao anterior afirmava que o `main.tf` declarava `t2.micro`,
+> `backup_retention_period = 0` e `skip_final_snapshot = true`, e mandava **nao
+> rodar `terraform apply`**. Aquilo ja tinha sido corrigido no FABIANO-10 — o
+> runbook e que envelheceu. Fica registrado porque aviso de perigo desatualizado
+> tem um custo proprio: ou paralisa quem confia nele, ou treina a ignorar avisos.
+
+Estado conferido com `terraform plan` em 09/08/2026: **`0 added, 0 changed,
+0 destroyed`**.
+
+O que precisou ser corrigido naquele dia, depois da virada e do upgrade:
+
+**1. O Elastic IP seria reassociado para a maquina antiga.** O `aws_eip.app`
+declara `instance = aws_instance.app.id`, que e a maquina legada. Desde a virada
+o endereco esta na maquina nova, que **nao e gerenciada por este state** de
+proposito. Sem trava, qualquer `apply` — ate um que so mexesse numa tag —
+proporia mover o EIP de volta, e producao cairia no mesmo segundo.
 
 ```hcl
-instance_type           = "t2.micro"          # a maquina real e t3.medium
-ami                     = "ami-0c02fb..."     # Amazon Linux 2; a real e AL2023
-backup_retention_period = 0                   # a real tem 7 dias
-skip_final_snapshot     = true                # a real tem deletion protection
+lifecycle {
+  ignore_changes  = [instance]
+  prevent_destroy = true
+}
 ```
 
-E o `infra/terraform/user_data.sh` ainda instala **Java 21 e um servico systemd** —
-a arquitetura de antes do Docker.
+> [!danger] `prevent_destroy` nao protegia disso
+> Reassociar EIP e **update no lugar**, nao destroy. A protecao que ja existia
+> cobria o cenario errado — e parecia suficiente. Vale a pergunta sempre que se
+> confia num `prevent_destroy`: o estrago que eu temo e mesmo um *destroy*?
 
-> [!danger] Nao rode `terraform apply` ate isso ser corrigido (FABIANO-10)
-> Ele devolveria a maquina errada, do tipo errado, com o sistema errado — e
-> **desligaria o backup automatico do banco de producao** no caminho. O plano de
-> recuperacao esta pior que nao ter plano, porque parece que existe.
+**2. Duas variaveis descrevendo a versao anterior:** `db_engine_version` estava
+`8.0.45` (real: `8.4.10`) e `db_parameter_group` estava `default.mysql8.0`
+(real: `poc-fabiano-mysql84`). Com aquilo, um `apply` proporia **downgrade de
+versao maior** — a AWS recusa, e o erro travaria qualquer mudanca legitima.
+
+**3. Outputs corretos que juntos mentiam:** `ec2_instance_id` vinha do recurso
+(maquina antiga) e `ec2_public_ip` do Elastic IP (maquina nova). Cada um certo
+isolado; lidos juntos, afirmavam que a instancia antiga atendia no IP de
+producao. Renomeados para `ec2_antiga_instance_id` e `eip_producao`.
+
+### Regra que fica: depois de toda virada, rodar `terraform plan`
+
+Nao para aplicar — para **ler**. Uma virada muda a realidade sem tocar no codigo,
+e o `plan` e o unico lugar onde essa diferenca aparece por escrito antes de virar
+incidente.
+
+```bash
+cd infra/terraform && terraform plan
+```
+
+O Terraform roda na **CloudShell**, nao no Windows. O ciclo hoje e empacotar
+(`Compress-Archive -Path infra\terraform\* -DestinationPath terraform4.zip`),
+subir por **Actions → Upload file** e descompactar em `/tmp/tf`. A CloudShell
+**nao sobrescreve** arquivo existente: apagar o antigo antes.
 
 ### As travas das esteiras — o que elas protegem, e o que nao
 
