@@ -4,7 +4,7 @@
 > comando nenhum. Tudo aqui é para copiar e colar. Onde houver valor a
 > preencher, a mesma linha diz onde encontrá-lo.
 
-**Atualizado em:** 08/08/2026 — dia da virada (secao 0 e secao 9)
+**Atualizado em:** 09/08/2026 — virada de maquina e upgrade do banco para MySQL 8.4
 
 ---
 
@@ -238,6 +238,70 @@ virada, e EIP parado e cobrado (~US$ 3,65/mes).
 > `cat >>`, `python3 -c "open(...,'w')"`, ou `sed` com redirecionamento para
 > arquivo temporario e depois `cat tmp > nginx.conf` (`>` trunca e reescreve o
 > mesmo inode; `mv` nao).
+
+> [!danger] Upgrade de RDS por Blue/Green? O pool fica preso no banco ANTIGO
+> Descoberto em 08/08/2026, na troca para MySQL 8.4. **Nao esta na documentacao
+> da AWS**, e morde qualquer aplicacao Java.
+>
+> No switchover, a AWS renomeia: o verde assume o nome `poc-fabiano-db` e o IP
+> dele passa a ser o que o nome resolve; o azul vira `poc-fabiano-db-old1`,
+> **mantem o IP antigo** e fica em somente leitura.
+>
+> O HikariCP reconstroi o pool nos segundos da troca — e a JVM ainda tem o IP
+> antigo em cache. Resultado: as conexoes novas nascem apontando para o banco
+> **abandonado**.
+>
+> ## Por que passa despercebido
+>
+> O `old1` e uma copia exata da producao de segundos atras. **Leitura funciona
+> perfeitamente**: login, dashboard, listas, tudo 200, tudo com os dados certos.
+> `SELECT VERSION()` pelo cliente `mysql` — processo novo, DNS novo — mostra o
+> verde e a versao nova, confirmando um sucesso que a aplicacao nao esta tendo.
+>
+> **So a escrita denuncia**, com esta mensagem:
+>
+> ```
+> The MySQL server is running with the --read-only option
+> so it cannot execute this statement
+> ```
+>
+> ## Como confirmar em dois comandos
+>
+> ```bash
+> getent hosts poc-fabiano-db.cqdguyqqe6d6.us-east-1.rds.amazonaws.com
+> getent hosts poc-fabiano-db-old1.cqdguyqqe6d6.us-east-1.rds.amazonaws.com
+> ```
+>
+> Converta cada IP para hexadecimal com os bytes invertidos (172.31.14.180 ->
+> `B40E1FAC`) e conte as conexoes de dentro do container — `0CEA` e a porta 3306:
+>
+> ```bash
+> docker exec fabiano-backend cat /proc/net/tcp | grep -c "<HEX_VERDE>:0CEA"
+> docker exec fabiano-backend cat /proc/net/tcp | grep -c "<HEX_OLD1>:0CEA"
+> ```
+>
+> `ss` no host **nao serve**: as conexoes vivem no namespace de rede do
+> container.
+>
+> ## A correcao
+>
+> ```bash
+> docker compose up -d --pull never --force-recreate backend
+> sleep 25
+> docker exec fabiano-nginx nginx -s reload
+> ```
+>
+> JVM nova, sem cache de DNS, pool nascendo no lugar certo.
+>
+> ## O que salvou
+>
+> A AWS deixa o azul em **somente leitura**. Foi isso que transformou perda
+> silenciosa de dados — escritas indo para um banco que ninguem vai abrir de
+> novo — num erro visivel na tela. Se o `old1` aceitasse escrita, a descoberta
+> viria dias depois, procurando um cadastro que "com certeza foi feito".
+>
+> **Regra: depois de todo switchover de Blue/Green, recrie a aplicacao ANTES de
+> declarar sucesso — e valide com uma ESCRITA, nunca com uma leitura.**
 
 > [!danger] Recriou o backend? Recarregue o nginx — sem excecao
 > O `nginx.conf` tem `proxy_pass http://backend:8080`, resolvido **uma unica vez,
