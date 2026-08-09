@@ -110,6 +110,20 @@ resource "aws_eip" "app" {
   }
 
   lifecycle {
+    # ignore_changes em 'instance' e a correcao mais importante deste arquivo.
+    #
+    # Este recurso declara o EIP apontando para aws_instance.app, que e a maquina
+    # ANTIGA (i-0987e63c336e202b9). Desde a virada de 08/08 (FABIANO-47) o
+    # endereco esta na maquina NOVA (i-008f8d272588845ef), que nao e gerenciada
+    # aqui de proposito — ver o comentario do aws_instance.app acima.
+    #
+    # Sem esta linha, um `terraform apply` REASSOCIARIA o EIP de volta para a
+    # maquina antiga. Producao cairia no mesmo segundo, por um plan que ninguem
+    # leria com atencao porque "so mexia em tag". O prevent_destroy nao protege
+    # disso: nao e destroy, e update no lugar.
+    #
+    # Sai daqui quando o Auto Scaling (FABIANO-57) assumir o endereco.
+    ignore_changes  = [instance]
     prevent_destroy = true
   }
 }

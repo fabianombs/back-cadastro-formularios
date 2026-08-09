@@ -469,12 +469,35 @@ groups:
   folder: Fabiano
   interval: 1m
   rules:
-  # Ausencia de envio so e sintoma onde alguem usa o sistema. Em homologacao
-  # ninguem usa, entao esta regra viveria acesa — e alerta que sempre toca e
-  # alerta que todo mundo aprende a ignorar. ALERTA_SUBMISSAO_PAUSADO vem do
-  # .env: true em homologacao, false em producao.
+  # ---------------------------------------------------------------------------
+  # CORRIGIDO EM 09/08/2026 — a regra anterior mentia no proprio nome
+  # ---------------------------------------------------------------------------
+  # O titulo dizia "em horario comercial" e o resumo dizia "em horario util",
+  # mas a consulta era apenas:
+  #
+  #     sum(increase(formulario_submissao_total{resultado="sucesso"}[2h])) < 1
+  #
+  # Nenhuma guarda de horario. Avaliava 24h por dia, 7 dias por semana, e
+  # confundia "produto parado" com "produto quebrado". Foi encontrada disparando
+  # ha 10h seguidas, as 23h, sem nada de errado acontecendo.
+  # Alerta que sempre toca e alerta que todo mundo aprende a ignorar.
+  #
+  # A regra certa ja estava escrita — na DESCRICAO desta propria regra:
+  #   "se as aberturas continuam e os envios estao em zero, o formulario
+  #    quebrou. Se os dois estao em zero, foi so um periodo parado."
+  #
+  # Agora a consulta faz isso: compara ABERTURAS com ENVIOS, e so acusa quando
+  # ha gente abrindo o formulario e ninguem conseguindo enviar.
+  #
+  # Por que isso e melhor que uma guarda de hora (hour() >= 12 etc.): as
+  # aberturas SAO o sinal de que tem alguem usando. A regra se adapta ao uso
+  # real em vez de assumir um expediente — vale igual num feriado, numa
+  # madrugada de campanha ou num sabado movimentado.
+  #
+  # ALERTA_SUBMISSAO_PAUSADO continua vindo do .env, mas deixou de ser
+  # necessario para evitar falso positivo: sem aberturas, nao ha alerta.
   - uid: fabiano-sem-submissao
-    title: Nenhum formulario enviado em horario comercial
+    title: Formulario sendo aberto mas nenhum envio conclui
     condition: B
     data:
     - refId: A
@@ -484,7 +507,17 @@ groups:
       datasourceUid: prometheus-fabiano
       model:
         refId: A
-        expr: sum(increase(formulario_submissao_total{job="fabiano-back",resultado="sucesso"}[2h]))
+        # Devolve a CONTAGEM DE ABERTURAS, e so quando os envios estao zerados.
+        # Havendo pelo menos um envio, o 'and on()' esvazia o resultado e a
+        # regra nem chega a avaliar o limiar.
+        #
+        # Os 'or vector(0)' existem porque contador do Micrometer so passa a
+        # existir depois do primeiro incremento: sem eles, um periodo sem
+        # nenhum envio devolveria vazio em vez de zero.
+        expr: >-
+          (sum(increase(http_server_requests_seconds_count{job="fabiano-back",method="GET",uri="/form-templates/slug/{slug}",status=~"2.."}[2h])) or vector(0))
+          and on()
+          ((sum(increase(formulario_submissao_total{job="fabiano-back",resultado="sucesso"}[2h])) or vector(0)) < 1)
         instant: true
         editorMode: code
         range: false
@@ -504,10 +537,12 @@ groups:
           type: __expr__
           uid: __expr__
         conditions:
+        # 3 aberturas em 2h e o piso de "tem gente usando". Abaixo disso pode ser
+        # varredura automatizada ou um clique solto, e nao vale acordar ninguem.
         - evaluator:
-            type: lt
+            type: gt
             params:
-            - 1
+            - 3
           operator:
             type: and
           query:
@@ -517,15 +552,25 @@ groups:
             type: last
             params: []
           type: query
-    noDataState: Alerting
+    # OK, e nao Alerting, e a mudanca mais delicada deste bloco. Resultado vazio
+    # agora significa "houve envio" — ou seja, saude. Manter Alerting faria a
+    # regra disparar exatamente quando o produto esta funcionando.
+    #
+    # A cegueira que isso abre (metrica sumir por falha de coleta) ja e coberta
+    # por fabiano-coleta-parada e fabiano-aplicacao-fora, que sao os alertas com
+    # essa responsabilidade.
+    noDataState: OK
     execErrState: Error
-    for: 0s
+    # 15m para nao disparar por um ciclo de avaliacao infeliz. A janela da
+    # consulta ja e de 2h, entao a espera nao atrasa deteccao de verdade.
+    for: 15m
     annotations:
-      summary: Duas horas sem nenhum envio de formulario, em horario util.
-      description: 'O alerta mais sutil e um dos mais valiosos: detecta o fracasso silencioso, quando
-        o sistema responde 200 em tudo mas ninguem consegue mais enviar. Confirme na tela Produto, no
-        painel ''Funil: aberturas x envios'' - se as aberturas continuam e os envios estao em zero, o
-        formulario quebrou. Se os dois estao em zero, foi so um periodo parado.'
+      summary: Ha gente abrindo o formulario, mas nenhum envio conclui ha 2 horas.
+      description: 'Detecta o fracasso silencioso: o sistema responde 200 em tudo e mesmo assim ninguem
+        consegue enviar. Diferente da versao anterior, este alerta NAO dispara em periodo parado — ele
+        so acusa quando ha aberturas acontecendo e os envios estao em zero. Confirme na tela Produto,
+        painel ''Funil: aberturas x envios''. Suspeitos habituais: validacao nova rejeitando tudo,
+        upload estourando limite, campo obrigatorio invisivel na tela.'
       runbook_url: https://grafana.nexventa.com.br/d/fabiano-produto
     labels:
       severidade: medio
