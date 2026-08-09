@@ -1477,7 +1477,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 8,
         "x": 8,
         "y": 12
       },
@@ -1536,6 +1536,77 @@
         "minVizHeight": 16,
         "namePlacement": "auto",
         "sizing": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "id": 25,
+      "title": "Renovacao de certificado",
+      "description": "Horas desde a ultima execucao do /app/renovar-certificados.sh. Mede o PROCESSO, enquanto o painel ao lado mede o RESULTADO. A diferenca custou caro: em 08/08/2026 a virada levou o Docker Compose para a maquina nova e deixou o 'certbot renew' do crontab para tras. Nao houve erro, nao houve alerta — so ausencia, e ausencia nao tem cor. Os certificados de producao venciam em 06/11 e ninguem sabia. O painel do lado so acenderia em outubro, depois de varias janelas de renovacao perdidas. Roda todo dia as 03:17 UTC, entao acima de 24h ja e estranho e acima de 48h o alerta dispara. 'Sem dado' e a MESMA emergencia que numero alto: metrica que sumiu e renovacao que parou.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "(time() - max(certbot_fabiano_timestamp_seconds)) / 3600",
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "legendFormat": "desde a ultima"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "noValue": "SEM DADO",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 24
+              },
+              {
+                "color": "red",
+                "value": 48
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
       }
     },
     {
