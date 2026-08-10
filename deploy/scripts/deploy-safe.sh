@@ -102,7 +102,13 @@ if [ -z "$GHCR_OWNER" ]; then
 fi
 
 IMAGEM="ghcr.io/${GHCR_OWNER}/fabiano-back"
-MYSQL_Q="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASSWORD -N -B $DB_NAME"
+# A senha vai por MYSQL_PWD, nunca por -p<senha>. Com -p ela fica visivel no
+# 'ps' para qualquer usuario da maquina e — pior — o analisar_banco ECOA este
+# comando na tela quando encontra migration destrutiva. A senha iria parar no
+# log do deploy exatamente no momento em que alguem cola esse log pedindo
+# ajuda. Mesmo padrao ja usado na anonimizacao do subir-homolog.sh.
+export MYSQL_PWD="$DB_PASSWORD"
+MYSQL_Q="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -N -B $DB_NAME"
 DB_BACKUP="$BACKUPS/db_before_${TAG_NOVA}_${TS}.sql.gz"
 
 # =============================================================================
@@ -199,7 +205,7 @@ FLYWAY_ANTES=$($MYSQL_Q -e "SELECT COALESCE(MAX(installed_rank),0) FROM flyway_s
 
 # PIPESTATUS[0] captura o exit code do mysqldump, nao o do gzip. Sem isso, um
 # mysqldump que falha some atras de um gzip que "deu certo".
-mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
+mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
   --single-transaction --set-gtid-purged=OFF --routines --triggers "$DB_NAME" \
   2>/tmp/dump.err | gzip -9 > "$DB_BACKUP"
 DUMP_RC=${PIPESTATUS[0]}
