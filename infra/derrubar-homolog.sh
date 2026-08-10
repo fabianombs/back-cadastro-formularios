@@ -111,6 +111,18 @@ cat <<FIM
 
  Custo corrente de homolog a partir de agora: so o Elastic IP.
 
+ -----------------------------------------------------------------------------
+ !! FALTA UM PASSO, E ELE NAO E OPCIONAL !!
+ -----------------------------------------------------------------------------
+ GitHub > Settings > Secrets and variables > Actions > aba VARIABLES
+   HOMOLOG_ATIVO = false
+
+ Sem isso, o proximo push na develop tenta deployar numa maquina que nao existe
+ mais e o job morre com 'dial tcp ***:22: i/o timeout'. Aconteceu em 09/08/2026.
+
+ A falha e barulhenta de proposito — melhor que passar verde sem deployar —
+ mas e ruido evitavel. Automatizar essa troca e o FABIANO-33 etapa 6b.
+
  Conferir daqui a alguns minutos que nada ficou para tras:
    aws ec2 describe-instances --region ${REGIAO} \\
      --filters "Name=tag:Ambiente,Values=homolog" \\
