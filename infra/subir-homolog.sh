@@ -290,7 +290,14 @@ trocar DB_HOST "${HML_ENDPOINT}"
 trocar SPRING_PROFILES_ACTIVE homolog
 trocar APP_BASE_URL https://api-hml.nexventa.com.br
 trocar APP_FRONTEND_URL https://hml.nexventa.com.br
-trocar CORS_ALLOWED_ORIGINS https://hml.nexventa.com.br
+# O curinga entra SO aqui, nunca em producao: o .env.example ja registrava a
+# regra, e o SecurityConfig usa setAllowedOriginPatterns, entao '*' funciona.
+# Sem ele, cada preview da Vercel nasce num subdominio novo e o navegador
+# barra o /auth/login por CORS — a rota e publica no Spring Security, mas o
+# CORS dela e o 'privateConfig', que so aceita a lista.
+# Em producao isso seria grave: qualquer projeto Vercel do mundo poderia
+# chamar a API autenticada pelo navegador de um usuario logado.
+trocar CORS_ALLOWED_ORIGINS 'https://hml.nexventa.com.br,https://*.vercel.app'
 trocar GRAFANA_ROOT_URL https://grafana-hml.nexventa.com.br
 
 # JWT proprio: com o mesmo segredo de producao, um token emitido em homolog
