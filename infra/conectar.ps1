@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-    Configura os atalhos SSH das duas EC2 do projeto no ~/.ssh/config do Windows.
+    Configura os atalhos SSH das EC2 do projeto no ~/.ssh/config do Windows.
 
 .DESCRIPTION
     Depois de rodar uma vez, conectar vira:
 
         ssh fabiano-nova      # producao, t3.medium, AL2023, Docker Compose
         ssh fabiano-antiga    # maquina legada, t2.micro, AL2, JAR + systemd
+        ssh fabiano-hml       # homologacao sob demanda, efemera (FABIANO-33)
 
     O script e idempotente: rodar de novo nao duplica bloco nem sobrescreve
     configuracao de outros projetos.
@@ -27,7 +28,14 @@ param(
     # pelo IP privado, saltando pela nova — dai o ProxyJump mais abaixo.
     [string]$IpAntiga = '172.31.28.215',
 
+    # EIP fixo da homolog. A MAQUINA muda a cada ciclo; o endereco, nao.
+    [string]$IpHomolog = '54.197.175.159',
+
     [string]$Chave = '~/.ssh/poc-fabiano',
+
+    # Chave propria da homolog. Separada de proposito: quem tiver acesso a
+    # homolog nao ganha acesso a producao junto.
+    [string]$ChaveHomolog = '~/.ssh/poc-fabiano-homolog',
 
     [string]$Usuario = 'ec2-user'
 )
@@ -65,6 +73,32 @@ Host fabiano-antiga
     # chave enquanto a sessao existir. Com ProxyJump a chave nunca sai do PC —
     # a maquina nova serve so de tunel de rede.
     ProxyJump fabiano-nova
+
+Host fabiano-hml
+    HostName $IpHomolog
+    User $Usuario
+    IdentityFile $ChaveHomolog
+    ServerAliveInterval 60
+    # -------------------------------------------------------------------------
+    # Por que esta maquina tem known_hosts SEPARADO
+    # -------------------------------------------------------------------------
+    # A homolog e destruida e recriada a cada ciclo, sempre com o mesmo Elastic
+    # IP. Chave de host nova, endereco antigo: e exatamente a assinatura de um
+    # ataque man-in-the-middle, e o SSH grita — corretamente.
+    #
+    # Se ela morasse no known_hosts normal, voce veria esse alerta toda semana e
+    # aprenderia a passar por cima sem ler. Ai, no dia em que ele aparecesse na
+    # PRODUCAO, voce passaria por cima tambem. O custo real nao e o incomodo: e
+    # o treino de ignorar.
+    #
+    # Isolando num arquivo proprio, a frouxidao fica confinada na maquina
+    # descartavel. 'accept-new' aceita host novo em silencio, mas continua
+    # recusando se uma chave JA CONHECIDA mudar — nao e o mesmo que desligar a
+    # verificacao.
+    UserKnownHostsFile ~/.ssh/known_hosts_homolog
+    StrictHostKeyChecking accept-new
+    # Tunel do Mailpit: 'ssh -L 8025:localhost:8025 fabiano-hml' e depois abrir
+    # http://localhost:8025. A caixa nao e exposta na internet de proposito.
 $fim
 "@
 
@@ -94,17 +128,36 @@ if (Test-Path $configPath) {
 # O OpenSSH do Windows recusa chave cujo arquivo seja legivel por outros
 # usuarios. Herdar permissao da pasta do usuario e o caso mais comum, e o erro
 # ('UNPROTECTED PRIVATE KEY FILE') so aparece na hora de conectar.
-$chaveReal = $Chave -replace '^~', $HOME
-if (Test-Path $chaveReal) {
-    $acl = icacls $chaveReal 2>$null
-    if ($acl -match 'BUILTIN|Todos|Everyone|Usuários|Users') {
-        Write-Host "`nA chave esta com permissao aberta. Corrigindo..." -ForegroundColor Yellow
-        icacls $chaveReal /inheritance:r          | Out-Null
-        icacls $chaveReal /grant:r "$($env:USERNAME):(R)" | Out-Null
-        Write-Host "Permissao ajustada." -ForegroundColor Green
+foreach ($c in @($Chave, $ChaveHomolog)) {
+    $chaveReal = $c -replace '^~', $HOME
+    if (-not (Test-Path $chaveReal)) {
+        Write-Warning "Chave nao encontrada em $chaveReal"
+        continue
     }
-} else {
-    Write-Warning "Chave nao encontrada em $chaveReal - ajuste o parametro -Chave."
+
+    # $ErrorActionPreference = 'Stop' transforma QUALQUER escrita em stderr de um
+    # programa externo em erro fatal — e o icacls escreve em stderr para coisas
+    # que aqui nao sao erro. O caso real: 'Acesso negado' ao LER a ACL de uma
+    # chave que ja esta trancada, ou seja, o estado que queremos. O script
+    # abortava por ter encontrado exatamente o que procurava.
+    #
+    # A configuracao do SSH ja foi gravada acima; deixar isto derrubar o script
+    # so faria parecer que nada funcionou.
+    $eapAnterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $acl = icacls $chaveReal 2>&1 | Out-String
+        if ($acl -match 'BUILTIN|Todos|Everyone|Usuários|Users') {
+            Write-Host "`n$chaveReal esta com permissao aberta. Corrigindo..." -ForegroundColor Yellow
+            icacls $chaveReal /inheritance:r                   2>&1 | Out-Null
+            icacls $chaveReal /grant:r "$($env:USERNAME):(R)"  2>&1 | Out-Null
+            Write-Host "Permissao ajustada." -ForegroundColor Green
+        } elseif ($acl -match 'Acesso negado|Access is denied') {
+            Write-Host "$chaveReal ja esta trancada (nem a leitura da ACL passa)." -ForegroundColor DarkGray
+        }
+    } finally {
+        $ErrorActionPreference = $eapAnterior
+    }
 }
 
 Write-Host @"
@@ -113,9 +166,15 @@ Pronto. A partir de agora:
 
     ssh fabiano-nova        producao (Docker Compose, ~/fabiano/deploy)
     ssh fabiano-antiga      legada  (JAR + systemd, sem IP publico)
+    ssh fabiano-hml         homologacao efemera (morre em 24h sem uso)
 
-Teste rapido, sem abrir sessao:
+Teste rapido, sem abrir sessao — repare no 'hostname':
 
     ssh -o BatchMode=yes fabiano-nova 'hostname; uptime'
+    ssh -o BatchMode=yes fabiano-hml  'hostname; uptime'
+
+O 'hostname' esta ai por um motivo. Producao e ip-172-31-12-104; homolog e
+outra. Em 10/08/2026 um diagnostico inteiro quase foi lido na maquina errada,
+e o que salvou foi o hostname no prompt.
 
 "@ -ForegroundColor Cyan

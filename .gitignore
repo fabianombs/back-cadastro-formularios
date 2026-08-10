@@ -29,6 +29,9 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+/terraform*.zip
+/homolog.zip
+
 ### VS Code ###
 .vscode/
 
@@ -79,3 +82,7 @@ blindagem-aws.txt
 # da verdade que envelhece em silencio.
 /terraform*.zip
 deploy-bundle.tar.gz
+
+# Worktree efemera de agente. Entrou no indice como gitlink (modo 160000) sem
+# entrada no .gitmodules, e todo checkout passou a terminar com exit code 128.
+.claude/worktrees/
