@@ -1011,6 +1011,55 @@ associa a mudança de autenticação. O `application-prod.properties` traz
 
 ---
 
+### 7.8 — Credencial de serviço do smoke (FABIANO-55)
+
+O `infra/smoke-local.ps1` escreve no banco: ele submete formulário, marca
+presença e cria agendamento. Para isso precisa de uma conta autenticada.
+
+**Uma conta por ambiente, reaproveitada em toda rodada.** A versão anterior
+criava um usuário novo a cada execução (`smoke_` + número aleatório) e nunca
+removia — o banco acumulava credencial `ROLE_FUNCIONARIO` ativa e válida, uma
+por rodada, para sempre.
+
+**De onde vem a credencial:**
+
+    $env:SMOKE_USER     = "smoke_servico"      # padrao quando a variavel nao existe
+    $env:SMOKE_PASSWORD = "Smoke@12345"        # idem
+
+Ou por parâmetro: `-SmokeUser` / `-SmokePassword`.
+
+**Como criar num ambiente novo.** Não crie na mão. Rode o smoke: o login falha,
+o script cai no ramo de cadastro, cria a conta e faz login de novo para provar
+que a credencial ficou utilizável — o token que o `/auth/register` devolve prova
+que o endpoint responde, não que a conta serve na próxima rodada. São coisas
+diferentes e só a segunda importa. A saída diz qual caminho foi tomado:
+
+    usuario de servico 'smoke_servico' nao existia e foi criado (cadastro testado)
+    usuario de servico 'smoke_servico' reaproveitado (nada criado)
+
+**Como rotacionar a senha.** Troque pela aplicação (perfil do usuário) e depois
+exporte a nova em `SMOKE_PASSWORD` antes de rodar o smoke. Se rodar com a senha
+velha, o script cai no ramo de cadastro, o `/auth/register` recusa por username
+duplicado, e a mensagem final aponta o caminho:
+
+    Sem token - os testes autenticados nao podem rodar. Parando.
+    Usuario de servico: smoke_servico. Ajuste com -SmokeUser/-SmokePassword ou
+    as variaveis SMOKE_USER / SMOKE_PASSWORD se a senha foi trocada.
+
+**Como auditar.** `infra/inventario-smoke.sh` roda em qualquer das duas máquinas,
+é somente leitura, e lista as contas `smoke%` junto com o que pendura nelas —
+templates, submissões e agendamentos. Essa segunda parte é o que importa antes de
+apagar qualquer coisa: uma conta que só ocupa uma linha é lixo; uma que é dona de
+formulário com submissão pode carregar resposta de gente de verdade.
+
+> **Por que produção nunca acumulou essas contas.** O smoke tem uma trava no
+> início que compara o **IP resolvido** do alvo, não o texto da URL, e se recusa a
+> rodar contra produção. Medido em 10/08/2026: produção tem **zero** usuários
+> `smoke%`. A trava funcionou durante todo o período em que o script tinha o
+> defeito — o lixo ficou onde devia ficar.
+
+---
+
 ## 8. Observabilidade (maquina nova)
 
 Subiu em 06/08/2026. Usuario `admin`. Os paineis ficam na pasta **Fabiano**.
