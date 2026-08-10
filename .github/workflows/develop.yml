@@ -724,6 +724,19 @@ jobs:
           PR_TITLE="release: develop → master"
           PR_BODY="## Release PR\n\nBranch \`develop\` passou em todos os testes e está pronta para produção.\n\n**Merge para master irá disparar deploy automático no Railway.**"
 
+          # Mesma protecao do feature.yml: se a master ja contem tudo da
+          # develop, nao ha PR a criar e o 'gh pr create' falharia com
+          # "No commits between". Aqui e mais raro que la, mas o modo de falha
+          # e identico — e um vermelho que nao significa nada custa a atencao
+          # de quem olha o painel.
+          AHEAD=$(gh api "repos/${{ github.repository }}/compare/master...develop" --jq '.ahead_by' 2>/dev/null || echo "")
+
+          if [ "${AHEAD:-0}" = "0" ]; then
+            echo "Nada a propor: a master ja contem todos os commits da develop."
+            exit 0
+          fi
+          echo "develop esta $AHEAD commit(s) a frente da master."
+
           EXISTING=$(gh pr list --head develop --base master --state open --json number --jq '.[0].number')
 
           if [ -n "$EXISTING" ]; then
