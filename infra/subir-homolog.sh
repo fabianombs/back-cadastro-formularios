@@ -368,7 +368,18 @@ RESULTADO_OBS=\$?
 
 REDE=\$(docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}' fabiano-backend)
 docker rm -f mailpit 2>/dev/null || true
-docker run -d --name mailpit --network "\$REDE" --restart unless-stopped axllent/mailpit
+# -p 127.0.0.1:8025:8025 e obrigatorio, e o endereco importa tanto quanto a porta.
+#
+# Sem publicar, a 8025 so existe dentro da rede do Docker: o tunel SSH nao chega
+# nela, porque quem resolve o destino de um -L e o servidor SSH, que roda no
+# host — e o host nao conhece nomes de container.
+#
+# Publicar em 127.0.0.1 e nao em 0.0.0.0 e o que mantem a caixa fora da internet.
+# Homolog tem a 22 aberta e recebe copia dos dados de producao; uma caixa de
+# e-mails capturados acessivel de fora seria pior que o problema que ela resolve.
+docker run -d --name mailpit --network "\$REDE" \
+  -p 127.0.0.1:8025:8025 \
+  --restart unless-stopped axllent/mailpit
 
 docker exec fabiano-nginx nginx -s reload || true
 
@@ -447,7 +458,8 @@ cat <<FIM
  dos nomes de producao, o curl recusaria a conexao.
 
  E-mails: NENHUM sai da maquina. Caixa do Mailpit:
-   ssh -L 8025:mailpit:8025 ...   e abrir http://localhost:8025
+   ssh -i ~/.ssh/poc-fabiano-homolog -L 8025:localhost:8025 ec2-user@54.197.175.159
+   e abrir http://localhost:8025 no navegador da sua maquina
 
  -----------------------------------------------------------------------------
  !! FALTA UM PASSO, E ELE NAO E OPCIONAL !!
