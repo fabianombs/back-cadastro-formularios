@@ -42,11 +42,16 @@ HML_SG_RDS=sg-04be8eca0a2dc1578
 HML_EIP=eipalloc-053acd67132fed0af          # 54.197.175.159, api-hml e grafana-hml
 HML_SUBNET=subnet-0dfc383d51ee3004a         # us-east-1a, mesma de producao
 
-# Anonimizacao desligada no primeiro ciclo: com o Mailpit capturando todo e-mail
-# dentro da maquina, o risco concreto (mensagem chegando em cliente real) deixa
-# de existir. Ela continua escrita abaixo como defesa em profundidade contra
-# vazamento — ligar com: ANONIMIZAR=sim ./subir-homolog.sh
-ANONIMIZAR="${ANONIMIZAR:-nao}"
+# LIGADA POR PADRAO desde 10/08/2026 (FABIANO-33, item 3 do criterio de aceite).
+#
+# Ficou desligada no primeiro ciclo com o argumento de que o Mailpit captura todo
+# e-mail, entao nenhuma mensagem chegaria a um cliente real. O argumento e
+# verdadeiro e cobre UM vetor. O snapshot continua trazendo nome, e-mail e
+# telefone reais para uma maquina com a porta 22 aberta para a internet.
+#
+# Desligar so e valido com 'nao' explicito na linha de comando — e ai a escolha
+# fica no historico do shell de quem a fez, que e onde ela deve estar.
+ANONIMIZAR="${ANONIMIZAR:-sim}"
 
 CARIMBO=$(date +%Y%m%d-%H%M)
 AMI_NOME="fabiano-homolog-base-${CARIMBO}"
@@ -310,18 +315,73 @@ trocar SMTP_PASS homolog
 trocar ALERTA_EMAIL homolog@exemplo.invalid
 trocar ALERTA_SUBMISSAO_PAUSADO true
 
-# --- 4. anonimizacao (opcional) ----------------------------------------------
+# --- 4. anonimizacao ---------------------------------------------------------
+# Roda ANTES do 'docker compose up' do passo 6, de proposito: nao pode existir
+# uma janela em que a API esteja no ar servindo dado real.
+#
+# COLUNAS CONFERIDAS CONTRA O SCHEMA REAL em 10/08/2026, nao supostas. A versao
+# anterior mexia em tres colunas escolhidas de cabeca e imprimia "anonimizado:
+# sim" — teria deixado todos os NOMES intactos e ninguem saberia.
+#
+# NAO EXISTE COLUNA DE CPF neste banco. Nem CNPJ, nem data de nascimento, nem
+# endereco. O criterio do card foi escrito supondo que existisse.
+#
+# EXCECAO DELIBERADA: 'username' fica intacto. Ele nao e e-mail em nenhum dos 34
+# registros (conferido), e serve de chave de login — trocar inutilizaria a
+# homolog para teste. O que causa dano num vazamento e dado de CONTATO: nome,
+# e-mail, telefone. Um handle de login sozinho, sem nada disso ao lado, nao e.
+#
+# NAO SAO ANONIMIZADOS os 'name' de equipment_catalogs, form_templates,
+# quiz_configs e survey_configs: sao nomes de COISAS. Mexer neles destruiria o
+# ambiente de teste sem proteger pessoa nenhuma.
 if [ "${ANONIMIZAR}" = "sim" ]; then
   set -a; . ./.env; set +a
+
+  # Sem --force: o mysql para no primeiro erro. Se uma tabela mudar de nome numa
+  # migration futura, o certo e falhar aqui e nao seguir com dado real.
   MYSQL_PWD="\$DB_PASSWORD" mysql -h "\$DB_HOST" -u "\$DB_USER" "\$DB_NAME" <<'SQL'
 -- Preserva NULL como NULL: campo vazio e caso de teste, e trocar por texto
 -- esconderia bugs que so aparecem com valor ausente.
--- Preserva contagem, indices e tamanho de tabela — o teste de desempenho
--- continua valendo.
-UPDATE users   SET email = CONCAT('usuario', id, '@exemplo.invalid') WHERE email IS NOT NULL;
-UPDATE clients SET email = CONCAT('cliente', id, '@exemplo.invalid') WHERE email IS NOT NULL;
-UPDATE clients SET phone = CONCAT('5511', LPAD(id, 9, '0'))          WHERE phone IS NOT NULL;
+-- Substituicao derivada do id: preserva contagem, unicidade, indices e tamanho
+-- de tabela — o teste de desempenho continua valendo.
+UPDATE users                 SET email           = CONCAT('usuario', id, '@exemplo.invalid') WHERE email IS NOT NULL;
+UPDATE users                 SET name            = CONCAT('Usuario ', id)                    WHERE name IS NOT NULL;
+UPDATE clients               SET email           = CONCAT('cliente', id, '@exemplo.invalid') WHERE email IS NOT NULL;
+UPDATE clients               SET name            = CONCAT('Cliente ', id)                    WHERE name IS NOT NULL;
+UPDATE clients               SET phone           = CONCAT('5511', LPAD(id, 9, '0'))          WHERE phone IS NOT NULL;
+UPDATE attendance_companions SET name            = CONCAT('Acompanhante ', id)               WHERE name IS NOT NULL;
+UPDATE attendance_companions SET phone           = CONCAT('5511', LPAD(id, 9, '0'))          WHERE phone IS NOT NULL;
+UPDATE appointments          SET booked_by_name  = CONCAT('Reserva ', id)                    WHERE booked_by_name IS NOT NULL;
+UPDATE quiz_sessions         SET player_name     = CONCAT('Jogador ', id)                    WHERE player_name IS NOT NULL;
 SQL
+  CODIGO_SQL=\$?
+
+  # A CONFERENCIA E A PARTE QUE IMPORTA.
+  #
+  # Um UPDATE que nao casa nenhuma linha devolve SUCESSO. Um WHERE que deixou de
+  # bater depois de uma migration devolve sucesso. Sem contar o que sobrou, este
+  # bloco imprimiria "anonimizado: sim" sobre um banco intacto — que e
+  # exatamente a familia de defeito que este projeto passou a semana caçando.
+  SOBROU=\$(MYSQL_PWD="\$DB_PASSWORD" mysql -N -B -h "\$DB_HOST" -u "\$DB_USER" "\$DB_NAME" -e "
+    SELECT
+      (SELECT COUNT(*) FROM users                 WHERE email          IS NOT NULL AND email          NOT LIKE '%@exemplo.invalid')
+    + (SELECT COUNT(*) FROM users                 WHERE name           IS NOT NULL AND name           NOT LIKE 'Usuario %')
+    + (SELECT COUNT(*) FROM clients               WHERE email          IS NOT NULL AND email          NOT LIKE '%@exemplo.invalid')
+    + (SELECT COUNT(*) FROM clients               WHERE name           IS NOT NULL AND name           NOT LIKE 'Cliente %')
+    + (SELECT COUNT(*) FROM clients               WHERE phone          IS NOT NULL AND phone          NOT LIKE '5511%')
+    + (SELECT COUNT(*) FROM attendance_companions WHERE name           IS NOT NULL AND name           NOT LIKE 'Acompanhante %')
+    + (SELECT COUNT(*) FROM attendance_companions WHERE phone          IS NOT NULL AND phone          NOT LIKE '5511%')
+    + (SELECT COUNT(*) FROM appointments          WHERE booked_by_name IS NOT NULL AND booked_by_name NOT LIKE 'Reserva %')
+    + (SELECT COUNT(*) FROM quiz_sessions         WHERE player_name    IS NOT NULL AND player_name    NOT LIKE 'Jogador %')
+  " 2>/dev/null)
+
+  if [ "\$CODIGO_SQL" -ne 0 ] || [ -z "\$SOBROU" ] || [ "\$SOBROU" != "0" ]; then
+    echo "ANONIMIZACAO FALHOU: mysql saiu \$CODIGO_SQL, restaram '\${SOBROU:-?}' campos com dado original."
+    echo "A maquina NAO vai subir com dado real exposto."
+    echo "FALHOU: anonimizacao" > /var/log/homolog-init.FALHOU
+    exit 1
+  fi
+  echo "anonimizacao conferida: 0 campos com dado original"
 fi
 
 # --- 5. observabilidade: parar de vigiar PRODUCAO ----------------------------
