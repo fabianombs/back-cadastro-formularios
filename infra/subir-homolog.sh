@@ -85,15 +85,29 @@ msg "1. criando AMI da producao (--no-reboot)"
 # garantir consistencia de disco. O preco de nao reiniciar e que a imagem sai
 # com o disco "sujo", como se a maquina tivesse levado um tapa na tomada — o
 # que e aceitavel aqui, porque tudo que importa (banco) vem do snapshot RDS.
+# As tags vao DENTRO da chamada de criacao, e nao num 'create-tags' depois.
+#
+# Nao e estilo: a politica IAM do papel do GitHub permite ec2:CreateTags apenas
+# com a condicao ec2:CreateAction in [RunInstances, CreateImage] — e essa chave
+# de contexto SO existe quando a etiqueta viaja junto com a chamada que cria o
+# recurso. Num 'create-tags' avulso ela nem aparece, a condicao nunca casa, e a
+# AWS recusa com UnauthorizedOperation.
+#
+# Aconteceu no primeiro ciclo pela esteira, em 09/08/2026: a AMI foi criada e o
+# job morreu na linha seguinte, deixando uma imagem sem etiqueta para tras.
+#
+# A alternativa seria afrouxar a politica para permitir CreateTags em qualquer
+# recurso — o que deixaria a esteira reetiquetar producao, inclusive marcar
+# producao como 'homolog' e fazer o auto-desligamento apontar a arma para o
+# lado errado. Etiquetar na criacao custa uma linha e mantem a trava.
 AMI=$(aws ec2 create-image --region "$REGIAO" \
   --instance-id "$PROD_INSTANCIA" \
   --name "$AMI_NOME" \
   --description "Base de homolog a partir da producao em ${CARIMBO} (FABIANO-33)" \
+  --tag-specifications 'ResourceType=image,Tags=[{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]' \
+                       'ResourceType=snapshot,Tags=[{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]' \
   --no-reboot --query ImageId --output text)
 echo "AMI: $AMI"
-
-aws ec2 create-tags --region "$REGIAO" --resources "$AMI" \
-  --tags Key=Project,Value=poc-fabiano Key=Ambiente,Value=homolog
 
 # -----------------------------------------------------------------------------
 # 2. Snapshot do banco (em paralelo com a AMI, que demora mais)

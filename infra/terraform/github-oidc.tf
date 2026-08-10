@@ -154,7 +154,11 @@ resource "aws_iam_role_policy" "github_homolog" {
         Resource = [
           "arn:aws:ec2:${local.regiao}:${local.conta}:instance/${local.prod_ec2}",
           "arn:aws:ec2:${local.regiao}::image/*",
-          "arn:aws:ec2:${local.regiao}::snapshot/*"
+          # Snapshot de EBS leva o id da conta no ARN; imagem, nao. As duas
+          # formas ficam aqui porque errar isso so aparece no meio de um
+          # create-image, com a AMI ja criada e o job morrendo em seguida.
+          "arn:aws:ec2:${local.regiao}::snapshot/*",
+          "arn:aws:ec2:${local.regiao}:${local.conta}:snapshot/*"
         ]
       },
       {
