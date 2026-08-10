@@ -3,15 +3,12 @@
 # Rollback pela interface do GitHub (Actions > este workflow > Run workflow),
 # para quando nao houver terminal com a chave SSH a mao. (FABIANO-18)
 #
-# CONVIVE com o rollback.yml antigo, que continua sendo o valido enquanto a
-# aplicacao rodar como JAR no systemd. Este aqui so passa a funcionar depois do
-# cutover para container (FABIANO-15). Como e workflow_dispatch, ele fica
-# inerte ate alguem clicar — adiciona-lo agora nao muda nada em producao.
-#
-# Depois do cutover, apagar o rollback.yml antigo para nao existirem dois
-# botoes com o mesmo nome numa hora em que ninguem quer escolher.
+# O rollback.yml antigo, que chamava 'sudo /app/rollback.sh' no mundo do JAR
+# com systemd, foi APAGADO em 10/08/2026. Ele deixou de funcionar no cutover
+# para container (08/08) e continuava aparecendo na lista de Actions com o
+# mesmo nome deste — dois botoes iguais numa hora em que ninguem quer escolher.
 
-name: Rollback Docker (usar apos o cutover)
+name: Rollback (manual)
 
 on:
   workflow_dispatch:
@@ -62,7 +59,17 @@ jobs:
 
             # tee para arquivo porque a ssh-action trunca saida acima de ~64 KB,
             # e e justamente no rollback que deu errado que a saida fica grande.
+            #
+            # No HOME e nao em /var/log: /var/log e 0755 do root, o ec2-user nao
+            # cria arquivo la. O tee falharia com 'Permission denied' bem no
+            # momento em que o log e a unica coisa que sobra para diagnosticar.
             ./scripts/rollback.sh "${{ inputs.tag }}" $FLAG \
-              2>&1 | tee "/var/log/rollback-$(date +%s).log"
+              2>&1 | tee "$HOME/rollback-$(date +%Y%m%d-%H%M%S).log"
 
             exit "${PIPESTATUS[0]}"
+
+            # Como testar este botao sem mexer em nada:
+            #   rode com 'tag' = a tag que JA esta rodando. O rollback.sh
+            #   responde "AVISO: ... e a tag que ja esta rodando. Nada a fazer."
+            #   e sai 0 — prova o botao, o SSH, o login no GHCR e o caminho do
+            #   script, sem trocar a versao no ar.
