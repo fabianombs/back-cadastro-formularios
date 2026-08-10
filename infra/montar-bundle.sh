@@ -24,6 +24,10 @@ CONTEUDO=(
   observability
   infra/backup-db.sh
   infra/enviar-backup-email.py
+  # Faltava ate 10/08/2026. Uma maquina nascida do bundle vinha SEM rotina de
+  # renovacao de certificado — o mesmo buraco do FABIANO-76, que apareceu na
+  # virada de 08/08 e teria voltado no primeiro boot pelo Auto Scaling.
+  infra/renovar-certificados.sh
 )
 
 # Sem isto, um arquivo renomeado sairia do pacote em silencio e so apareceria
@@ -63,7 +67,8 @@ for esperado in \
   "deploy/nginx/nginx.conf" \
   "observability/prometheus/prometheus.yml" \
   "infra/backup-db.sh" \
-  "infra/enviar-backup-email.py"
+  "infra/enviar-backup-email.py" \
+  "infra/renovar-certificados.sh"
 do
   if grep -qx "$esperado" <<< "$LISTA"; then
     echo "    ok   $esperado"
