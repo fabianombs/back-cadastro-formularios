@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - master
+    # Commit que toca SO em script de infra, documentacao ou markdown nao
+    # redeploya producao. Deploy sem mudanca de codigo e risco sem contrapartida
+    # — e gasta a atencao de quem acompanha em run que nao muda nada.
+    #
+    # paths-ignore so pula quando TODOS os arquivos alterados casam: commit que
+    # mexe em infra/ E em src/ continua deployando normalmente.
+    paths-ignore:
+      - 'infra/**'
+      - 'docs/**'
+      - '**.md'
 
 jobs:
   build-and-test:
@@ -379,6 +389,13 @@ jobs:
 
             # O scp nao preserva o bit de execucao.
             chmod +x scripts/*.sh
+
+            # Nao renderiza nada em producao: CONFERE. O arquivo do repositorio
+            # vai para a maquina como esta, e esta trava existe porque entre 08 e
+            # 10/08/2026 ele passou tres dias declarando 'ambiente: homolog' —
+            # resto da virada, e ninguem viu. O script aborta ANTES de qualquer
+            # escrita, entao o modo de falha e seguro.
+            ./scripts/render-observabilidade.sh prod
 
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u ${{ github.actor }} --password-stdin
