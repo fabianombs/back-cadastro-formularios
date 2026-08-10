@@ -1729,7 +1729,7 @@
               }
             ]
           },
-          "noValue": "SEM DADO — a rotina de renovacao nao rodou"
+          "noValue": "SEM DADO — a metrica certbot_fabiano_cert_expiry_seconds nao chegou ao Prometheus desta maquina. Pode ser rotina que ainda nao rodou, ou rotina rodando com uma versao antiga do renovar-certificados.sh (foi o caso da homolog em 10/08/2026)."
         },
         "overrides": []
       },

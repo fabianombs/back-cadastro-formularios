@@ -228,7 +228,10 @@ fi
 # Rede antes da rede: um dump do estado ATUAL, para poder desfazer a restauracao.
 SEGURANCA="$BACKUPS/db_safety_$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M%S).sql.gz"
 echo "  gravando dump de seguranca do estado atual..."
-mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
+# Senha por MYSQL_PWD, nunca por -p<senha>: com -p ela aparece no 'ps' de
+# qualquer usuario da maquina durante todo o dump.
+export MYSQL_PWD="$DB_PASSWORD"
+mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
   --single-transaction --set-gtid-purged=OFF --routines --triggers "$DB_NAME" \
   2>/tmp/safety.err | gzip -9 > "$SEGURANCA"
 if [ "${PIPESTATUS[0]}" -ne 0 ]; then
@@ -240,7 +243,7 @@ fi
 echo "  seguranca em: $SEGURANCA"
 
 echo "  restaurando..."
-if gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"; then
+if gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME"; then
   echo "  banco restaurado."
   echo "  reiniciando a aplicacao para limpar cache e pool de conexao..."
   $COMPOSE restart "$SERVICO"
