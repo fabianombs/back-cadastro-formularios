@@ -47,6 +47,9 @@ CONTAINER_NGINX="fabiano-nginx"
 BACKUPS="/app/backups/pre-deploy"
 HEALTH_TIMEOUT=120
 KEEP=8
+# Quantas versoes do backend ficam guardadas na maquina, ALEM das protegidas
+# (:previous, :latest e a tag do deploy corrente). Cada imagem pesa ~380 MB.
+KEEP_IMAGENS=5
 
 # Um gzip VAZIO tem exatamente 20 bytes — foi assim que a falha de 2026 passou
 # batida por cinco deploys seguidos.
@@ -110,6 +113,66 @@ IMAGEM="ghcr.io/${GHCR_OWNER}/fabiano-back"
 export MYSQL_PWD="$DB_PASSWORD"
 MYSQL_Q="mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -N -B $DB_NAME"
 DB_BACKUP="$BACKUPS/db_before_${TAG_NOVA}_${TS}.sql.gz"
+
+# =============================================================================
+# PODA DE IMAGENS
+# =============================================================================
+# POR QUE A LINHA ANTIGA NUNCA REMOVEU NADA
+#
+#   docker image prune -f --filter "until=168h"
+#
+# Sem '-a', o prune so remove imagem DANGLING — sem nenhuma tag. Toda imagem do
+# backend chega tagueada com o SHA do commit, entao nenhuma delas jamais foi
+# candidata. Medido em producao em 10/08/2026: 20 tags acumuladas, 1,874 GB
+# recuperaveis, e o comando devolveu "Total reclaimed space: 0B".
+#
+# E '-a' tambem nao serve: removeria toda imagem sem container, o que inclui a
+# :previous — a rede do rollback. Por isso a poda e por TAG, com lista explicita
+# de protegidas. Harness em infra/testar-podar-imagens.sh (FABIANO-81).
+podar_imagens() {
+  local em_uso protegidas tag id candidatas removidas=0
+
+  # Comparar por ID e nao por nome: a mesma imagem costuma ter duas tags (o SHA
+  # do commit e a :previous), e o nome sozinho nao diz qual esta em uso.
+  em_uso=$(docker inspect --format='{{.Image}}' "$CONTAINER" 2>/dev/null || echo "")
+
+  # 'previous' e a rede do rollback e 'latest' e o ponteiro movel do registry:
+  # nenhuma das duas sai, em circunstancia nenhuma. As tags do deploy corrente
+  # entram na lista para que a poda no caminho de FALHA nao apague a imagem
+  # quebrada antes de alguem conseguir olhar para ela.
+  protegidas=" previous latest ${TAG_NOVA:-} ${TAG_ANTERIOR:-} "
+
+  # O filtro de protegidas vem ANTES do tail de proposito. Se viesse depois, a
+  # :previous ocuparia uma das KEEP_IMAGENS vagas e a maquina guardaria uma
+  # versao a menos do que o numero diz.
+  candidatas=$(
+    docker images "$IMAGEM" --format '{{.Tag}}' 2>/dev/null \
+      | grep -v '^<none>$' \
+      | grep -vxF -e previous -e latest -e "${TAG_NOVA:-@}" -e "${TAG_ANTERIOR:-@}" \
+      | tail -n +$((KEEP_IMAGENS + 1))
+  )
+
+  for tag in $candidatas; do
+    # Cinto e suspensorio: se um dia o filtro acima for mexido, esta conferencia
+    # impede que uma tag protegida chegue no rmi.
+    case "$protegidas" in *" $tag "*) continue ;; esac
+
+    id=$(docker images --no-trunc --quiet "${IMAGEM}:${tag}" 2>/dev/null | head -1)
+    [ -n "$id" ] && [ "$id" = "$em_uso" ] && continue
+
+    if docker rmi "${IMAGEM}:${tag}" >/dev/null 2>&1; then
+      removidas=$((removidas + 1))
+      echo "      removida ${IMAGEM}:${tag}"
+    fi
+  done
+
+  # Destaguear deixa as camadas orfas. AGORA o prune sem '-a' tem o que fazer:
+  # e exatamente para camada dangling que ele existe.
+  docker image prune -f >/dev/null 2>&1
+
+  echo "    imagens do backend removidas: ${removidas}  (mantidas as ${KEEP_IMAGENS} mais novas + previous)"
+  echo "    disco: $(df -h / | awk 'NR==2{print $4" livres de "$2", "$5" usado"}')"
+}
 
 # =============================================================================
 # ANALISE DO BANCO APOS FALHA
@@ -319,7 +382,7 @@ if [ "$ok" = "1" ]; then
   set +e
   set +o pipefail
   ls -1t "$BACKUPS"/db_before_*.gz 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f
-  docker image prune -f --filter "until=168h" >/dev/null 2>&1
+  podar_imagens
   exit 0
 fi
 
@@ -359,6 +422,11 @@ if [ "$ok" = "1" ]; then
   fi
   # O .env volta a apontar para a versao que de fato esta rodando.
   sed -i "s|^BACKEND_TAG=.*|BACKEND_TAG=${TAG_ANTERIOR}|" "$ENV_FILE"
+  # A poda tambem roda aqui. Antes ela so existia no caminho de sucesso, entao
+  # uma sequencia de deploys que falham enchia o disco sem nunca limpar — e e
+  # justamente quando o deploy vai mal que ninguem esta olhando para o disco.
+  # A imagem quebrada de hoje (TAG_NOVA) e protegida: fica para diagnostico.
+  podar_imagens
   analisar_banco "$FLYWAY_ANTES"
   exit 1
 else
