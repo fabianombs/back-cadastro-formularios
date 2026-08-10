@@ -75,7 +75,63 @@ if [ -n "$JA" ]; then
   echo "      Rode ./derrubar-homolog.sh antes, ou use a que esta no ar."
   exit 1
 fi
-echo "nenhum homolog no ar, seguindo"
+echo "nenhuma EC2 de homolog no ar, seguindo"
+
+# -----------------------------------------------------------------------------
+# 0b. Reconciliacao: apagar o que o auto-desligamento nao alcanca
+# -----------------------------------------------------------------------------
+# O homolog-autodesliga.sh mata SO a EC2 — ele nao tem papel IAM nenhum, e isso
+# e proposital: a maquina nasce de uma imagem da producao e dar a ela permissao
+# de apagar banco seria armar a arma do lado errado.
+#
+# Consequencia: banco, AMI e snapshots sobrevivem ao auto-desligamento. Sem este
+# bloco, o SEGUNDO ciclo morre no passo 3 com DBInstanceAlreadyExists — e cada
+# tentativa quebrada ainda deixa mais uma AMI e mais um snapshot para tras.
+#
+# Nao da para descobrir isso olhando o primeiro ciclo: ele passa. O defeito so
+# aparece 24h depois, quando ninguem esta olhando.
+msg "0b. limpando restos de ciclos anteriores"
+
+if aws rds describe-db-instances --region "$REGIAO" \
+     --db-instance-identifier "$HML_BANCO" >/dev/null 2>&1; then
+  echo "banco orfao encontrado: ${HML_BANCO} — apagando"
+  # --skip-final-snapshot: guardar um retrato final de homolog seria pagar
+  # armazenamento por uma copia velha da producao que ninguem restauraria.
+  aws rds delete-db-instance --region "$REGIAO" \
+    --db-instance-identifier "$HML_BANCO" \
+    --skip-final-snapshot --delete-automated-backups >/dev/null
+  echo "aguardando o banco sumir (costuma levar 3-5 min)"
+  aws rds wait db-instance-deleted --region "$REGIAO" --db-instance-identifier "$HML_BANCO"
+  echo "banco orfao apagado"
+else
+  echo "nenhum banco orfao"
+fi
+
+for AMI_VELHA in $(aws ec2 describe-images --region "$REGIAO" --owners self \
+    --filters "Name=tag:Ambiente,Values=homolog" \
+    --query 'Images[].ImageId' --output text); do
+  # Ler os snapshots ANTES do deregister. Depois dele a AMI some e os discos
+  # ficam na fatura sem nada apontando para eles — foi assim que sobrou um
+  # snapshot orfao do job que falhou em 09/08/2026.
+  SNAPS=$(aws ec2 describe-images --region "$REGIAO" --image-ids "$AMI_VELHA" \
+    --query 'Images[].BlockDeviceMappings[].Ebs.SnapshotId' --output text)
+  aws ec2 deregister-image --region "$REGIAO" --image-id "$AMI_VELHA" >/dev/null
+  echo "AMI antiga removida: ${AMI_VELHA}"
+  for S in $SNAPS; do
+    aws ec2 delete-snapshot --region "$REGIAO" --snapshot-id "$S" >/dev/null \
+      && echo "  disco removido: ${S}" \
+      || echo "  AVISO: nao consegui remover ${S} — confira na mao"
+  done
+done
+
+for SNAP_VELHO in $(aws rds describe-db-snapshots --region "$REGIAO" --snapshot-type manual \
+    --query "DBSnapshots[?starts_with(DBSnapshotIdentifier, 'homolog-base-')].DBSnapshotIdentifier" \
+    --output text); do
+  aws rds delete-db-snapshot --region "$REGIAO" \
+    --db-snapshot-identifier "$SNAP_VELHO" >/dev/null \
+    && echo "snapshot de banco antigo removido: ${SNAP_VELHO}" \
+    || echo "AVISO: nao consegui remover ${SNAP_VELHO} — confira na mao"
+done
 
 # -----------------------------------------------------------------------------
 # 1. Imagem da producao
@@ -336,6 +392,11 @@ chmod 755 /usr/local/bin/homolog-autodesliga.sh
 CLOUDINIT
 )
 
+# Um RunInstances cria varios recursos de uma vez — instancia, volume e placa de
+# rede — e a AWS avalia a permissao de CADA UM separadamente. O volume tambem
+# precisa nascer etiquetado: a politica IAM exige Ambiente=homolog nele, e sem
+# esta segunda linha de tag a chamada inteira e negada com UnauthorizedOperation
+# em volume/*. Aconteceu no ciclo de 10/08/2026.
 INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --image-id "$AMI" \
   --instance-type "$HML_TIPO" \
@@ -346,6 +407,7 @@ INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
   --instance-initiated-shutdown-behavior terminate \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=poc-fabiano-homolog},{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]" \
+                       "ResourceType=volume,Tags=[{Key=Name,Value=poc-fabiano-homolog},{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]" \
   --query 'Instances[0].InstanceId' --output text)
 echo "instancia: $INSTANCIA"
 

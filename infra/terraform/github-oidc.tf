@@ -94,12 +94,15 @@ resource "aws_iam_role_policy" "github_deploy" {
 #                   -> deploy
 #                   -> 24h sem uso -> a maquina se TERMINA sozinha
 #
-# A consequencia boa disso e que esta politica NAO PRECISA de nenhuma acao
-# destrutiva. Sem ec2:TerminateInstances, sem rds:DeleteDBInstance. Quem apaga
-# e a propria maquina, de dentro, com InstanceInitiatedShutdownBehavior=terminate
-# — e para isso nao existe permissao a conceder.
+# Quem apaga a MAQUINA e ela mesma, de dentro, com
+# InstanceInitiatedShutdownBehavior=terminate — e para isso nao existe permissao
+# a conceder. Por isso nao ha ec2:TerminateInstances aqui.
 #
-# Era o item que fazia o 6b assustar. Deixou de existir.
+# CORRECAO DE 10/08/2026: eu tinha escrito neste ponto que a politica nao
+# precisaria de NENHUMA acao destrutiva. Era falso, e o jeito de descobrir seria
+# esperar 24h. A maquina se mata; o banco dela, nao. Sobra um RDS cobrando e o
+# ciclo seguinte quebra. O rds:DeleteDBInstance no fim do arquivo existe por
+# isso, preso a um unico nome literal.
 #
 # O que sobra de perigoso e o ec2:RunInstances, que sem condicao permitiria
 # subir qualquer coisa de qualquer tamanho. As condicoes abaixo o prendem a:
@@ -170,14 +173,35 @@ resource "aws_iam_role_policy" "github_homolog" {
         Sid      = "SubirInstanciaDeHomolog"
         Effect   = "Allow"
         Action   = "ec2:RunInstances"
-        Resource = [
-          "arn:aws:ec2:${local.regiao}:${local.conta}:instance/*",
-          "arn:aws:ec2:${local.regiao}:${local.conta}:volume/*"
-        ]
+        Resource = "arn:aws:ec2:${local.regiao}:${local.conta}:instance/*"
         Condition = {
           StringEquals = {
             "aws:RequestTag/Ambiente" = "homolog"
             "ec2:InstanceType"        = local.hml_tipo
+          }
+        }
+      },
+      {
+        # O volume precisa de um bloco SEPARADO, e a razao e sutil o bastante
+        # para ter custado um ciclo inteiro da esteira em 10/08/2026.
+        #
+        # Um RunInstances cria varios recursos numa chamada so, e a AWS avalia a
+        # permissao de cada um contra as chaves de contexto QUE EXISTEM PARA
+        # AQUELE RECURSO. 'ec2:InstanceType' existe para 'instance'; para
+        # 'volume', nao existe. E um StringEquals sobre chave ausente nunca casa
+        # — entao a condicao que protege a instancia, aplicada ao volume,
+        # tornava a chamada impossivel de autorizar.
+        #
+        # A tag continua exigida aqui (o run-instances etiqueta o volume junto).
+        # Perder o limite de tipo neste bloco nao afrouxa nada: os dois blocos
+        # precisam passar para a chamada existir, e o de cima ja barra o tipo.
+        Sid      = "DiscoDaInstanciaDeHomolog"
+        Effect   = "Allow"
+        Action   = "ec2:RunInstances"
+        Resource = "arn:aws:ec2:${local.regiao}:${local.conta}:volume/*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/Ambiente" = "homolog"
           }
         }
       },
@@ -255,6 +279,55 @@ resource "aws_iam_role_policy" "github_homolog" {
           "arn:aws:rds:${local.regiao}:${local.conta}:db:${local.hml_banco}",
           "arn:aws:rds:${local.regiao}:${local.conta}:snapshot:homolog-base-*"
         ]
+      },
+      {
+        # ---------------------------------------------------------------------
+        # AQUI ENTRA A UNICA ACAO DESTRUTIVA DESTE ARQUIVO, e ela merece
+        # explicacao porque contradiz o comentario la de cima.
+        # ---------------------------------------------------------------------
+        # O desenho original dizia "esta politica nao precisa de nada
+        # destrutivo, quem apaga e a propria maquina". Estava errado pela
+        # metade: a maquina se apaga, mas o BANCO dela nao. O auto-desligamento
+        # nao tem papel IAM — de proposito — entao o banco de homolog sobrevive
+        # a morte da EC2, cobrando ~US$ 15/mes para sempre, e faz o ciclo
+        # seguinte quebrar no restore com DBInstanceAlreadyExists.
+        #
+        # A regra "sem acao destrutiva" era uma heuristica para impedir que a
+        # esteira pudesse machucar producao. Um DeleteDBInstance preso a UM
+        # nome literal nao consegue nomear producao nem por erro de digitacao:
+        # nao existe curinga aqui. A heuristica continua respeitada; o que muda
+        # e o meio.
+        Sid      = "ApagarBancoDeHomolog"
+        Effect   = "Allow"
+        Action   = "rds:DeleteDBInstance"
+        Resource = "arn:aws:rds:${local.regiao}:${local.conta}:db:${local.hml_banco}"
+      },
+      {
+        # Os snapshots de base acumulam um por ciclo. Sem apaga-los, o custo
+        # cresce em degraus que ninguem associa a homolog quando a fatura chega.
+        Sid      = "ApagarSnapshotDeHomolog"
+        Effect   = "Allow"
+        Action   = "rds:DeleteDBSnapshot"
+        Resource = "arn:aws:rds:${local.regiao}:${local.conta}:snapshot:homolog-base-*"
+      },
+      {
+        # Escopo por TAG, nao por ARN, porque o id da AMI muda a cada ciclo.
+        # A trava e que a esteira so consegue POR a tag Ambiente=homolog no
+        # momento da criacao (ver EtiquetarSomenteAoCriar) — ela nao tem como
+        # etiquetar um recurso de producao como homolog para depois apaga-lo.
+        Sid    = "ApagarImagemEDiscoDeHomolog"
+        Effect = "Allow"
+        Action = ["ec2:DeregisterImage", "ec2:DeleteSnapshot"]
+        Resource = [
+          "arn:aws:ec2:${local.regiao}::image/*",
+          "arn:aws:ec2:${local.regiao}::snapshot/*",
+          "arn:aws:ec2:${local.regiao}:${local.conta}:snapshot/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "ec2:ResourceTag/Ambiente" = "homolog"
+          }
+        }
       }
     ]
   })
