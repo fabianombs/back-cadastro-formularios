@@ -1679,6 +1679,79 @@
       ]
     },
     {
+      "type": "bargauge",
+      "id": 26,
+      "title": "Certificado NO DISCO desta maquina — dias restantes",
+      "description": "Le o arquivo em /etc/letsencrypt/live, e nao a rede. A diferenca importa e e o motivo deste painel existir (FABIANO-77). O painel ao lado mede o certificado que cada dominio ESTA APRESENTANDO — medida certa para api. e grafana., que a producao serve. Ja api-hml e grafana-hml apontam para a homolog, que na maior parte do tempo NAO EXISTE: nao ha o que sondar, e o que importa deles nao e o que esta no ar e sim o que esta no disco da producao, porque e daqui que a proxima AMI de homolog nasce. Homolog que sobe com certificado vencido faz o curl do job garantir-homolog falhar e trava TODO push na develop, por um motivo sem relacao com o codigo enviado. O rotulo meu=1 marca os certificados que esta maquina renova sozinha; meu=0 sao os que ela apenas carrega e que chegam pela esteira, vindos da homolog.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-fabiano"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-fabiano"
+          },
+          "expr": "(certbot_fabiano_cert_expiry_seconds - time()) / 86400",
+          "refId": "A",
+          "editorMode": "code",
+          "legendFormat": "{{nome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "noValue": "SEM DADO — a rotina de renovacao nao rodou"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "sizing": "auto"
+      }
+    },
+    {
       "type": "timeseries",
       "id": 19,
       "title": "Trafego e erro",
@@ -1691,7 +1764,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 20
       },
       "targets": [
         {
@@ -1760,7 +1833,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 20
       },
       "targets": [
         {

@@ -10,8 +10,18 @@ on:
     #
     # paths-ignore so pula quando TODOS os arquivos alterados casam: commit que
     # mexe em infra/ E em src/ continua deployando normalmente.
+    # CORRIGIDO EM 10/08/2026, no mesmo dia em que foi criado: a lista tinha
+    # 'infra/**', com o argumento de que infra/ nao chega na producao. Chega.
+    # O montar-bundle.sh empacota infra/backup-db.sh no bundle do S3, e a partir
+    # de hoje o scp tambem entrega infra/ e instala os scripts em /app.
+    #
+    # Ignorar infra/ inteiro faria uma correcao no backup-db.sh nunca ser
+    # deployada — que e exatamente o defeito que este commit conserta.
+    #
+    # Sobra o que de fato nunca roda numa maquina: script de PowerShell, que so
+    # existe para a estacao de trabalho.
     paths-ignore:
-      - 'infra/**'
+      - 'infra/**.ps1'
       - 'docs/**'
       - '**.md'
 
@@ -372,7 +382,10 @@ jobs:
           # deploy/. Na virada (FABIANO-47) esta maquina passa a rodar a stack
           # de observabilidade, e sem isto o compose subiria apontando para
           # arquivo que nao existe.
-          source:   "deploy/**,observability/**"
+          # infra/** entrou em 10/08/2026. Os scripts que rodam NA maquina
+          # (/app/backup-db.sh e /app/renovar-certificados.sh) moram em infra/ e
+          # ate entao so chegavam aqui por instalacao manual.
+          source:   "deploy/**,observability/**,infra/**"
           target:   "/home/ec2-user/fabiano/"
           strip_components: 0
           overwrite: true
@@ -396,6 +409,29 @@ jobs:
             # resto da virada, e ninguem viu. O script aborta ANTES de qualquer
             # escrita, entao o modo de falha e seguro.
             ./scripts/render-observabilidade.sh prod
+
+            # Instalar os scripts de infra que RODAM nesta maquina.
+            #
+            # Ate 10/08/2026 isso era manual, e o resultado foi medido nesse
+            # dia: a producao rodava um backup-db.sh SEM a correcao de fuso do
+            # log, que estava no repositorio havia dias. O log carimbava UTC e o
+            # nome do arquivo, horario de Brasilia — tres horas de diferenca na
+            # mesma linha. Custou meia hora tratando como possivel defeito uma
+            # correcao que ja existia e nunca tinha sido entregue.
+            #
+            # Compara antes de instalar so para o log dizer o que mudou. O
+            # 'install' seria idempotente de qualquer jeito; o que nao seria e
+            # saber, olhando a execucao, se algo mudou ou nao.
+            for f in backup-db.sh renovar-certificados.sh enviar-backup-email.py; do
+              ORIG="$HOME/fabiano/infra/$f"
+              [ -f "$ORIG" ] || { echo "::warning::$f nao veio no pacote"; continue; }
+              if sudo diff -q "$ORIG" "/app/$f" >/dev/null 2>&1; then
+                echo "  $f ja identico"
+              else
+                sudo install -m 755 -o root -g root "$ORIG" "/app/$f"
+                echo "  $f ATUALIZADO em /app"
+              fi
+            done
 
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u ${{ github.actor }} --password-stdin

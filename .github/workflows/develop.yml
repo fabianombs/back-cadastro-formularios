@@ -510,6 +510,173 @@ jobs:
             # Nunca propaga falha: ver o comentario do passo.
             exit 0
 
+      # -----------------------------------------------------------------------
+      # Trazer os certificados de hml de volta para a producao (FABIANO-77)
+      # -----------------------------------------------------------------------
+      # O PROBLEMA
+      #
+      # api-hml e grafana-hml resolvem para o Elastic IP da HOMOLOG. A producao
+      # nao consegue renova-los por HTTP-01: o desafio da Let's Encrypt vai para
+      # a outra maquina. Quem consegue e a propria homolog — e o
+      # renovar-certificados.sh la ja faz isso, porque ele renova exatamente o
+      # que resolve para o IP dele.
+      #
+      # So que o certificado renovado morre junto com a homolog, e a AMI do ciclo
+      # seguinte sai da PRODUCAO, com a copia velha. Sem este passo o certificado
+      # do api-hml vence em 03/11/2026 e TODA homolog nova nasce quebrada: o
+      # 'curl -fsS' do garantir-homolog falha em certificado invalido, e todo push
+      # na develop para de passar — por um motivo sem relacao com o codigo.
+      #
+      # POR QUE A COPIA RODA SEMPRE, E NAO SO QUANDO HOUVE RENOVACAO
+      #
+      # A renovacao so acontece nos 30 dias antes do vencimento, ou seja a partir
+      # de 04/10/2026. Um transporte exercitado uma vez por trimestre e um
+      # transporte que ninguem sabe se funciona. Sao poucos KB: copiando em todo
+      # deploy, qualquer defeito aparece no proximo push e nao no dia do
+      # vencimento — que e o dia em que ninguem quer descobrir nada.
+      #
+      # POR QUE A ESTEIRA E A MENSAGEIRA
+      #
+      # Ela ja tem as duas chaves SSH como segredo. A alternativa seria dar um
+      # papel IAM a homolog, que hoje nao tem nenhum de proposito.
+      #
+      # continue-on-error: este passo nao pode derrubar um deploy que ja deu
+      # certo. Se o transporte falhar, o certificado continua valido por semanas
+      # e ha tempo de sobra para consertar — mas o aviso fica no resumo.
+      - name: Trazer os certificados de hml de volta para producao
+        continue-on-error: true
+        env:
+          HML_KEY:   ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          HML_HOST:  ${{ secrets.HOMOLOG_EC2_HOST }}
+          HML_USER:  ${{ secrets.HOMOLOG_EC2_USER }}
+          PROD_KEY:  ${{ secrets.SSH_PRIVATE_KEY }}
+          PROD_HOST: ${{ secrets.EC2_HOST }}
+          PROD_USER: ${{ secrets.EC2_USER }}
+        run: |
+          set -euo pipefail
+          umask 077
+          T=$(mktemp -d)
+          trap 'rm -rf "$T"' EXIT
+          printf '%s\n' "$HML_KEY"  > "$T/hml.key"
+          printf '%s\n' "$PROD_KEY" > "$T/prod.key"
+          chmod 600 "$T"/*.key
+          OPT="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$T/known_hosts -o LogLevel=ERROR"
+
+          # A homolog e recriada a cada ciclo com o mesmo Elastic IP, entao a
+          # chave de host muda por desenho. known_hosts descartavel por execucao
+          # e o que evita 'accept-new' virar habito em maquina que importa.
+
+          NOMES="api-hml.nexventa.com.br grafana-hml.nexventa.com.br"
+
+          # O tar leva SO os dois nomes de hml. Restringir aqui e o que impede
+          # este passo de sobrescrever, na producao, os certificados que sao dela.
+          ssh -i "$T/hml.key" $OPT "$HML_USER@$HML_HOST" "
+            set -euo pipefail
+            cd /etc/letsencrypt
+            ALVOS=''
+            for N in $NOMES; do
+              # sudo no teste, e nao '[ -d ]' puro: /etc/letsencrypt/archive e
+              # 0700 do root. Sem sudo, ec2-user nao ATRAVESSA o diretorio e o
+              # teste da falso — o script concluiria 'nao existe certificado'
+              # quando o certo seria 'nao consigo enxergar'. Um teste que nao
+              # distingue ausente de invisivel relata ausente, com confianca.
+              if sudo test -d \"archive/\$N\"; then
+                ALVOS=\"\$ALVOS archive/\$N live/\$N renewal/\$N.conf\"
+              else
+                echo \"aviso: \$N nao esta em /etc/letsencrypt/archive\"
+              fi
+            done
+            if [ -z \"\$ALVOS\" ]; then
+              echo 'ERRO: nenhum certificado de hml encontrado. O que existe em archive/:'
+              sudo ls -1 archive/ || true
+              exit 1
+            fi
+            # rm ANTES de criar. Nao dava para confiar na sobrescrita.
+            #
+            # fs.protected_regular=1 (padrao no AL2023) recusa abrir para
+            # escrita um arquivo que esta em diretorio world-writable com sticky
+            # bit (/tmp) e pertence a OUTRO usuario. Essa checagem do kernel NAO
+            # abre excecao para o root — e a unica classe de negacao em que sudo
+            # nao ajuda.
+            #
+            # Como o pacote precisa terminar com dono ec2-user (senao o scp nao
+            # o le), a execucao seguinte encontrava o proprio arquivo e o root
+            # levava 'Permission denied'. Funcionou na primeira vez e falhou na
+            # segunda. Medido na homolog em 10/08/2026.
+            sudo rm -f /tmp/certs-hml.tgz
+            sudo tar czf /tmp/certs-hml.tgz \$ALVOS
+            # 600 e nao 644: este pacote contem a CHAVE PRIVADA dos
+            # certificados. Com o modo padrao ele ficava legivel por qualquer
+            # usuario da maquina enquanto estivesse em /tmp.
+            sudo chown \$(id -un) /tmp/certs-hml.tgz
+            sudo chmod 600 /tmp/certs-hml.tgz
+          "
+
+          scp -i "$T/hml.key" $OPT "$HML_USER@$HML_HOST:/tmp/certs-hml.tgz" "$T/certs-hml.tgz"
+          echo "pacote trazido da homolog: $(stat -c%s "$T/certs-hml.tgz") bytes"
+
+          # Apagar o pacote da homolog assim que ele foi copiado. Chave privada
+          # nao deve ficar em repouso em /tmp esperando a maquina morrer — e, de
+          # quebra, isso deixa o proximo ciclo comecar de um estado limpo em vez
+          # de depender do rm la de cima.
+          ssh -i "$T/hml.key" $OPT "$HML_USER@$HML_HOST" 'sudo rm -f /tmp/certs-hml.tgz'
+
+          scp -i "$T/prod.key" $OPT "$T/certs-hml.tgz" "$PROD_USER@$PROD_HOST:/tmp/certs-hml.tgz"
+
+          # Na producao a instalacao NAO e um 'tar x' direto por cima.
+          #
+          # Extrair cego significaria que, no dia em que alguem renovasse esses
+          # certificados aqui, a copia da homolog sobrescreveria com uma versao
+          # MAIS VELHA — em silencio, e o defeito so apareceria no vencimento.
+          # Entao compara-se a data de expiracao antes de instalar.
+          #
+          # A comparacao le o certificado de dentro de archive/, e nao de live/:
+          # live/ e um conjunto de symlinks para caminhos ABSOLUTOS
+          # (/etc/letsencrypt/archive/...), entao dentro do diretorio temporario
+          # eles ainda apontariam para o certificado JA instalado — e a
+          # comparacao seria do arquivo consigo mesmo.
+          ssh -i "$T/prod.key" $OPT "$PROD_USER@$PROD_HOST" '
+            set -euo pipefail
+            TMP=$(mktemp -d)
+            # sudo na extracao para preservar dono e modo: privkey.pem e 0600 do
+            # root, e um cp -a a partir de arquivo de outro dono instalaria a
+            # chave privada legivel por quem nao deve.
+            sudo tar xzf /tmp/certs-hml.tgz -C "$TMP"
+            sudo rm -f /tmp/certs-hml.tgz
+
+            for N in api-hml.nexventa.com.br grafana-hml.nexventa.com.br; do
+              ENTRANTE=$(sudo ls -1v "$TMP/archive/$N"/fullchain*.pem 2>/dev/null | tail -1 || true)
+              if [ -z "$ENTRANTE" ]; then
+                echo "::warning::pacote nao traz $N — nada a instalar"
+                continue
+              fi
+              FIM_NOVO=$(sudo openssl x509 -enddate -noout -in "$ENTRANTE" | cut -d= -f2)
+
+              ATUAL="/etc/letsencrypt/live/$N/fullchain.pem"
+              if sudo test -e "$ATUAL"; then
+                FIM_ATUAL=$(sudo openssl x509 -enddate -noout -in "$ATUAL" | cut -d= -f2)
+                if [ "$(date -d "$FIM_NOVO" +%s)" -lt "$(date -d "$FIM_ATUAL" +%s)" ]; then
+                  echo "::warning::$N: o que veio da homolog vence ANTES do que ja esta aqui ($FIM_NOVO contra $FIM_ATUAL). NAO instalado."
+                  continue
+                fi
+                if [ "$FIM_NOVO" = "$FIM_ATUAL" ]; then
+                  echo "$N: ja identico aqui, valido ate $FIM_ATUAL"
+                  continue
+                fi
+              fi
+
+              # -T para copiar diretorio SOBRE diretorio. Sem ele o cp criaria
+              # archive/<nome>/<nome>, e o certificado ficaria num lugar que
+              # ninguem procura.
+              sudo cp -aT "$TMP/archive/$N"      "/etc/letsencrypt/archive/$N"
+              sudo cp -aT "$TMP/live/$N"         "/etc/letsencrypt/live/$N"
+              sudo cp -a  "$TMP/renewal/$N.conf" "/etc/letsencrypt/renewal/$N.conf"
+              echo "$N ATUALIZADO na producao — valido ate $FIM_NOVO"
+            done
+
+            sudo rm -rf "$TMP"
+          '
+
       - name: Tag validada
         run: |
           echo "Imagem em homologacao: ${{ needs['build-push-develop'].outputs.tag }}"
@@ -556,6 +723,19 @@ jobs:
         run: |
           PR_TITLE="release: develop → master"
           PR_BODY="## Release PR\n\nBranch \`develop\` passou em todos os testes e está pronta para produção.\n\n**Merge para master irá disparar deploy automático no Railway.**"
+
+          # Mesma protecao do feature.yml: se a master ja contem tudo da
+          # develop, nao ha PR a criar e o 'gh pr create' falharia com
+          # "No commits between". Aqui e mais raro que la, mas o modo de falha
+          # e identico — e um vermelho que nao significa nada custa a atencao
+          # de quem olha o painel.
+          AHEAD=$(gh api "repos/${{ github.repository }}/compare/master...develop" --jq '.ahead_by' 2>/dev/null || echo "")
+
+          if [ "${AHEAD:-0}" = "0" ]; then
+            echo "Nada a propor: a master ja contem todos os commits da develop."
+            exit 0
+          fi
+          echo "develop esta $AHEAD commit(s) a frente da master."
 
           EXISTING=$(gh pr list --head develop --base master --state open --json number --jq '.[0].number')
 
