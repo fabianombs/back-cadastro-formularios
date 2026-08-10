@@ -575,12 +575,20 @@ jobs:
             cd /etc/letsencrypt
             ALVOS=''
             for N in $NOMES; do
-              if [ -d \"archive/\$N\" ]; then
+              # sudo no teste, e nao '[ -d ]' puro: /etc/letsencrypt/archive e
+              # 0700 do root. Sem sudo, ec2-user nao ATRAVESSA o diretorio e o
+              # teste da falso — o script concluiria 'nao existe certificado'
+              # quando o certo seria 'nao consigo enxergar'. Um teste que nao
+              # distingue ausente de invisivel relata ausente, com confianca.
+              if sudo test -d \"archive/\$N\"; then
                 ALVOS=\"\$ALVOS archive/\$N live/\$N renewal/\$N.conf\"
+              else
+                echo \"aviso: \$N nao esta em /etc/letsencrypt/archive\"
               fi
             done
             if [ -z \"\$ALVOS\" ]; then
-              echo 'ERRO: nenhum certificado de hml no disco da homolog'
+              echo 'ERRO: nenhum certificado de hml encontrado. O que existe em archive/:'
+              sudo ls -1 archive/ || true
               exit 1
             fi
             sudo tar czf /tmp/certs-hml.tgz \$ALVOS
