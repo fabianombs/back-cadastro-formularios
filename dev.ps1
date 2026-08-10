@@ -119,7 +119,6 @@ Write-Host ""
 Write-Host "  TESTES" -ForegroundColor White
 Write-Host "  9  smoke test         (precisa da aplicacao no ar em outra janela)"
 Write-Host " 10  migrations do zero (sobe um 8.4 descartavel na 3308)"
-Write-Host " 11  ensaio do cliente  (troca do MySQL client em container)"
 Write-Host ""
 Write-Host "  UTIL" -ForegroundColor White
 Write-Host " 12  abrir os links no navegador"
@@ -171,7 +170,6 @@ switch ($op) {
     "8"  { Push-Location $PSScriptRoot; & .\infra\dev-local.ps1 -SemRestaurar; Pop-Location }
     "9"  { Push-Location $PSScriptRoot; & .\infra\smoke-local.ps1; Pop-Location }
     "10" { Push-Location $PSScriptRoot; & .\infra\testar-mysql84.ps1; Pop-Location }
-    "11" { Push-Location $PSScriptRoot; & .\infra\ensaio-cliente84.ps1; Pop-Location }
 
     "12" { AbrirLinks }
     "13" { LimparGitLock }
