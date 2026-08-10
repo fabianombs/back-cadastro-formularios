@@ -12,9 +12,19 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    # Vira rotulo em toda serie. Quando o Grafana passar a ver producao e
-    # homologacao ao mesmo tempo, e por aqui que se separa uma da outra.
-    ambiente: homolog
+    # Vira rotulo em toda serie que SAI daqui — alerta, federacao, remote_write.
+    # Quando o Grafana passar a ver producao e homologacao ao mesmo tempo, e por
+    # aqui que se separa uma da outra.
+    #
+    # CORRIGIDO EM 10/08/2026: dizia 'homolog'. Era resto da virada de 08/08, em
+    # que esta maquina rodou como homologacao antes de assumir a producao — o
+    # mesmo defeito do .env daquele dia, no arquivo ao lado, que passou batido.
+    # Producao vinha se identificando como homologacao desde entao.
+    #
+    # Este arquivo vai para PRODUCAO como esta. Quem muda o valor para homolog e
+    # o scripts/render-observabilidade.sh, no deploy da homolog — e o mesmo
+    # script aborta se um dia esta linha voltar a dizer outra coisa.
+    ambiente: prod
 
 scrape_configs:
   - job_name: fabiano-back

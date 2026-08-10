@@ -403,6 +403,13 @@ jobs:
             # O scp nao preserva o bit de execucao.
             chmod +x scripts/*.sh
 
+            # A observabilidade que acabou de chegar por scp descreve PRODUCAO.
+            # Sem esta linha o Grafana da homolog vigia a producao — verde e
+            # confiante, mudo sobre a maquina em teste — e os logs dela entram
+            # etiquetados 'ambiente: prod', misturados aos de producao para quem
+            # filtrar por ambiente num incidente. Aconteceu em 10/08/2026.
+            ./scripts/render-observabilidade.sh homolog
+
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
