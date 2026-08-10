@@ -373,6 +373,17 @@ cat <<FIM
  E-mails: NENHUM sai da maquina. Caixa do Mailpit:
    ssh -L 8025:mailpit:8025 ...   e abrir http://localhost:8025
 
+ -----------------------------------------------------------------------------
+ !! FALTA UM PASSO, E ELE NAO E OPCIONAL !!
+ -----------------------------------------------------------------------------
+ GitHub > Settings > Secrets and variables > Actions > aba VARIABLES
+   HOMOLOG_ATIVO = true
+
+ Sem isso o job 'Deploy em homologacao' e PULADO, e o 'homolog-desativada'
+ emite aviso amarelo — homolog fica de pe sem receber deploy nenhum.
+ Atencao: e VARIABLE, nao Secret. Como secret, vars.HOMOLOG_ATIVO vem vazio e
+ o 'if' nunca casa.
+
  AUTO-DESLIGAMENTO: esta maquina se TERMINA sozinha se ficar
    - 24h sem nenhuma requisicao real (a sonda do blackbox nao conta), ou
    - 7 dias de pe, aconteca o que acontecer.
