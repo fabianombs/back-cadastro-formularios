@@ -226,9 +226,95 @@ jobs:
   #
   # A trava do '-ensaio.' continua no lugar e nao foi enfraquecida: ela e a
   # ultima barreira se alguem religar a variavel apontando para producao.
+
+  # ---------------------------------------------------------------------------
+  # A homolog nasce sozinha quando precisa (FABIANO-33, etapa 6b)
+  # ---------------------------------------------------------------------------
+  # DESENHO, decidido em 09/08/2026:
+  #
+  #   push na develop -> existe homolog? nao: cria. sim: segue.
+  #                   -> deploy
+  #                   -> 24h sem uso -> a maquina se TERMINA sozinha
+  #
+  # Antes disso, subir e derrubar homolog era manual na CloudShell, e o
+  # HOMOLOG_ATIVO tinha que ser virado a mao nos dois sentidos. Em 09/08 a
+  # variavel ficou em 'true' com a maquina ja derrubada e o job morreu com
+  # 'dial tcp ***:22: i/o timeout'. Interruptor manual sempre acaba
+  # dessincronizado da realidade.
+  #
+  # O SIGNIFICADO DO HOMOLOG_ATIVO MUDOU. Ele deixou de ser "existe homolog" e
+  # passou a ser "usar homolog neste fluxo". Quem cuida da existencia e este
+  # job; a variavel virou um interruptor geral, para desligar a etapa inteira
+  # sem mexer em codigo.
+  #
+  # Note o que NAO esta aqui: nenhum passo que apague nada. O papel do GitHub
+  # nao tem ec2:TerminateInstances nem rds:DeleteDBInstance, de proposito —
+  # quem apaga a maquina e ela mesma, de dentro, e para isso nao existe
+  # permissao a conceder.
+  garantir-homolog:
+    name: Garantir que a homolog existe
+    needs: build-push-develop
+    if: vars.HOMOLOG_ATIVO == 'true'
+    runs-on: ubuntu-latest
+    # Provisionar leva ~20 min: AMI, snapshot do banco, restauracao e boot. O
+    # padrao de 6h do GitHub esconderia um travamento por meio dia.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # OIDC: credencial de minutos, nenhuma chave guardada
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_DEPLOY }}
+          aws-region: us-east-1
+
+      - name: Ja existe homolog de pe?
+        id: existe
+        run: |
+          set -euo pipefail
+          # Busca por TAG, nao por id fixo: o id muda a cada ciclo.
+          ID=$(aws ec2 describe-instances --region us-east-1 \
+            --filters "Name=tag:Ambiente,Values=homolog" \
+                      "Name=instance-state-name,Values=pending,running" \
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+          if [ -n "$ID" ]; then
+            echo "homolog ja esta de pe: $ID"
+            echo "criar=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "nenhuma homolog no ar — sera criada"
+            echo "criar=sim" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Criar a homolog a partir da producao de agora
+        if: steps.existe.outputs.criar == 'sim'
+        run: |
+          chmod +x infra/subir-homolog.sh infra/homolog-autodesliga.sh
+          ./infra/subir-homolog.sh
+
+      # Esperar por SINAL, nao por relogio. Um 'sleep 240' passaria verde numa
+      # maquina que nunca subiu, e o proximo job falharia com um erro que nao
+      # aponta para a causa. Aqui o proprio caminho do usuario e o teste:
+      # DNS, Security Group, nginx, TLS e backend, tudo de uma vez.
+      - name: Esperar a homolog responder de fora
+        if: steps.existe.outputs.criar == 'sim'
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS --max-time 5 https://api-hml.nexventa.com.br/actuator/health >/dev/null 2>&1; then
+              echo "homolog respondendo apos $((i*15))s"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::A homolog foi criada mas nao respondeu em 10 minutos."
+          echo "::error::Conferir /var/log/homolog-init.log e se existe homolog-init.FALHOU."
+          exit 1
+
   deploy-homolog:
     name: Deploy em homologacao
-    needs: build-push-develop
+    needs: [build-push-develop, garantir-homolog]
     if: vars.HOMOLOG_ATIVO == 'true'
     runs-on: ubuntu-latest
     permissions:
