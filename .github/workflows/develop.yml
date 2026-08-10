@@ -591,12 +591,35 @@ jobs:
               sudo ls -1 archive/ || true
               exit 1
             fi
+            # rm ANTES de criar. Nao dava para confiar na sobrescrita.
+            #
+            # fs.protected_regular=1 (padrao no AL2023) recusa abrir para
+            # escrita um arquivo que esta em diretorio world-writable com sticky
+            # bit (/tmp) e pertence a OUTRO usuario. Essa checagem do kernel NAO
+            # abre excecao para o root — e a unica classe de negacao em que sudo
+            # nao ajuda.
+            #
+            # Como o pacote precisa terminar com dono ec2-user (senao o scp nao
+            # o le), a execucao seguinte encontrava o proprio arquivo e o root
+            # levava 'Permission denied'. Funcionou na primeira vez e falhou na
+            # segunda. Medido na homolog em 10/08/2026.
+            sudo rm -f /tmp/certs-hml.tgz
             sudo tar czf /tmp/certs-hml.tgz \$ALVOS
+            # 600 e nao 644: este pacote contem a CHAVE PRIVADA dos
+            # certificados. Com o modo padrao ele ficava legivel por qualquer
+            # usuario da maquina enquanto estivesse em /tmp.
             sudo chown \$(id -un) /tmp/certs-hml.tgz
+            sudo chmod 600 /tmp/certs-hml.tgz
           "
 
           scp -i "$T/hml.key" $OPT "$HML_USER@$HML_HOST:/tmp/certs-hml.tgz" "$T/certs-hml.tgz"
           echo "pacote trazido da homolog: $(stat -c%s "$T/certs-hml.tgz") bytes"
+
+          # Apagar o pacote da homolog assim que ele foi copiado. Chave privada
+          # nao deve ficar em repouso em /tmp esperando a maquina morrer — e, de
+          # quebra, isso deixa o proximo ciclo comecar de um estado limpo em vez
+          # de depender do rm la de cima.
+          ssh -i "$T/hml.key" $OPT "$HML_USER@$HML_HOST" 'sudo rm -f /tmp/certs-hml.tgz'
 
           scp -i "$T/prod.key" $OPT "$T/certs-hml.tgz" "$PROD_USER@$PROD_HOST:/tmp/certs-hml.tgz"
 
