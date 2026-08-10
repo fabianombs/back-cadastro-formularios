@@ -40,11 +40,13 @@ class ClientRepositoryTest {
     void clienteNovoNasceComTimestamps() {
         LocalDateTime antes = LocalDateTime.now().minusMinutes(1);
 
+        // name e email sao NOT NULL na V2; username e UNIQUE. O nanoTime evita
+        // colisao entre execucoes caso a transacao de teste nao seja desfeita.
+        String marca = "teste_created_at_" + System.nanoTime();
         Client novo = Client.builder()
-                // username e unique e not null; o nanoTime evita colisao entre
-                // execucoes caso a transacao de teste nao seja desfeita.
-                .username("teste_created_at_" + System.nanoTime())
+                .username(marca)
                 .name("Cliente de teste")
+                .email(marca + "@teste.local")
                 .build();
 
         // saveAndFlush e nao save: o save adia o INSERT ate o fim da transacao,
