@@ -59,6 +59,14 @@ public class FormSubmissionService {
     // =========================
     // LISTAR POR TEMPLATE ID
     // =========================
+    // readOnly = true nao e otimizacao: e o que mantem a sessao aberta enquanto
+    // o toResponse le 'values', que e @ElementCollection e portanto preguicosa.
+    // Sem isto, com spring.jpa.open-in-view=false a sessao fecha ao voltar do
+    // repositorio e o .map() estoura com LazyInitializationException — que o
+    // handler generico converte em HTTP 400, ou seja, "voce errou a requisicao"
+    // numa rota publica que estava certa. Medido em homolog, 10/08/2026
+    // (FABIANO-37).
+    @Transactional(readOnly = true)
     public Page<FormSubmissionResponse> getSubmissionsByTemplate(Long templateId, Pageable pageable) {
         return submissionRepository.findByTemplate_Id(templateId, pageable)
                 .map(this::toResponse);
@@ -67,6 +75,8 @@ public class FormSubmissionService {
     // =========================
     // LISTAR POR SLUG
     // =========================
+    // Mesmo motivo do metodo acima: o .map() abaixo toca a colecao preguicosa.
+    @Transactional(readOnly = true)
     public Page<FormSubmissionResponse> getSubmissionsBySlug(String slug, Pageable pageable) {
 
         FormTemplate template = templateRepository.findBySlug(slug)
