@@ -123,6 +123,40 @@ certbot_fabiano_falhas ${FALHAS}
 # TYPE certbot_fabiano_gerenciados gauge
 certbot_fabiano_gerenciados ${MEUS}
 EOF
+
+  # ---------------------------------------------------------------------------
+  # Validade de CADA certificado no disco desta maquina (FABIANO-77)
+  # ---------------------------------------------------------------------------
+  # POR QUE NAO BASTA A SONDA EXTERNA
+  #
+  # O painel de dias restantes le probe_ssl_earliest_cert_expiry, do blackbox —
+  # ou seja, o certificado que o servidor ESTA APRESENTANDO agora. Para api. e
+  # grafana. isso e a medida certa.
+  #
+  # Para api-hml e grafana-hml, nao e. Esses nomes apontam para a homolog, que
+  # nem sempre existe, e o que importa deles nao e o que esta sendo servido: e o
+  # que esta NO DISCO DA PRODUCAO, porque e daqui que a proxima AMI nasce. Uma
+  # homolog que sobe com certificado vencido quebra o 'curl -fsS' do
+  # garantir-homolog e trava todo push na develop.
+  #
+  # Entao esta metrica le o arquivo, e nao a rede. Ela responde "o que a proxima
+  # homolog vai herdar", que e a pergunta que o FABIANO-77 existe para vigiar.
+  {
+    echo "# HELP certbot_fabiano_cert_expiry_seconds validade do certificado no DISCO desta maquina"
+    echo "# TYPE certbot_fabiano_cert_expiry_seconds gauge"
+    for live in /etc/letsencrypt/live/*/fullchain.pem; do
+      [ -e "$live" ] || continue
+      nome=$(basename "$(dirname "$live")")
+      fim=$(openssl x509 -enddate -noout -in "$live" 2>/dev/null | cut -d= -f2)
+      [ -n "$fim" ] || continue
+      epoch=$(date -d "$fim" +%s 2>/dev/null) || continue
+      # 'meu' distingue o que esta maquina renova do que ela apenas carrega.
+      # Sem esse rotulo, um certificado alheio vencendo pareceria negligencia
+      # desta maquina — e o alerta iria para quem nao pode resolver.
+      if [ "$(resolver "$nome")" = "$MEU_IP" ]; then meu=1; else meu=0; fi
+      echo "certbot_fabiano_cert_expiry_seconds{nome=\"${nome}\",meu=\"${meu}\"} ${epoch}"
+    done
+  } >> "${METRICA}.tmp"
   # mv atomico: o node_exporter pode estar lendo o arquivo neste instante, e
   # ler um .prom pela metade faz a metrica sumir por um ciclo.
   mv "${METRICA}.tmp" "${METRICA}"
