@@ -102,6 +102,28 @@ jobs:
           PR_TITLE="feat: merge ${BRANCH} into develop"
           PR_BODY="## Automated PR\n\nBranch \`${BRANCH}\` passou no build e testes.\n\n**Merge para develop após revisão.**"
 
+          # Nao ha o que propor se a develop ja contem tudo desta branch.
+          #
+          # Acontece o tempo todo no fluxo real: o push da feature dispara este
+          # workflow, e o merge na develop e feito em seguida, nos segundos
+          # seguintes. Quando o job chega aqui, a develop ja absorveu os commits
+          # e o 'gh pr create' morre com "No commits between develop and
+          # feature/...", pintando o run de vermelho.
+          #
+          # Vermelho recorrente que nao significa nada e pior que nenhum aviso:
+          # ele treina a equipe a ignorar vermelho — inclusive o que importa.
+          #
+          # A comparacao e pela API e nao por git local: o checkout@v4 traz um
+          # clone raso so desta branch, entao 'origin/develop' pode nem existir
+          # no disco do runner.
+          AHEAD=$(gh api "repos/${{ github.repository }}/compare/develop...${BRANCH}" --jq '.ahead_by' 2>/dev/null || echo "")
+
+          if [ "${AHEAD:-0}" = "0" ]; then
+            echo "Nada a propor: a develop ja contem todos os commits de $BRANCH."
+            exit 0
+          fi
+          echo "$BRANCH esta $AHEAD commit(s) a frente da develop."
+
           # Verifica se já existe um PR aberto para essa branch
           EXISTING=$(gh pr list --head "$BRANCH" --base develop --state open --json number --jq '.[0].number')
 
