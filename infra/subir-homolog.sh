@@ -262,6 +262,45 @@ echo "17 3 * * * /app/renovar-certificados.sh" | crontab -
 # O renovar-certificados.sh descobre sozinho quais certificados apontam para
 # esta maquina — aqui vai renovar api-hml e grafana-hml, e pular os de producao.
 
+# --- 1b. segredos de producao que moram FORA de deploy/ ----------------------
+# O /etc/fabiano-backup.env carrega SMTP_USER e SMTP_PASS de producao e vem
+# dentro da AMI, entao toda homolog nascia com ele. A sanitizacao do passo 3 so
+# alcanca o .env do Compose — este arquivo escapava por estar fora de deploy/.
+#
+# Nao esta em uso aqui (o crontab acima foi substituido e a homolog nao roda o
+# backup-db.sh), mas esta maquina tem a 22 aberta e vive dias. Credencial de
+# producao parada tambem vaza.
+#
+# Sobrescrever, e nao apagar: se algum script herdado ainda fizer 'source' dele,
+# a ausencia do arquivo quebraria o boot com erro obscuro; com valores inertes
+# ele carrega e nao entrega nada. .invalid e reservado pela RFC 2606.
+if [ -f /etc/fabiano-backup.env ]; then
+  cat > /etc/fabiano-backup.env <<'INERTE'
+# Sanitizado pelo subir-homolog.sh (FABIANO-79). Os valores de producao que
+# vinham na AMI foram substituidos por valores que nao autenticam em lugar
+# nenhum. Nao repor credencial real aqui.
+SMTP_USER=homolog@exemplo.invalid
+SMTP_PASS=homolog
+MAIL_TO=homolog@exemplo.invalid
+INERTE
+  chmod 600 /etc/fabiano-backup.env
+fi
+
+# Conferir depois de transformar, e falhar ALTO. Sem esta guarda, um arquivo com
+# formato diferente do esperado passaria silenciosamente com a senha intacta.
+if grep -qiE 'nexventa|gmail|sendgrid|smtp\.' /etc/fabiano-backup.env 2>/dev/null; then
+  echo "ERRO: /etc/fabiano-backup.env ainda parece conter valor de producao." >&2
+  exit 1
+fi
+
+# Varredura do resto da maquina. Imprime NOMES DE ARQUIVO, nunca conteudo: o
+# objetivo e descobrir onde procurar, e um grep que ecoa a senha na tela do
+# cloud-init transformaria a busca por vazamento em um vazamento.
+echo "--- arquivos fora de deploy/ que parecem carregar segredo ---"
+grep -rlIE 'AKIA[0-9A-Z]{16}|SMTP_PASS=|DB_PASSWORD=|SECRET=' \
+  /etc /usr/local/bin /opt 2>/dev/null \
+  | grep -v '^/etc/fabiano-backup.env\$' || echo "  nenhum"
+
 # --- 2. certificados: os de producao saem daqui ------------------------------
 # A AMI carrega /etc/letsencrypt inteiro, inclusive a CHAVE PRIVADA dos
 # certificados de producao. Homolog e menos vigiado e tem a 22 aberta: material

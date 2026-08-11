@@ -49,9 +49,33 @@ aws ec2 associate-address \
 # -----------------------------------------------------------------------------
 dnf update -y
 
-# mariadb105 e quem traz o mysqldump no AL2023. Nao e o cliente da Oracle, e
-# funciona para gerar e restaurar dump do MySQL 8.x — que e o uso aqui.
-dnf install -y docker mariadb105 cronie tar gzip jq
+dnf install -y docker cronie tar gzip jq
+
+# CLIENTE MYSQL: o da ORACLE, nao o mariadb105.
+#
+# CONFERIDO NA MAQUINA EM 11/08/2026, nao suposto. A producao roda
+# 'mysql-community-client-8.4.11-1.el9', do repositorio oficial da Oracle
+# (/etc/yum.repos.d/mysql-community.repo, canal mysql-8.4-lts-community).
+#
+# A versao anterior deste arquivo instalava 'mariadb105' com o comentario "nao e
+# o cliente da Oracle, e funciona". NAO funciona para o uso deste projeto: o
+# infra/backup-db.sh chama
+#
+#     mysqldump --single-transaction --set-gtid-purged=OFF --routines --triggers
+#
+# e '--set-gtid-purged' NAO EXISTE no mysqldump do MariaDB. Uma maquina nascida
+# com mariadb105 sobe saudavel, responde HTTP, passa no health check — e falha
+# as 3h30, no unico momento em que o backup roda. Mesmo modo de falha do
+# FABIANO-29, agora automatizado.
+dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-1.noarch.rpm
+dnf install -y mysql-community-client
+
+# Falhar AQUI, e alto. Sem esta guarda a ausencia so apareceria no primeiro
+# backup — depois de a instancia ja ter assumido o Elastic IP e o trafego.
+command -v mysqldump >/dev/null \
+  || { echo "FATAL: mysqldump ausente apos instalacao"; exit 1; }
+mysqldump --help 2>/dev/null | grep -q 'set-gtid-purged' \
+  || { echo "FATAL: mysqldump sem --set-gtid-purged — cliente errado"; exit 1; }
 
 # O plugin do compose nao esta nos repositorios do AL2023: instalacao manual, em
 # versao FIXA. Sem fixar, uma maquina recriada daqui a seis meses nasce com um
@@ -68,13 +92,20 @@ systemctl enable --now docker
 systemctl enable --now crond
 usermod -aG docker ec2-user
 
-# certbot pelo pip, em ambiente virtual proprio: o AL2023 nao empacota certbot,
-# e o EPEL nao vale para ele. E o metodo que a propria Let's Encrypt documenta
-# para distribuicao sem pacote.
-dnf install -y python3-pip
-python3 -m venv /opt/certbot
-/opt/certbot/bin/pip install --upgrade pip certbot
-ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+# CERTBOT: pacote do proprio AL2023.
+#
+# CONFERIDO NA MAQUINA EM 11/08/2026: a producao roda
+# 'certbot-2.6.0-4.amzn2023.0.1.noarch' — ou seja, o AL2023 EMPACOTA certbot,
+# ao contrario do que a versao anterior deste arquivo afirmava.
+#
+# O metodo por venv/pip funcionaria, mas troca um pacote versionado pela
+# distribuicao por um ambiente Python que precisa de rede para o PyPI no boot,
+# nao recebe atualizacao de seguranca junto com o resto do sistema, e nasce numa
+# versao diferente a cada recriacao — o oposto de "recriar identico".
+dnf install -y certbot
+
+command -v certbot >/dev/null \
+  || { echo "FATAL: certbot ausente apos instalacao"; exit 1; }
 
 # -----------------------------------------------------------------------------
 # 3. Segredos, lidos do Parameter Store
