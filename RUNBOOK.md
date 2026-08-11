@@ -1060,6 +1060,157 @@ formulário com submissão pode carregar resposta de gente de verdade.
 
 ---
 
+### 7.9 — Switchover de Blue/Green do RDS: a aplicação não acompanha sozinha
+
+**Quando isto se aplica:** qualquer switchover de Blue/Green do RDS — upgrade de
+versão maior, mudança de classe, troca de parameter group. Foi o que aconteceu em
+08/08/2026 no upgrade para o MySQL 8.4 (FABIANO-9, FABIANO-74).
+
+#### O que a AWS faz, e o que ela não faz
+
+No switchover a AWS **renomeia** as duas instâncias:
+
+|  | Antes | Depois |
+| --- | --- | --- |
+| Verde (novo) | `poc-fabiano-db-green-xxxxx` | `poc-fabiano-db` — assume o nome e o DNS |
+| Azul (antigo) | `poc-fabiano-db` | `poc-fabiano-db-old1` — **mantém o IP**, vira somente leitura |
+
+O endpoint que o `.env` usa passa a resolver para o IP do verde. O `.env` não
+precisa ser alterado — e é justamente isso que engana: **está tudo certo na
+configuração**.
+
+O que a AWS não faz é derrubar a aplicação. A JVM continua rodando, com o pool de
+conexões que já tinha. Duas coisas, somadas, deixam esse pool no banco errado:
+
+1. **O cache de DNS da JVM** — 30 segundos por padrão (sem SecurityManager; a
+   linha `networkaddress.cache.ttl` vem comentada no `java.security`). Se o
+   HikariCP reconstruir o pool dentro dessa janela, as conexões novas nascem
+   apontando para o IP antigo.
+2. **O `max-lifetime` do HikariCP** — 30 minutos por padrão, e não configurado
+   neste projeto. Uma conexão que nasceu errada **continua** errada por até meia
+   hora, porque nada a força a fechar.
+
+O primeiro item explica como o erro nasce. O segundo explica por que ele dura.
+Confundir os dois leva a "corrigir" só o TTL do DNS e achar que resolveu.
+
+#### Por que leitura não prova nada
+
+O `old1` é uma cópia exata da produção de segundos atrás. **Ler dele é
+indistinguível de ler da produção**: login funciona, dashboard funciona, listas
+funcionam, tudo 200 com os dados certos.
+
+Em 08/08 a validação feita logo após a troca foi `SELECT VERSION()` pelo cliente
+`mysql` de linha de comando. Deu `8.4.10` e 62 migrations — e **confirmou um
+sucesso que a aplicação não estava tendo**. O cliente é um processo novo: resolve
+o DNS na hora e acerta o banco novo. A aplicação é um processo velho, com
+conexões TCP já abertas. Os dois responderam "tudo bem" sobre servidores
+diferentes.
+
+O erro só apareceu 20 minutos depois, ao tentar **cadastrar um cliente**:
+
+```
+could not execute statement [The MySQL server is running with the --read-only
+option so it cannot execute this statement] [insert into users (...)]
+```
+
+O que salvou foi a AWS deixar o azul em somente leitura. Se ele aceitasse
+escrita, teria sido split-brain: parte dos dados num banco, parte no outro, e a
+descoberta viria dias depois procurando um cadastro que "com certeza foi feito".
+
+#### Procedimento obrigatório
+
+**Depois de todo switchover, antes de declarar sucesso:**
+
+1. Recriar a aplicação — JVM nova, sem cache de DNS, pool do zero:
+
+   ```bash
+   cd /home/ec2-user/fabiano/deploy
+   docker compose up -d --pull never --force-recreate backend
+   sleep 25
+   docker exec fabiano-nginx nginx -s reload
+   ```
+
+   O `--pull never` evita depender do registry neste momento. O reload do nginx
+   **não é opcional**: recriar o backend muda o IP do container, e o nginx guarda
+   o IP resolvido (FABIANO-67).
+
+2. Conferir onde o pool realmente está — ver a subseção abaixo.
+
+3. Validar com uma **ESCRITA**, nunca com uma leitura. Um cadastro de teste pela
+   interface serve. Leitura não distingue o banco novo do antigo; só a escrita
+   distingue.
+
+#### Como conferir onde o pool está
+
+`ss` no host **não serve** — as conexões vivem no namespace de rede do container.
+
+Se o `infra/checar-74.sh` estiver disponível na máquina, é ele que responde. Como
+`infra/` não vai no scp da esteira (só `deploy/**` e `observability/**`), o mais
+provável é que não esteja — então o método manual:
+
+```bash
+cd /home/ec2-user/fabiano/deploy
+
+# 1. Para onde o endpoint do .env aponta agora
+DB_HOST=$(grep -E '^DB_HOST=' .env | cut -d= -f2-)
+getent hosts "$DB_HOST"
+```
+
+Converter o IP para hexadecimal com os **bytes invertidos** (little-endian):
+`172.31.14.180` vira `B40E1FAC`, e não `AC1F0EB4`.
+
+```bash
+# 2. Contar as conexoes do container nesse IP (0CEA = porta 3306)
+docker exec fabiano-backend cat /proc/net/tcp | grep -c "B40E1FAC:0CEA"
+
+# 3. E listar TODOS os destinos na 3306, para ver se sobrou algum
+docker exec fabiano-backend cat /proc/net/tcp \
+  | awk 'NR>1 { split($3,d,":"); if (d[2]=="0CEA") print d[1] }' | sort | uniq -c
+```
+
+**O resultado esperado é uma linha só**, com o hexadecimal do endpoint do `.env`
+e a contagem igual ao tamanho do pool. Duas linhas significam pool dividido entre
+dois servidores — repetir o passo 1 do procedimento.
+
+Medição de referência (produção, 10/08/2026, situação sã):
+
+```
+172.31.14.180    B40E1FAC  -> 10 conexao(oes)   <<< o endpoint do .env
+no endpoint do .env ...... 10
+total na porta 3306 ...... 10
+```
+
+#### O que NÃO fazer
+
+- **Não** declarar sucesso com `SELECT VERSION()` ou qualquer leitura pelo cliente
+  `mysql`. Foi exatamente esse teste que deu falso positivo em 08/08.
+- **Não** apagar o `old1` antes de a aplicação estar comprovadamente no verde. Ele
+  é o caminho de volta.
+- **Não** confiar no `.env`: ele estava certo o tempo inteiro durante o incidente.
+  A configuração certa e o processo executando outra coisa é a família de defeito
+  mais comum deste projeto.
+
+#### Por que não mexemos na configuração
+
+Foi avaliado e recusado, em 10/08/2026:
+
+- `-Dnetworkaddress.cache.ttl=5` encurtaria a janela de 30s para 5s em que uma
+  conexão pode nascer errada. Não elimina o problema e não toca nas conexões já
+  abertas.
+- Reduzir o `max-lifetime` de 30 para 10 minutos encurtaria a janela em que uma
+  conexão errada sobrevive. Mas isso otimiza a **duração** de uma falha em vez de
+  evitá-la: dez minutos de erro em produção já é inaceitável.
+
+Nenhuma das duas dispensa o passo 1. Como o switchover é um evento manual e raro,
+o procedimento acima cobre o caso com menos superfície de mudança do que ajustar
+dois parâmetros que continuariam exigindo o mesmo procedimento.
+
+Se um dia o RDS passar a Multi-AZ, **reabrir esta decisão**: em failover
+automático não há operador para executar o passo 1, e aí o TTL do DNS deixa de
+ser cosmético.
+
+---
+
 ## 8. Observabilidade (maquina nova)
 
 Subiu em 06/08/2026. Usuario `admin`. Os paineis ficam na pasta **Fabiano**.
