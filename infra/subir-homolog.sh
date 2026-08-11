@@ -290,7 +290,14 @@ trocar DB_HOST "${HML_ENDPOINT}"
 trocar SPRING_PROFILES_ACTIVE homolog
 trocar APP_BASE_URL https://api-hml.nexventa.com.br
 trocar APP_FRONTEND_URL https://hml.nexventa.com.br
-trocar CORS_ALLOWED_ORIGINS https://hml.nexventa.com.br
+# O curinga entra SO aqui, nunca em producao: o .env.example ja registrava a
+# regra, e o SecurityConfig usa setAllowedOriginPatterns, entao '*' funciona.
+# Sem ele, cada preview da Vercel nasce num subdominio novo e o navegador
+# barra o /auth/login por CORS — a rota e publica no Spring Security, mas o
+# CORS dela e o 'privateConfig', que so aceita a lista.
+# Em producao isso seria grave: qualquer projeto Vercel do mundo poderia
+# chamar a API autenticada pelo navegador de um usuario logado.
+trocar CORS_ALLOWED_ORIGINS 'https://hml.nexventa.com.br,https://*.vercel.app'
 trocar GRAFANA_ROOT_URL https://grafana-hml.nexventa.com.br
 
 # JWT proprio: com o mesmo segredo de producao, um token emitido em homolog
@@ -314,6 +321,43 @@ trocar SMTP_USER homolog@exemplo.invalid
 trocar SMTP_PASS homolog
 trocar ALERTA_EMAIL homolog@exemplo.invalid
 trocar ALERTA_SUBMISSAO_PAUSADO true
+
+# --- S3: armario proprio, e sem a chave de producao --------------------------
+# MEDIDO EM 10/08/2026: a homolog nascia com AWS_S3_BUCKET=cadastro-fabiano-uploads
+# e com a MESMA chave estatica de producao (AKIA...Z2UT), herdadas da AMI. Ou seja:
+# todo upload feito em homologacao gravava no bucket do cliente, e como o
+# S3ImageStorageService tambem chama deleteObject, um teste de troca de imagem
+# podia APAGAR uma foto de producao.
+#
+# Pior: aquele usuario IAM tem AmazonS3FullAccess. A chave nesta maquina alcancava
+# tambem o bucket de BACKUP DO BANCO e o de artefatos de deploy — numa maquina de
+# teste, com a porta 22 aberta, recriada a cada ciclo.
+#
+# Nao foi falha de desenho: a sanitizacao protege o que alguem lembrou de listar.
+# Banco, e-mail e JWT foram lembrados; o S3 nao. E era invisivel porque a homolog
+# FUNCIONA assim — o upload sobe, a imagem aparece, nada acusa.
+trocar AWS_S3_BUCKET cadastro-fabiano-uploads-hml
+trocar AWS_S3_BASE_URL https://cadastro-fabiano-uploads-hml.s3.us-east-1.amazonaws.com
+
+# As chaves saem do arquivo, nao viram valor falso. Com o DefaultCredentialsProvider
+# (FABIANO-79) a aplicacao so cai no papel da instancia quando as variaveis NAO
+# EXISTEM: um valor invalido seria encontrado pela cadeia e usado, resultando em
+# 403 na hora do upload em vez de usar o papel.
+sed -i '/^AWS_ACCESS_KEY_ID=/d; /^AWS_SECRET_ACCESS_KEY=/d' .env
+
+# Conferir depois de transformar. Um 'sed' que nao casa nada sai com 0 e deixa o
+# arquivo intacto — e esta guarda e a unica coisa entre um ciclo silenciosamente
+# errado e a producao.
+if grep -qE '^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=' .env; then
+  echo "ABORTADO: sobrou chave estatica da AWS no .env da homolog." >&2
+  exit 1
+fi
+if ! grep -q '^AWS_S3_BUCKET=cadastro-fabiano-uploads-hml$' .env; then
+  echo "ABORTADO: o AWS_S3_BUCKET da homolog NAO ficou apontando para o bucket de homologacao." >&2
+  echo "          Sem isto, esta maquina grava e apaga no bucket do cliente." >&2
+  exit 1
+fi
+echo "    S3 da homolog: bucket proprio, sem chave estatica."
 
 # --- 4. anonimizacao ---------------------------------------------------------
 # Roda ANTES do 'docker compose up' do passo 6, de proposito: nao pode existir
@@ -468,6 +512,26 @@ CLOUDINIT
 # precisa nascer etiquetado: a politica IAM exige Ambiente=homolog nele, e sem
 # esta segunda linha de tag a chamada inteira e negada com UnauthorizedOperation
 # em volume/*. Aconteceu no ciclo de 10/08/2026.
+#
+# POR QUE A HOMOLOG PASSOU A TER PAPEL DE INSTANCIA (mudanca de decisao, 10/08)
+#
+# Ate aqui a homolog nascia SEM papel nenhum, de proposito: sem papel, ela nao
+# alcancava o S3 nem o SSM de producao. A intencao estava certa e o efeito era o
+# oposto — sem papel, o que fazia o upload funcionar era a chave estatica de
+# producao herdada da AMI, e aquele usuario tem AmazonS3FullAccess. Na pratica a
+# maquina "sem permissao" tinha acesso total a TODOS os buckets da conta,
+# inclusive o de backup do banco.
+#
+# O papel 'poc-fabiano-homolog-ec2' tem exatamente dois blocos: as tres acoes do
+# S3ImageStorageService restritas ao bucket de homologacao, e o SSM gerenciado
+# (sem ele esta maquina nasce sem acesso remoto). Nada de producao.
+#
+# Um papel restrito e estritamente melhor que uma chave ampla no disco. A decisao
+# antiga nao foi revertida — foi cumprida de verdade pela primeira vez.
+#
+# ATENCAO: passar --iam-instance-profile exige iam:PassRole no papel de quem roda
+# este script. Sem isso o RunInstances falha com UnauthorizedOperation, e a
+# mensagem fala em PassRole, nao em perfil de instancia.
 INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --image-id "$AMI" \
   --instance-type "$HML_TIPO" \
@@ -477,6 +541,7 @@ INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --user-data "$USER_DATA" \
   --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
   --instance-initiated-shutdown-behavior terminate \
+  --iam-instance-profile "Name=poc-fabiano-homolog-ec2" \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=poc-fabiano-homolog},{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]" \
                        "ResourceType=volume,Tags=[{Key=Name,Value=poc-fabiano-homolog},{Key=Project,Value=poc-fabiano},{Key=Ambiente,Value=homolog}]" \
   --query 'Instances[0].InstanceId' --output text)

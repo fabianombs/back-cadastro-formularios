@@ -7,8 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -29,14 +28,37 @@ public class S3Config {
 
     @Bean
     @Profile("!dev")
-    public S3Client s3Client(
-            @Value("${aws.access-key-id}") String accessKeyId,
-            @Value("${aws.secret-access-key}") String secretKey,
-            @Value("${aws.region}") String region) {
+    public S3Client s3Client(@Value("${aws.region}") String region) {
+        // POR QUE NAO HA MAIS aws.access-key-id AQUI (FABIANO-79)
+        //
+        // Antes este bean montava um StaticCredentialsProvider a partir de dois
+        // @Value obrigatorios. Isso tinha duas consequencias:
+        //
+        //   1. A aplicacao NUNCA usava o papel da instancia, mesmo existindo um.
+        //      Nao era questao de precedencia — o codigo simplesmente nao
+        //      consultava a cadeia de credenciais.
+        //   2. Remover as variaveis do .env nao migrava para o papel: derrubava
+        //      a aplicacao, porque o placeholder ${AWS_ACCESS_KEY_ID} deixava de
+        //      resolver e o bean falhava na criacao.
+        //
+        // O DefaultCredentialsProvider percorre a cadeia padrao, nesta ordem:
+        // propriedades de sistema, VARIAVEIS DE AMBIENTE, arquivo de perfil e,
+        // por ultimo, o papel da instancia via IMDS.
+        //
+        // Isso torna a migracao um passo reversivel em vez de uma virada: as
+        // variaveis do .env chamam-se AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY,
+        // que sao exatamente os nomes que a cadeia procura. Enquanto elas
+        // existirem, o comportamento e identico ao de antes. Quando forem
+        // removidas, a aplicacao cai sozinha no papel da instancia — sem
+        // recompilar e sem editar nada.
+        //
+        // Chave estatica nao expira: vaza inteira em um log, num 'docker
+        // inspect' colado num chat, ou numa copia do .env para outra maquina.
+        // Credencial de papel dura minutos e se renova sozinha. E o mesmo
+        // argumento que motivou trocar chave por OIDC no GitHub (FABIANO-58).
         return S3Client.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKeyId, secretKey)))
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
     }
 

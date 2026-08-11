@@ -434,37 +434,61 @@ Disparado por **push na `master`**. Workflow: `.github/workflows/prod.yml`.
 
 | Etapa | O que faz | Duração típica |
 |---|---|---|
-| `build-and-test` | compila e roda a suíte contra um MySQL 8.4 efêmero | 3 a 5 min |
-| SCP | envia jar e scripts para `/home/ec2-user/fabiano/deploy/` | segundos |
-| `deploy-safe.sh` | backup, troca do jar, health-gate, rollback se falhar | 1 a 3 min |
+| `Build & Test` | compila e roda a suíte contra um MySQL 8.4 efêmero | 1 a 3 min |
+| `Promover imagem validada` | **não recompila nada** — marca no GHCR a mesma imagem que já passou pela homologação | segundos |
+| `Publicar pacote de deploy (S3)` | envia o bundle de scripts de infra para o bucket de artefatos | segundos |
+| `Deploy em producao` | SCP de `deploy/`, `observability/` e `infra/`, e roda o `deploy-safe.sh` | 1 a 3 min |
+
+Tempo total observado em 10/08/2026: **2m37s**.
+
+> **A tag da imagem é o SHA curto do commit da `develop`, não o do merge na `master`.**
+> O passo *Promover imagem validada* existe exatamente para isso: o artefato que
+> entra em produção é bit a bit o mesmo que passou pela homologação, nada é
+> recompilado no meio. Em 10/08/2026 a master estava no commit `37339b8` e o que
+> rodava em produção era a tag `3aacbc8` — o commit da develop. Quem procura a tag
+> pelo commit da master não encontra.
 
 Acompanhar em **GitHub → Actions**. Na EC2, ao vivo:
 
-    sudo journalctl -u poc-fabiano -f
+    docker logs -f fabiano-backend
 
-### As quatro etapas do deploy-safe.sh
+### As cinco etapas do deploy-safe.sh
 
-1. Confere que `mysqldump` e `mysql` existem na máquina
-2. Gera o backup e roda **cinco validações** nele
-3. Troca o jar e reinicia o serviço
-4. Health-gate: espera até **90 segundos** por `"status":"UP"` em `/actuator/health`
+O script roda em `~/fabiano/deploy/` e recebe a tag como argumento.
 
-No sucesso, grava a versão em `/app/CURRENT_VERSION` e mantém os **8** jars e
-dumps mais recentes em `/app/releases/`.
+1. **Backup do banco**, antes de qualquer migration, com cinco validações no dump
+2. **Marca a imagem atual como `:previous`** — rede de segurança local, que funciona mesmo com o GHCR fora do ar
+3. **Puxa e sobe a tag nova** (`docker compose pull` + `up -d --force-recreate`)
+4. **Health-gate**: espera até **120 segundos** o container reportar `healthy`
+5. **Sucesso**, ou **rollback automático** para `:previous`
+
+O health-gate lê o `HEALTHCHECK` do container, e não um `curl` no host: o backend
+**não publica porta nenhuma** — quem fala com a internet é o nginx.
+
+No sucesso, o script grava `BACKEND_TAG=<tag>` no `~/fabiano/deploy/.env` (para
+que um reboot suba a mesma versão), recarrega o nginx e mantém os **8** dumps mais
+recentes em `/app/backups/pre-deploy/`.
+
+> **Onde ver o que está rodando agora**
+>
+>     grep '^BACKEND_TAG=' ~/fabiano/deploy/.env
+>     docker inspect --format='{{.Config.Image}}' fabiano-backend
+>
+> As duas têm que dizer a mesma coisa. Se divergirem, alguém subiu container à mão.
 
 ---
 
 ## 3. O deploy falhou. E agora?
 
-Comece pelo **exit code**, no fim do log do passo *Deploy seguro* no GitHub Actions.
+Comece pelo **exit code**, no fim do log do job *Deploy em producao* no GitHub Actions.
 
     Deploy vermelho no CI
     |
-    +-- exit 2  -> BACKUP FALHOU. O deploy nem comecou.
+    +-- exit 2  -> O DEPLOY NEM COMECOU (backup ou pull falhou).
     |              *** PRODUCAO ESTA INTACTA. Ninguem precisa correr. ***
     |              Va para 3.1
     |
-    +-- exit 1  -> O jar novo subiu, nao respondeu, e o ROLLBACK JA RODOU.
+    +-- exit 1  -> A imagem nova subiu, nao ficou saudavel, e o ROLLBACK JA RODOU.
     |              O sistema esta no ar na versao anterior.
     |              Va para 3.2
     |
@@ -474,69 +498,126 @@ Comece pelo **exit code**, no fim do log do passo *Deploy seguro* no GitHub Acti
     +-- vermelho antes disso (build ou teste)
                    Nada saiu da maquina do CI. Corrigir e repetir.
 
-### 3.1 — exit 2: backup falhou
+### 3.1 — exit 2: o deploy nem começou
 
-A mensagem no log diz qual validação reprovou. Causas já vistas neste projeto:
+A mensagem no log diz qual guarda reprovou. Causas já vistas neste projeto:
 
 | Mensagem | Causa | Correção |
 |---|---|---|
 | `'mysqldump' nao encontrado` | cliente MySQL ausente na EC2 | seção 7.5 |
+| `falhou ao puxar ghcr.io/...` | tag que não existe no registry, GHCR fora do ar, ou sem login | conferir a tag (§4); `docker login ghcr.io` |
 | `mysqldump retornou 2` com `FLUSH TABLES WITH READ LOCK: Access denied (1045)` | o RDS recusa lock global até para o usuário master | falta `--set-gtid-purged=OFF` no comando |
-| `arquivo com apenas 20 bytes` | gzip vazio — o dump não produziu nada | ver as duas linhas acima |
+| `backup com apenas 20 bytes` | gzip vazio — o dump não produziu nada | ver as duas linhas acima |
 | `sem a marca 'Dump completed'` | dump interrompido no meio | rede ou timeout; repetir |
-| `dump sem nenhum INSERT` | veio só a estrutura, sem dados | conferir os parâmetros do mysqldump |
-| `nao consegui ler DB_HOST/DB_NAME/DB_USER` | env file ilegível ou serviço parado | `sudo cat /etc/poc-fabiano.env` |
+| `backup sem nenhum CREATE TABLE` | veio só o cabeçalho | conferir os parâmetros do mysqldump |
+| `DB_HOST/DB_NAME/DB_USER/DB_PASSWORD ausentes` | `.env` ilegível ou incompleto | `ls -l ~/fabiano/deploy/.env` |
+| `GHCR_OWNER ausente` | idem | idem |
 
 Antes de qualquer coisa, confirme que a aplicação continua no ar:
 
-    systemctl is-active poc-fabiano
-    curl -s -o /dev/null -w "health HTTP %{http_code}\n" http://localhost:8080/actuator/health
+    docker ps --filter name=fabiano-backend --format '{{.Names}}  {{.Status}}'
+    curl -s -o /dev/null -w "nginx HTTP %{http_code}\n" http://localhost/nginx-health
 
-`active` e `HTTP 200` significam que não há incidente — só um deploy bloqueado.
-Pode resolver com calma.
+`healthy` e `HTTP 200` significam que **não há incidente** — só um deploy
+bloqueado. Pode resolver com calma.
+
+> [!note] Observado no ensaio de 10/08/2026
+> Deploy de uma tag inexistente: o `docker compose pull` falhou com `denied`, o
+> script saiu com 2 e o container em execução continuou com o **mesmo image id** de
+> antes, `healthy`. O deploy morreu antes de encostar no serviço.
 
 ### 3.2 — exit 1: o rollback automático já aconteceu
 
-O sistema está no ar na versão anterior. **Não há urgência.** Confirme e investigue:
+O sistema está no ar na versão anterior. **Não há urgência.** Confirme:
 
-    cat /app/CURRENT_VERSION
-    systemctl is-active poc-fabiano
-    sudo journalctl -u poc-fabiano -n 200 --no-pager
+    grep '^BACKEND_TAG=' ~/fabiano/deploy/.env      # deve dizer 'previous'
+    docker ps --filter name=fabiano-backend --format '{{.Names}}  {{.Status}}'
+    docker logs --tail 200 fabiano-backend
 
-O que procurar no log, em ordem de probabilidade: erro de migration do Flyway,
-`Schema-validation` do Hibernate reclamando de coluna, falha de conexão com o
-banco, variável de ambiente ausente.
+O log do deploy já traz os 50 últimos logs do container que falhou **e a análise do
+banco**, que responde a única pergunta que decide se vale restaurar o dump:
 
-Corrija, commite e faça um novo deploy. Não conserte na EC2 à mão — o próximo
-deploy sobrescreveria.
+    ==> ANALISE DO BANCO
+        NENHUMA MIGRATION RODOU — banco intacto.
+        NAO restaure o dump. O problema esta na aplicacao, nao no banco.
+
+Se disser isso, **não restaure nada**: o problema é código, e o dump só faria
+perder o que foi gravado durante o incidente. Se disser que o schema mudou, o
+script lista as migrations aplicadas e mostra o SQL de cada uma, marcando as que
+contêm comando destrutivo. Só nesse caso a seção 6 entra em cena.
+
+Corrija, commite e faça um novo deploy. **Não conserte na EC2 à mão** — o próximo
+deploy sobrescreve.
+
+> **`BACKEND_TAG=previous` é um estado provisório.** A tag `:previous` é local e é
+> reescrita a cada deploy. Enquanto o `.env` apontar para ela, um reboot da máquina
+> sobe "a imagem anterior de agora", que não é necessariamente a que você quer.
+> Assim que o incidente fechar, volte para uma tag de verdade pelo §4.
+
+### 3.3 — exit 3
+
+Deploy e rollback falharam. Vá direto para a seção 5.
 
 ---
 
 ## 4. Rollback manual
 
-Use quando o deploy passou no health-gate mas o sistema está errado — bug de
-comportamento, que o health-check não detecta.
+Use quando o deploy **passou** no health-gate e mesmo assim o sistema está errado —
+bug de comportamento, que nenhum health-check detecta. O rollback automático cobre
+o caso "não subiu"; este cobre "subiu e está errado".
 
-**Listar as versões disponíveis:**
+### Onde encontrar as versões
 
-    ls -1t /app/releases/app_*.jar | sed -E 's#.*/app_(.*)\.jar#\1#'
+| Preciso saber... | Onde |
+|---|---|
+| que versão está no ar | `grep '^BACKEND_TAG=' ~/fabiano/deploy/.env` |
+| para onde dá para voltar **sem depender de rede** | `cd ~/fabiano/deploy && ./scripts/rollback.sh` (sem argumento) |
+| todas as versões já publicadas | GHCR: `https://github.com/fabianombs?tab=packages` → `fabiano-back` → Versions |
+| de que commit veio uma tag | a tag **é** o SHA curto do commit da develop: `github.com/fabianombs/back-cadastro-formularios/commit/<tag>` |
+| o que foi para a máquina num deploy | no log do job *Deploy em producao*: `==> [3/5] Puxando e subindo a tag <tag>` |
 
-O nome da versão é `AAAAMMDD-HHMMSS-<7 primeiros do commit>`.
+Os dois primeiros são os que importam durante um incidente: um diz onde você está,
+o outro diz para onde pode ir, e nenhum depende do GitHub estar no ar.
 
-**Voltar só a aplicação** — é o que se quer em quase todos os casos:
+### Voltar só a aplicação — é o que se quer em quase todos os casos
 
-    sudo /app/rollback.sh 20260803-021500-a1b2c3d
+    cd ~/fabiano/deploy
+    ./scripts/rollback.sh 3aacbc8        # uma tag especifica
+    ./scripts/rollback.sh previous       # a imagem imediatamente anterior
 
-Saída esperada: `Rollback OK -> versao <versao> no ar.`
+Saída esperada: `ROLLBACK OK — <tag> no ar.`
 
-**Voltar aplicação e banco** — leia a seção 6 antes:
+O script puxa do GHCR se a imagem não estiver na máquina, espera ficar saudável,
+recarrega o nginx e grava a tag no `.env`. **Não toca no banco**, e avisa isso na
+tela.
 
-    sudo /app/rollback.sh 20260803-021500-a1b2c3d --with-db
+### Pelo GitHub, sem terminal
 
-> **O `--with-db` apaga tudo que foi gravado no banco depois daquele deploy.**
-> Formulário preenchido, presença marcada, agendamento feito: some. O script tira
-> um dump de segurança antes, em `/app/releases/db_safety_*.sql.gz`, mas o caminho
-> de volta é manual. Não use por reflexo.
+**Actions → Rollback (manual) → Run workflow.** Dois campos: a tag e uma caixa para
+o banco. Funciona no navegador do celular — é o caminho quando o incidente cai no
+fim de semana e a chave SSH está em casa.
+
+> [!note] Testado em 10/08/2026
+> Disparado com a tag que já estava rodando. Resposta:
+> `AVISO: '3aacbc8' e a tag que ja esta rodando. Nada a fazer.` — verde em 10s, sem
+> recriar container nenhum, `.env` e imagem em execução inalterados. Um rollback de
+> verdade leva 30s ou mais só esperando o container ficar saudável; **a duração do
+> run já diz qual dos dois aconteceu**.
+
+### Voltar aplicação e banco — leia a seção 6 antes
+
+    ./scripts/rollback.sh 3aacbc8 --com-banco
+
+> **O `--com-banco` apaga tudo que foi gravado no banco depois daquele deploy.**
+> Formulário preenchido, presença marcada, agendamento feito: some. O script exige
+> que você digite a palavra `RESTAURAR` por extenso, e tira um dump de segurança do
+> estado atual antes, em `/app/backups/pre-deploy/db_safety_*.sql.gz`. O caminho de
+> volta é manual. Não use por reflexo.
+>
+> Pelo workflow, marcar a caixa não basta sozinho: ela vira a variável
+> `CONFIRMO_PERDA_DE_DADOS=RESTAURAR`. É deliberado que a intenção precise aparecer
+> duas vezes — marcar uma caixa por engano não pode ser suficiente para apagar dado
+> de cliente.
 
 ---
 
@@ -546,35 +627,57 @@ O rollback automático falhou e o sistema pode estar fora do ar.
 
 **Passo 1 — ver o que está acontecendo:**
 
-    systemctl status poc-fabiano --no-pager
-    sudo journalctl -u poc-fabiano -n 100 --no-pager
+    docker ps -a --filter name=fabiano
+    docker inspect --format='{{.State.Health.Status}}' fabiano-backend
+    docker logs --tail 100 fabiano-backend
 
 **Passo 2 — descartar as causas bobas, que são as mais frequentes:**
 
-    df -h /                      # disco cheio impede o servico de subir
+    df -h /                      # disco cheio impede o container de subir
     free -h                      # sem memoria e sem swap = OOM killer
     sudo dmesg | tail -20        # confirma se o kernel matou o processo
+    docker system df             # imagens antigas acumuladas comem o disco
+
+> O `docker image prune` do `deploy-safe.sh` só roda no ramo de **sucesso**. Uma
+> sequência de deploys que falham enche o disco sem limpar nada — em 10/08/2026 a
+> homologação já tinha 28 imagens acumuladas. Se o disco estiver apertado:
+> `docker image prune -a --filter "until=168h"`.
 
 **Passo 3 — subir a última versão boa na mão:**
 
-    ls -1t /app/releases/app_*.jar | head -3
-    sudo systemctl stop poc-fabiano
-    sudo cp /app/releases/app_VERSAO_BOA.jar /app/app.jar
-    sudo chown appuser:appuser /app/app.jar
-    sudo systemctl start poc-fabiano
-    sleep 20
-    curl -s http://localhost:8080/actuator/health
+    cd ~/fabiano/deploy
+    ./scripts/rollback.sh              # lista o que existe na maquina
+    ./scripts/rollback.sh <tag-boa>
 
-**Passo 4 — se nem assim subir**, o problema não é o jar. É banco, rede ou
+Se o próprio script falhar, o caminho mais curto por baixo dele:
+
+    cd ~/fabiano/deploy
+    BACKEND_TAG=<tag-boa> docker compose up -d --no-deps --force-recreate --pull never backend
+    docker compose logs -f backend
+
+O `--pull never` é **obrigatório** quando a tag é `previous`: ela só existe
+localmente, e o `docker-compose.yml` declara `pull_policy: always` — sem o flag, o
+compose tentaria buscá-la no registry justo no momento do resgate.
+
+**Passo 4 — se nem assim subir**, o problema não é a imagem. É banco, rede ou
 configuração:
 
-    DB_HOST=$(sudo grep '^DB_HOST=' /etc/poc-fabiano.env | cut -d= -f2-)
-    DB_USER=$(sudo grep '^DB_USER=' /etc/poc-fabiano.env | cut -d= -f2-)
-    export MYSQL_PWD=$(sudo grep '^DB_PASSWORD=' /etc/poc-fabiano.env | cut -d= -f2-)
+    cd ~/fabiano/deploy
+    DB_HOST=$(grep '^DB_HOST=' .env | cut -d= -f2-)
+    DB_USER=$(grep '^DB_USER=' .env | cut -d= -f2-)
+    export MYSQL_PWD=$(grep '^DB_PASSWORD=' .env | cut -d= -f2-)
     mysql -h "$DB_HOST" -u "$DB_USER" -N -B -e "SELECT VERSION(), CURRENT_USER();"
     unset MYSQL_PWD
 
 Se isso falhar, o problema é o RDS ou a rede, não a aplicação.
+
+**Passo 5 — o backend está de pé mas o site não responde.** O nginx só sobe depois
+que o backend fica saudável (`depends_on: service_healthy`), e ele resolve o IP do
+container `backend` **uma vez** e guarda. Recriar o backend muda o IP; sem reload
+ele fica batendo no endereço velho:
+
+    docker ps --filter name=fabiano-nginx --format '{{.Names}}  {{.Status}}'
+    docker exec fabiano-nginx nginx -t && docker exec fabiano-nginx nginx -s reload
 
 ---
 
@@ -623,15 +726,15 @@ que nunca tinha sido exercitada. Deixou de ser em 09/08/2026 (ver 6.3).
 
 Console AWS, RDS, instância, **Actions → Restore to point in time**. Cria uma
 instância **nova**; a antiga fica intacta. Depois de conferir os dados na nova,
-aponte a aplicação para ela trocando `DB_HOST` no `/etc/poc-fabiano.env` e
-reiniciando o serviço.
+aponte a aplicação para ela trocando `DB_HOST` no `~/fabiano/deploy/.env` e
+recriando o container: `docker compose up -d --no-deps --force-recreate backend`.
 
 Não sobrescreve nada. É o caminho seguro.
 
 ### 6.2 — Restaurar de dump
 
     ls -lht /app/backups/diario/ | head
-    ls -lht /app/releases/db_before_*.sql.gz | head
+    ls -lht /app/backups/pre-deploy/db_before_*.sql.gz | head
 
 **Sempre valide o arquivo antes de restaurar.** Um dump vazio restaurado apaga o
 banco sem repor nada — foi exatamente esse o risco do FABIANO-29:
@@ -646,12 +749,13 @@ Se qualquer um reprovar, **não restaure**. Procure outro arquivo.
 
 Com o arquivo validado:
 
-    sudo systemctl stop poc-fabiano
+    cd ~/fabiano/deploy
+    docker compose stop backend        # o nginx passa a devolver 502 ate o fim
 
-    DB_HOST=$(sudo grep '^DB_HOST=' /etc/poc-fabiano.env | cut -d= -f2-)
-    DB_NAME=$(sudo grep '^DB_NAME=' /etc/poc-fabiano.env | cut -d= -f2-)
-    DB_USER=$(sudo grep '^DB_USER=' /etc/poc-fabiano.env | cut -d= -f2-)
-    export MYSQL_PWD=$(sudo grep '^DB_PASSWORD=' /etc/poc-fabiano.env | cut -d= -f2-)
+    DB_HOST=$(grep '^DB_HOST=' .env | cut -d= -f2-)
+    DB_NAME=$(grep '^DB_NAME=' .env | cut -d= -f2-)
+    DB_USER=$(grep '^DB_USER=' .env | cut -d= -f2-)
+    export MYSQL_PWD=$(grep '^DB_PASSWORD=' .env | cut -d= -f2-)
 
     mysqldump -h "$DB_HOST" -u "$DB_USER" --single-transaction --set-gtid-purged=OFF \
       --routines --triggers "$DB_NAME" | gzip -9 > ~/antes-da-restauracao-$(date +%Y%m%d-%H%M%S).sql.gz
@@ -659,9 +763,9 @@ Com o arquivo validado:
     gunzip -c "$ARQ" | mysql -h "$DB_HOST" -u "$DB_USER" "$DB_NAME"
     unset MYSQL_PWD
 
-    sudo systemctl start poc-fabiano
+    docker compose start backend
     sleep 20
-    curl -s http://localhost:8080/actuator/health
+    docker inspect --format='{{.State.Health.Status}}' fabiano-backend
 
 O `mysqldump` antes do `gunzip` é rede de segurança: guarda o estado atual antes
 de sobrescrever.
@@ -746,28 +850,33 @@ era ≤ 1 hora.
 
 ### 7.1 — Logs
 
-    sudo journalctl -u poc-fabiano -f                    # ao vivo
-    sudo journalctl -u poc-fabiano -n 200 --no-pager     # ultimas 200
-    sudo journalctl -u poc-fabiano -p err -n 50          # so erros
-    sudo journalctl -u poc-fabiano --since "1 hour ago"
+    docker logs -f fabiano-backend                       # ao vivo
+    docker logs --tail 200 fabiano-backend               # ultimas 200
+    docker logs --since 1h fabiano-backend               # ultima hora
+    docker logs fabiano-backend 2>&1 | grep -i '"log.level":"ERROR"'   # so erros
 
 A partir do deploy que leva o FABIANO-26, o log sai em **JSON (ECS)**. Para ler
 com conforto:
 
-    sudo journalctl -u poc-fabiano -n 50 -o cat | python3 -m json.tool
+    docker logs --tail 50 fabiano-backend 2>&1 | python3 -m json.tool
 
 Cada linha carrega um `requestId`. Para ver tudo de uma requisição:
 
-    sudo journalctl -u poc-fabiano --since "30 min ago" -o cat | grep SEU_REQUEST_ID
+    docker logs --since 30m fabiano-backend 2>&1 | grep SEU_REQUEST_ID
 
 O `requestId` chega ao usuário no header `X-Request-Id` da resposta — peça esse
 valor a quem relatou o erro.
 
 ### 7.2 — Saúde
 
-    systemctl is-active poc-fabiano
-    curl -s http://localhost:8080/actuator/health
-    curl -s -o /dev/null -w "%{http_code}\n" https://100-30-35-83.sslip.io/actuator/health
+    docker ps --filter name=fabiano --format '{{.Names}}  {{.Status}}'
+
+    # De DENTRO do container: o backend nao publica porta no host, entao um
+    # 'curl localhost:8080' na EC2 sempre falha — nao ha o que consultar de fora.
+    docker exec fabiano-backend curl -fsS http://localhost:8080/actuator/health
+
+    # Pela borda, o caminho que o cliente usa:
+    curl -s -o /dev/null -w "%{http_code}\n" https://api.nexventa.com.br/actuator/health
 
 ### 7.3 — Recursos
 
@@ -838,8 +947,14 @@ estiver no `.env`, o script pula esse trecho **em silencio** (FABIANO-20).
 
 ### 7.6 — Nginx e certificado
 
-    sudo nginx -t
-    sudo systemctl reload nginx
+    # O nginx roda EM CONTAINER desde a virada de 08/08. O nginx do host nao
+    # existe mais — 'sudo systemctl reload nginx' nao recarrega nada do que
+    # esta atendendo o cliente.
+    docker exec fabiano-nginx nginx -t
+    docker exec fabiano-nginx nginx -s reload
+
+    # O certbot continua rodando NO HOST e escrevendo em /etc/letsencrypt, que o
+    # container monta read-only. Por isso este ainda e um comando do host.
     sudo certbot certificates          # data de expiracao
 
 O certificado expirou uma vez, em 10/07/2026, e derrubou o sistema. Vale conferir
@@ -893,6 +1008,206 @@ no primeiro handshake, ou `allowPublicKeyRetrieval=true`. Sem uma das duas,
 o driver falha com `Public Key Retrieval is not allowed` — erro que ninguém
 associa a mudança de autenticação. O `application-prod.properties` traz
 `sslMode=REQUIRED`, e o `Ssl_cipher` foi conferido em vigor antes da troca.
+
+---
+
+### 7.8 — Credencial de serviço do smoke (FABIANO-55)
+
+O `infra/smoke-local.ps1` escreve no banco: ele submete formulário, marca
+presença e cria agendamento. Para isso precisa de uma conta autenticada.
+
+**Uma conta por ambiente, reaproveitada em toda rodada.** A versão anterior
+criava um usuário novo a cada execução (`smoke_` + número aleatório) e nunca
+removia — o banco acumulava credencial `ROLE_FUNCIONARIO` ativa e válida, uma
+por rodada, para sempre.
+
+**De onde vem a credencial:**
+
+    $env:SMOKE_USER     = "smoke_servico"      # padrao quando a variavel nao existe
+    $env:SMOKE_PASSWORD = "Smoke@12345"        # idem
+
+Ou por parâmetro: `-SmokeUser` / `-SmokePassword`.
+
+**Como criar num ambiente novo.** Não crie na mão. Rode o smoke: o login falha,
+o script cai no ramo de cadastro, cria a conta e faz login de novo para provar
+que a credencial ficou utilizável — o token que o `/auth/register` devolve prova
+que o endpoint responde, não que a conta serve na próxima rodada. São coisas
+diferentes e só a segunda importa. A saída diz qual caminho foi tomado:
+
+    usuario de servico 'smoke_servico' nao existia e foi criado (cadastro testado)
+    usuario de servico 'smoke_servico' reaproveitado (nada criado)
+
+**Como rotacionar a senha.** Troque pela aplicação (perfil do usuário) e depois
+exporte a nova em `SMOKE_PASSWORD` antes de rodar o smoke. Se rodar com a senha
+velha, o script cai no ramo de cadastro, o `/auth/register` recusa por username
+duplicado, e a mensagem final aponta o caminho:
+
+    Sem token - os testes autenticados nao podem rodar. Parando.
+    Usuario de servico: smoke_servico. Ajuste com -SmokeUser/-SmokePassword ou
+    as variaveis SMOKE_USER / SMOKE_PASSWORD se a senha foi trocada.
+
+**Como auditar.** `infra/inventario-smoke.sh` roda em qualquer das duas máquinas,
+é somente leitura, e lista as contas `smoke%` junto com o que pendura nelas —
+templates, submissões e agendamentos. Essa segunda parte é o que importa antes de
+apagar qualquer coisa: uma conta que só ocupa uma linha é lixo; uma que é dona de
+formulário com submissão pode carregar resposta de gente de verdade.
+
+> **Por que produção nunca acumulou essas contas.** O smoke tem uma trava no
+> início que compara o **IP resolvido** do alvo, não o texto da URL, e se recusa a
+> rodar contra produção. Medido em 10/08/2026: produção tem **zero** usuários
+> `smoke%`. A trava funcionou durante todo o período em que o script tinha o
+> defeito — o lixo ficou onde devia ficar.
+
+---
+
+### 7.9 — Switchover de Blue/Green do RDS: a aplicação não acompanha sozinha
+
+**Quando isto se aplica:** qualquer switchover de Blue/Green do RDS — upgrade de
+versão maior, mudança de classe, troca de parameter group. Foi o que aconteceu em
+08/08/2026 no upgrade para o MySQL 8.4 (FABIANO-9, FABIANO-74).
+
+#### O que a AWS faz, e o que ela não faz
+
+No switchover a AWS **renomeia** as duas instâncias:
+
+|  | Antes | Depois |
+| --- | --- | --- |
+| Verde (novo) | `poc-fabiano-db-green-xxxxx` | `poc-fabiano-db` — assume o nome e o DNS |
+| Azul (antigo) | `poc-fabiano-db` | `poc-fabiano-db-old1` — **mantém o IP**, vira somente leitura |
+
+O endpoint que o `.env` usa passa a resolver para o IP do verde. O `.env` não
+precisa ser alterado — e é justamente isso que engana: **está tudo certo na
+configuração**.
+
+O que a AWS não faz é derrubar a aplicação. A JVM continua rodando, com o pool de
+conexões que já tinha. Duas coisas, somadas, deixam esse pool no banco errado:
+
+1. **O cache de DNS da JVM** — 30 segundos por padrão (sem SecurityManager; a
+   linha `networkaddress.cache.ttl` vem comentada no `java.security`). Se o
+   HikariCP reconstruir o pool dentro dessa janela, as conexões novas nascem
+   apontando para o IP antigo.
+2. **O `max-lifetime` do HikariCP** — 30 minutos por padrão, e não configurado
+   neste projeto. Uma conexão que nasceu errada **continua** errada por até meia
+   hora, porque nada a força a fechar.
+
+O primeiro item explica como o erro nasce. O segundo explica por que ele dura.
+Confundir os dois leva a "corrigir" só o TTL do DNS e achar que resolveu.
+
+#### Por que leitura não prova nada
+
+O `old1` é uma cópia exata da produção de segundos atrás. **Ler dele é
+indistinguível de ler da produção**: login funciona, dashboard funciona, listas
+funcionam, tudo 200 com os dados certos.
+
+Em 08/08 a validação feita logo após a troca foi `SELECT VERSION()` pelo cliente
+`mysql` de linha de comando. Deu `8.4.10` e 62 migrations — e **confirmou um
+sucesso que a aplicação não estava tendo**. O cliente é um processo novo: resolve
+o DNS na hora e acerta o banco novo. A aplicação é um processo velho, com
+conexões TCP já abertas. Os dois responderam "tudo bem" sobre servidores
+diferentes.
+
+O erro só apareceu 20 minutos depois, ao tentar **cadastrar um cliente**:
+
+```
+could not execute statement [The MySQL server is running with the --read-only
+option so it cannot execute this statement] [insert into users (...)]
+```
+
+O que salvou foi a AWS deixar o azul em somente leitura. Se ele aceitasse
+escrita, teria sido split-brain: parte dos dados num banco, parte no outro, e a
+descoberta viria dias depois procurando um cadastro que "com certeza foi feito".
+
+#### Procedimento obrigatório
+
+**Depois de todo switchover, antes de declarar sucesso:**
+
+1. Recriar a aplicação — JVM nova, sem cache de DNS, pool do zero:
+
+   ```bash
+   cd /home/ec2-user/fabiano/deploy
+   docker compose up -d --pull never --force-recreate backend
+   sleep 25
+   docker exec fabiano-nginx nginx -s reload
+   ```
+
+   O `--pull never` evita depender do registry neste momento. O reload do nginx
+   **não é opcional**: recriar o backend muda o IP do container, e o nginx guarda
+   o IP resolvido (FABIANO-67).
+
+2. Conferir onde o pool realmente está — ver a subseção abaixo.
+
+3. Validar com uma **ESCRITA**, nunca com uma leitura. Um cadastro de teste pela
+   interface serve. Leitura não distingue o banco novo do antigo; só a escrita
+   distingue.
+
+#### Como conferir onde o pool está
+
+`ss` no host **não serve** — as conexões vivem no namespace de rede do container.
+
+Se o `infra/checar-74.sh` estiver disponível na máquina, é ele que responde. Como
+`infra/` não vai no scp da esteira (só `deploy/**` e `observability/**`), o mais
+provável é que não esteja — então o método manual:
+
+```bash
+cd /home/ec2-user/fabiano/deploy
+
+# 1. Para onde o endpoint do .env aponta agora
+DB_HOST=$(grep -E '^DB_HOST=' .env | cut -d= -f2-)
+getent hosts "$DB_HOST"
+```
+
+Converter o IP para hexadecimal com os **bytes invertidos** (little-endian):
+`172.31.14.180` vira `B40E1FAC`, e não `AC1F0EB4`.
+
+```bash
+# 2. Contar as conexoes do container nesse IP (0CEA = porta 3306)
+docker exec fabiano-backend cat /proc/net/tcp | grep -c "B40E1FAC:0CEA"
+
+# 3. E listar TODOS os destinos na 3306, para ver se sobrou algum
+docker exec fabiano-backend cat /proc/net/tcp \
+  | awk 'NR>1 { split($3,d,":"); if (d[2]=="0CEA") print d[1] }' | sort | uniq -c
+```
+
+**O resultado esperado é uma linha só**, com o hexadecimal do endpoint do `.env`
+e a contagem igual ao tamanho do pool. Duas linhas significam pool dividido entre
+dois servidores — repetir o passo 1 do procedimento.
+
+Medição de referência (produção, 10/08/2026, situação sã):
+
+```
+172.31.14.180    B40E1FAC  -> 10 conexao(oes)   <<< o endpoint do .env
+no endpoint do .env ...... 10
+total na porta 3306 ...... 10
+```
+
+#### O que NÃO fazer
+
+- **Não** declarar sucesso com `SELECT VERSION()` ou qualquer leitura pelo cliente
+  `mysql`. Foi exatamente esse teste que deu falso positivo em 08/08.
+- **Não** apagar o `old1` antes de a aplicação estar comprovadamente no verde. Ele
+  é o caminho de volta.
+- **Não** confiar no `.env`: ele estava certo o tempo inteiro durante o incidente.
+  A configuração certa e o processo executando outra coisa é a família de defeito
+  mais comum deste projeto.
+
+#### Por que não mexemos na configuração
+
+Foi avaliado e recusado, em 10/08/2026:
+
+- `-Dnetworkaddress.cache.ttl=5` encurtaria a janela de 30s para 5s em que uma
+  conexão pode nascer errada. Não elimina o problema e não toca nas conexões já
+  abertas.
+- Reduzir o `max-lifetime` de 30 para 10 minutos encurtaria a janela em que uma
+  conexão errada sobrevive. Mas isso otimiza a **duração** de uma falha em vez de
+  evitá-la: dez minutos de erro em produção já é inaceitável.
+
+Nenhuma das duas dispensa o passo 1. Como o switchover é um evento manual e raro,
+o procedimento acima cobre o caso com menos superfície de mudança do que ajustar
+dois parâmetros que continuariam exigindo o mesmo procedimento.
+
+Se um dia o RDS passar a Multi-AZ, **reabrir esta decisão**: em failover
+automático não há operador para executar o passo 1, e aí o TTL do DNS deixa de
+ser cosmético.
 
 ---
 
@@ -1190,18 +1505,19 @@ ser considerado documentado. Ainda não é o caso de todos:
 | Upgrade de MySQL 8.0 → 8.4 | **sim**, 05/08, no ensaio — 2 min 41 s |
 | Troca de tipo de instância com Elastic IP | **sim**, 06/08 — t3.small → t3.medium |
 | Subida da stack de observabilidade | **sim**, 06/08 |
-| Caminho de **falha** do `deploy-safe.sh` (rollback automático) | **não** — exige branch descartável com defeito de boot |
+| Caminho de **falha** do `deploy-safe.sh` (rollback automático) | **sim**, 10/08 — ver 12.5 |
+| Caminho de **abortar antes de encostar no serviço** (exit 2) | **sim**, 10/08 — tag inexistente, container intacto |
+| Rollback pelo **botão do GitHub** | **sim**, 10/08 — com a tag que já rodava, para não trocar nada |
 | Recuperação manual (seção 5) | **não** |
-| Restauração de dump (6.2) | **não** |
+| Restauração de dump (6.2) | **não em produção**; sim em container descartável, 09/08 (ver 6.3) |
 | Point-in-time recovery (6.1) | **não** — mas o PITR **existe**, confirmado 05/08 (7 dias) |
 | Envio de alerta por e-mail | **sim**, 06/08 (alerta de erro no log) e 07/08 ("Site fora do ar visto de fora", com `grafana_state_reason: NoData`) — SMTP entregando |
 | Recriação da máquina do zero | **não** — e hoje a Terraform impede (seção 10) |
 | Sonda externa (blackbox) pelo endereço público | **sim**, 07/08 — `probe_success=1` nos 3 domínios |
 | Deploy aplicando config de observabilidade sozinho | **sim**, 07/08 — deploy #39 (FABIANO-63/68) |
 
-Procedimento não executado é hipótese. As seções 5 e 6, o caminho de falha do
-deploy e a recriação da máquina ainda são hipótese — e é justamente neles que se
-confia num sábado à noite.
+Procedimento não executado é hipótese. A seção 5 e a restauração em produção da
+6.2 ainda são hipótese — e é justamente nelas que se confia num sábado à noite.
 
 ### 12.4 — A armadilha que quase transformou o teste de rollback em teatro
 
@@ -1347,3 +1663,42 @@ A máquina ficou no mesmo estado de antes do teste.
 
 **A prioridade seguinte é executar o teste de restauração (FABIANO-20)** e voltar
 aqui para preencher o RTO real.
+
+---
+
+### 12.5 — O runbook descreveu por dois dias um mundo que não existia mais
+
+Em 10/08/2026, ao verificar o critério *"runbook de deploy/rollback documentado"*
+do FABIANO-2, a checagem foi feita nos **títulos** das seções: existia um "§4
+Rollback manual", existia um "§3.2 exit 1", logo o critério estava cumprido.
+
+O conteúdo dessas seções ainda era o mundo do JAR com systemd, encerrado na virada
+de 08/08. O runbook mandava rodar `sudo journalctl -u poc-fabiano -f`,
+`ls -1t /app/releases/app_*.jar`, `sudo /app/rollback.sh ... --with-db` e
+`sudo systemctl stop poc-fabiano`. Nenhum desses alvos existe: o serviço systemd
+foi removido, `/app/releases/` não recebe jar desde a virada, e o
+`/etc/poc-fabiano.env` que a seção 6 mandava ler é — segundo a **seção 1 deste
+mesmo documento** — a marca infalível de que você está na máquina *antiga*.
+
+A contagem no momento da descoberta: **61 menções ao mundo do JAR contra 23 ao
+mundo do Docker**. As seções atualizadas na virada foram a 0, a 1 e da 8 em
+diante. As 2 a 6 — exatamente as que alguém abre com o sistema fora do ar —
+ficaram para trás.
+
+Duas coisas valem ser guardadas disto:
+
+**A primeira é sobre a verificação.** Conferir o índice não é conferir o
+documento, pela mesma razão que `[ -d /etc/letsencrypt/archive ]` rodado sem
+`sudo` não confere se o certificado existe: é um teste que não distingue *ausente*
+de *invisível*, ou *presente* de *correto*. Um runbook desatualizado tem exatamente
+a mesma aparência externa de um runbook em dia.
+
+**A segunda é sobre o custo.** Documentação errada é pior que documentação
+ausente. Quem abre um runbook vazio sabe que está sozinho e improvisa. Quem abre
+este ia gastar os primeiros dez minutos de um incidente colecionando
+`Unit poc-fabiano.service not found` e `No such file or directory`, achando que
+tinha quebrado mais alguma coisa — no único momento em que os dez primeiros
+minutos importam.
+
+As seções 2 a 6 foram reescritas no mesmo dia, com as saídas reais dos ensaios de
+10/08 no lugar das saídas imaginadas.
