@@ -169,6 +169,28 @@ cat > /etc/cron.d/fabiano-backup <<'CRON'
 CRON
 chmod 0644 /etc/cron.d/fabiano-backup
 
+# Ate 12/08 este agendamento vivia no crontab do root da maquina feita a mao, e
+# chegava nas outras por HERANCA da AMI. Maquina descartavel nao herda: producao
+# nasceu SEM renovacao nenhuma, com certificado vencendo em 89 dias e nada para
+# renovar. Agora e criado explicitamente.
+#
+# 06:17 UTC = 03:17 em Brasilia, treze minutos antes do backup: os dois sao
+# pesados e no mesmo minuto competem por disco, deixando o log ilegivel
+# justamente quando alguem for investigar.
+cat > /etc/cron.d/fabiano-certificados <<'CRON'
+17 6 * * * root /app/renovar-certificados.sh >> /var/log/renovar-certificados.log 2>&1
+CRON
+chmod 0644 /etc/cron.d/fabiano-certificados
+touch /var/log/renovar-certificados.log
+
+# O script vem do BUNDLE, nao escrito aqui. A versao do repositorio publica tres
+# metricas que a versao simplificada nao publicava — entre elas a do ultimo
+# sucesso, que o painel "Renovacao de certificado" procura e sem a qual ele fica
+# SEM DADO. Duas versoes da mesma coisa envelhecem mal.
+RENOVA=$(find "$DEPLOY_DIR" -name renovar-certificados.sh 2>/dev/null | head -1)
+[ -n "$RENOVA" ] || { echo "FATAL: renovar-certificados.sh ausente no bundle"; exit 1; }
+install -m 755 "$RENOVA" /app/renovar-certificados.sh
+
 # /etc/fabiano-backup.env guarda a senha do SMTP e NAO vem do bundle — vem do
 # Parameter Store, pelo mesmo motivo do .env.
 set +x
@@ -271,34 +293,6 @@ sudo -u ec2-user docker compose -f deploy/docker-compose.yml up -d
 # So aqui, depois do nginx no ar: o desafio HTTP-01 precisa de alguem
 # respondendo na porta 80. Antes disto os certificados sao as pontes
 # autoassinadas do bloco 5b, que servem para o nginx iniciar e nada mais.
-cat > /app/renovar-certificados.sh <<'RENOVASH'
-#!/bin/bash
-set -u
-TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
-mkdir -p "$TEXTFILE_DIR"
-
-certbot renew --webroot -w /var/www/certbot --quiet \
-  --deploy-hook 'docker exec fabiano-nginx nginx -s reload || true'
-
-TMP=$(mktemp)
-echo '# HELP certbot_fabiano_cert_expiry_seconds Epoch em que o certificado expira.' > "$TMP"
-echo '# TYPE certbot_fabiano_cert_expiry_seconds gauge' >> "$TMP"
-for C in /etc/letsencrypt/live/*/fullchain.pem; do
-  [ -f "$C" ] || continue
-  D=$(basename "$(dirname "$C")")
-  # Autoassinado nao entra na metrica: o painel ficaria verde exibindo a
-  # validade de um certificado que navegador nenhum aceita.
-  case "$(openssl x509 -issuer -noout -in "$C")" in
-    *"CN = $D"*|*"CN=$D"*) continue ;;
-  esac
-  FIM=$(openssl x509 -enddate -noout -in "$C" | cut -d= -f2)
-  EPOCH=$(date -d "$FIM" +%s 2>/dev/null) || continue
-  echo "certbot_fabiano_cert_expiry_seconds{dominio=\"$D\"} $EPOCH" >> "$TMP"
-done
-mv "$TMP" "$TEXTFILE_DIR/certbot_fabiano.prom"
-chmod 644 "$TEXTFILE_DIR/certbot_fabiano.prom"
-RENOVASH
-chmod +x /app/renovar-certificados.sh
 
 TOKEN=$(curl -s -X PUT http://169.254.169.254/latest/api/token \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
@@ -338,6 +332,7 @@ done
 systemctl is-enabled crond  >/dev/null || { echo "PROVISIONAMENTO: crond nao habilitado";  FALHAS=$((FALHAS+1)); }
 systemctl is-enabled docker >/dev/null || { echo "PROVISIONAMENTO: docker nao habilitado"; FALHAS=$((FALHAS+1)); }
 grep -q backup-db /etc/cron.d/fabiano-backup || { echo "PROVISIONAMENTO: cron do backup ausente"; FALHAS=$((FALHAS+1)); }
+grep -q renovar-certificados /etc/cron.d/fabiano-certificados || { echo "PROVISIONAMENTO: cron da renovacao ausente"; FALHAS=$((FALHAS+1)); }
 
 aws cloudwatch put-metric-data \
   --namespace "Fabiano/$AMBIENTE" \

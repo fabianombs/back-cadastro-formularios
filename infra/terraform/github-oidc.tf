@@ -123,7 +123,6 @@ locals {
   hml_eip      = "eipalloc-053acd67132fed0af"
   hml_tipo     = "t3.small"
   hml_banco    = "poc-fabiano-homolog-db"
-  prod_ec2     = "i-008f8d272588845ef"
   prod_banco   = "poc-fabiano-db"
 }
 
@@ -149,17 +148,38 @@ resource "aws_iam_role_policy" "github_homolog" {
         Resource = "*"
       },
       {
-        # A imagem sai da instancia de PRODUCAO, e so dela. O ARN fixo aqui e o
-        # que impede a esteira de clonar qualquer outra maquina da conta.
-        Sid    = "ImagemDaProducao"
+        # A imagem sai de uma instancia do PROJETO, e so dela. Ate 12/08 isto era
+        # um ARN fixo de instancia — o que funcionou enquanto producao foi uma
+        # maquina feita a mao. Com Auto Scaling a instancia e trocada sem aviso,
+        # e o ARN fixo passou a apontar para uma maquina terminada: o job morria
+        # com UnauthorizedOperation, sem nenhuma pista de que a causa era o ASG.
+        #
+        # A tag vem do launch template e sobrevive a qualquer recriacao. A
+        # protecao continua a mesma na pratica: nao da para clonar maquina de
+        # outro projeto na conta.
+        Sid    = "ImagemDaProducaoInstancia"
+        Effect = "Allow"
+        Action = "ec2:CreateImage"
+        Resource = "arn:aws:ec2:${local.regiao}:${local.conta}:instance/*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Projeto" = "poc-fabiano"
+          }
+        }
+      },
+      {
+        # SEM condicao de tag, de proposito: a imagem e o snapshot ainda NAO
+        # existem no momento da chamada, entao uma condicao sobre as tags deles
+        # avalia uma chave inexistente e REPROVA a acao inteira.
+        #
+        # Snapshot de EBS leva o id da conta no ARN; imagem, nao. As duas formas
+        # ficam aqui porque errar isso so aparece no meio de um create-image,
+        # com a AMI ja criada e o job morrendo em seguida.
+        Sid    = "ImagemDaProducaoArtefatos"
         Effect = "Allow"
         Action = "ec2:CreateImage"
         Resource = [
-          "arn:aws:ec2:${local.regiao}:${local.conta}:instance/${local.prod_ec2}",
           "arn:aws:ec2:${local.regiao}::image/*",
-          # Snapshot de EBS leva o id da conta no ARN; imagem, nao. As duas
-          # formas ficam aqui porque errar isso so aparece no meio de um
-          # create-image, com a AMI ja criada e o job morrendo em seguida.
           "arn:aws:ec2:${local.regiao}::snapshot/*",
           "arn:aws:ec2:${local.regiao}:${local.conta}:snapshot/*"
         ]
