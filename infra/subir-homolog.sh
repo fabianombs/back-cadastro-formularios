@@ -594,7 +594,7 @@ case " \$IPS " in
     certbot certonly --webroot -w /var/www/certbot \
       -d api-hml.nexventa.com.br -d grafana-hml.nexventa.com.br \
       --cert-name hml-nexventa --non-interactive --agree-tos \
-      -m vinicius.politta1@gmail.com --keep-until-expiring \
+      -m contato@resultatec.com.br --keep-until-expiring \
       --deploy-hook /usr/local/bin/espelhar-cert-hml.sh \
       && /usr/local/bin/espelhar-cert-hml.sh \
       && echo "certificados de homolog emitidos" \
