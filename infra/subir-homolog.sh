@@ -29,7 +29,20 @@ set -euo pipefail
 REGIAO=us-east-1
 
 # --- producao, a fonte do espelho -------------------------------------------
-PROD_INSTANCIA=i-008f8d272588845ef
+# NAO fixar o ID da instancia. Desde 12/08 producao roda em Auto Scaling e a
+# maquina e trocada sem aviso — o ID fixo daqui apontava para uma instancia ja
+# terminada e o create-image morria com InvalidParameterValue.
+#
+# O que NAO muda e o Elastic IP. Nesta arquitetura, "a maquina de producao" e,
+# por definicao, a que detem este endereco: quem tem o EIP recebe o trafego.
+PROD_EIP=eipalloc-025082e8787508bb8          # 100.30.35.83, api e grafana
+PROD_INSTANCIA=$(aws ec2 describe-addresses --region "$REGIAO" \
+  --allocation-ids "$PROD_EIP" --query 'Addresses[0].InstanceId' --output text)
+case "$PROD_INSTANCIA" in
+  i-*) echo "producao detectada pelo EIP: $PROD_INSTANCIA" ;;
+  *)   echo "FATAL: nenhuma instancia associada ao EIP de producao ($PROD_EIP)"
+       exit 1 ;;
+esac
 PROD_BANCO=poc-fabiano-db
 
 # --- homolog, criado neste script -------------------------------------------

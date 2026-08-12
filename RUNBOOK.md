@@ -77,7 +77,7 @@ Se aparecer outro, **pare**. Ai sim pode ser problema de verdade.
 |---|---|---|
 | IP publico | `100.30.35.83` (Elastic IP) | **nenhum** — perdeu o EIP na virada |
 | Prompt | `ec2-user@ip-172-31-12-104` | `ec2-user@ip-172-31-28-215` |
-| Instancia | `i-008f8d272588845ef` | `i-0987e63c336e202b9` |
+| Instancia | **nao ha ID fixo** — producao roda em Auto Scaling desde 12/08. Descubra com o comando da secao abaixo | `i-0987e63c336e202b9` (terminada em 12/08) |
 | Tipo / AZ | `t3.medium` (4 GB) / `us-east-1a` | `t2.micro` / `us-east-1c` |
 | SO | Amazon Linux 2023 | Amazon Linux 2 (**sem suporte** desde 30/06/2026) |
 | Runtime | Docker + Compose | JAR no systemd |
@@ -144,7 +144,13 @@ conectar.
 sem chave, sem IP publico, sem porta 22 aberta:
 
 ```bash
-aws ssm start-session --target i-008f8d272588845ef --region us-east-1
+# A maquina de producao e, por definicao, a que detem o Elastic IP. Nao existe
+# ID fixo: o ASG troca a instancia sem aviso. Sempre descubra antes de entrar.
+PROD=$(aws ec2 describe-addresses --region us-east-1 \
+  --allocation-ids eipalloc-025082e8787508bb8 \
+  --query 'Addresses[0].InstanceId' --output text)
+echo "producao agora: $PROD"
+aws ssm start-session --target "$PROD" --region us-east-1
 ```
 
 ### Rollback da virada
@@ -154,10 +160,14 @@ gravado nada desde a virada** — a partir da primeira escrita, voltar significa
 perder essas escritas, porque as duas maquinas escrevem em bancos diferentes.
 
 ```bash
-aws ec2 associate-address \
-  --allocation-id eipalloc-025082e8787508bb8 \
-  --instance-id i-0987e63c336e202b9 \
-  --allow-reassociation --region us-east-1
+# OBSOLETO desde 12/08: as duas maquinas antigas foram terminadas depois que
+# producao passou para o Auto Scaling. Nao ha mais para onde devolver o EIP.
+#
+# O equivalente hoje e deixar o ASG recriar a maquina — ela nasce completa em
+# ~5 minutos a partir do launch template:
+#   aws autoscaling start-instance-refresh \
+#     --auto-scaling-group-name <ASG de producao> \
+#     --preferences '{"MinHealthyPercentage":0,"InstanceWarmup":300}'
 ```
 
 O dominio `100-30-35-83.sslip.io` deriva do proprio IP, entao o certificado
