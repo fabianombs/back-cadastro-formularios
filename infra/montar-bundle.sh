@@ -28,6 +28,11 @@ CONTEUDO=(
   # renovacao de certificado — o mesmo buraco do FABIANO-76, que apareceu na
   # virada de 08/08 e teria voltado no primeiro boot pelo Auto Scaling.
   infra/renovar-certificados.sh
+  # A auditoria operacional precisa viajar com o bundle: ela e o que transforma
+  # "parece que esta tudo bem" em uma lista fechada de OK e FALHA. Deixa-la fora
+  # do pacote e o mesmo que nao ter — ninguem copia script a mao no meio de um
+  # incidente.
+  infra/varredura.sh
 )
 
 # Sem isto, um arquivo renomeado sairia do pacote em silencio e so apareceria
@@ -68,7 +73,8 @@ for esperado in \
   "observability/prometheus/prometheus.yml" \
   "infra/backup-db.sh" \
   "infra/enviar-backup-email.py" \
-  "infra/renovar-certificados.sh"
+  "infra/renovar-certificados.sh" \
+  "infra/varredura.sh"
 do
   if grep -qx "$esperado" <<< "$LISTA"; then
     echo "    ok   $esperado"

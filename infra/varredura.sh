@@ -75,9 +75,17 @@ for C in /etc/letsencrypt/live/*/fullchain.pem; do
   fi
 done
 
-certbot renew --dry-run >/tmp/varredura-dry.log 2>&1 \
-  && ok "certbot renew --dry-run" \
-  || falha "certbot renew --dry-run: $(grep -aiE 'error|failed' /tmp/varredura-dry.log | tail -1)"
+# A mensagem NUNCA pode sair vazia. Na primeira execucao real deste script, em
+# 12/08, o dry-run reprovou e a mensagem veio em branco — porque o extrator so
+# procurava linhas com "error" ou "failed" e nao havia nenhuma. Verificador que
+# acusa sem explicar e treinado para ser ignorado.
+if certbot renew --dry-run >/tmp/varredura-dry.log 2>&1; then
+  ok "certbot renew --dry-run"
+else
+  RC=$?
+  DETALHE=$(grep -av '^[[:space:]]*$' /tmp/varredura-dry.log | grep -av '^-\+$' | tail -3 | tr '\n' ' | ')
+  falha "certbot renew --dry-run (codigo $RC): ${DETALHE:-log em /tmp/varredura-dry.log}"
+fi
 
 # --- agendamentos ------------------------------------------------------------
 systemctl is-active crond >/dev/null 2>&1 && ok "crond ativo" || falha "crond parado"
