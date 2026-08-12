@@ -42,6 +42,7 @@ module "asg_homolog" {
   # sem depender de DNS propagar.
   eip_allocation_id = "eipalloc-053acd67132fed0af"
 
+  bucket_imagens   = "cadastro-fabiano-uploads-hml"
   bucket_backup    = "fabiano-db-backups-135133927228"
   bucket_artefatos = "fabiano-artefatos-135133927228"
 
