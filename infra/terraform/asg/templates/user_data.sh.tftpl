@@ -49,9 +49,38 @@ aws ec2 associate-address \
 # -----------------------------------------------------------------------------
 dnf update -y
 
-# mariadb105 e quem traz o mysqldump no AL2023. Nao e o cliente da Oracle, e
-# funciona para gerar e restaurar dump do MySQL 8.x — que e o uso aqui.
-dnf install -y docker mariadb105 cronie tar gzip jq
+dnf install -y docker cronie tar gzip jq
+
+# CLIENTE MYSQL: o da ORACLE, nao o mariadb105.
+#
+# CONFERIDO NA MAQUINA EM 11/08/2026, nao suposto. A producao roda
+# 'mysql-community-client-8.4.11-1.el9', do repositorio oficial da Oracle
+# (/etc/yum.repos.d/mysql-community.repo, canal mysql-8.4-lts-community).
+#
+# A versao anterior deste arquivo instalava 'mariadb105' com o comentario "nao e
+# o cliente da Oracle, e funciona". NAO funciona para o uso deste projeto: o
+# infra/backup-db.sh chama
+#
+#     mysqldump --single-transaction --set-gtid-purged=OFF --routines --triggers
+#
+# e '--set-gtid-purged' NAO EXISTE no mysqldump do MariaDB. Uma maquina nascida
+# com mariadb105 sobe saudavel, responde HTTP, passa no health check — e falha
+# as 3h30, no unico momento em que o backup roda. Mesmo modo de falha do
+# FABIANO-29, agora automatizado.
+dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-1.noarch.rpm
+dnf install -y mysql-community-client
+
+# Falhar AQUI, e alto. Sem esta guarda a ausencia so apareceria no primeiro
+# backup — depois de a instancia ja ter assumido o Elastic IP e o trafego.
+command -v mysqldump >/dev/null \
+  || { echo "FATAL: mysqldump ausente apos instalacao"; exit 1; }
+# Sem pipe de proposito: "mysqldump --help | grep -q" sob pipefail e uma
+# corrida — o grep fecha o pipe ao casar, o mysqldump leva SIGPIPE, e o guarda
+# reprova justamente quando a condicao ESTA satisfeita.
+case "$(mysqldump --help 2>/dev/null)" in
+  *set-gtid-purged*) ;;
+  *) echo "FATAL: mysqldump sem --set-gtid-purged — cliente errado"; exit 1 ;;
+esac
 
 # O plugin do compose nao esta nos repositorios do AL2023: instalacao manual, em
 # versao FIXA. Sem fixar, uma maquina recriada daqui a seis meses nasce com um
@@ -68,13 +97,20 @@ systemctl enable --now docker
 systemctl enable --now crond
 usermod -aG docker ec2-user
 
-# certbot pelo pip, em ambiente virtual proprio: o AL2023 nao empacota certbot,
-# e o EPEL nao vale para ele. E o metodo que a propria Let's Encrypt documenta
-# para distribuicao sem pacote.
-dnf install -y python3-pip
-python3 -m venv /opt/certbot
-/opt/certbot/bin/pip install --upgrade pip certbot
-ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+# CERTBOT: pacote do proprio AL2023.
+#
+# CONFERIDO NA MAQUINA EM 11/08/2026: a producao roda
+# 'certbot-2.6.0-4.amzn2023.0.1.noarch' — ou seja, o AL2023 EMPACOTA certbot,
+# ao contrario do que a versao anterior deste arquivo afirmava.
+#
+# O metodo por venv/pip funcionaria, mas troca um pacote versionado pela
+# distribuicao por um ambiente Python que precisa de rede para o PyPI no boot,
+# nao recebe atualizacao de seguranca junto com o resto do sistema, e nasce numa
+# versao diferente a cada recriacao — o oposto de "recriar identico".
+dnf install -y certbot
+
+command -v certbot >/dev/null \
+  || { echo "FATAL: certbot ausente apos instalacao"; exit 1; }
 
 # -----------------------------------------------------------------------------
 # 3. Segredos, lidos do Parameter Store
@@ -83,6 +119,7 @@ ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
 # Hoje o .env existe em UM lugar no mundo: o disco da instancia. Perdeu a
 # maquina, perdeu as credenciais, e a recuperacao vira remontagem de memoria.
 mkdir -p "$DEPLOY_DIR/deploy"
+set +x
 aws ssm get-parameters-by-path \
   --path "/$PROJETO/$AMBIENTE/env" \
   --with-decryption \
@@ -92,6 +129,7 @@ aws ssm get-parameters-by-path \
 | while IFS=$'\t' read -r nome valor; do
     echo "$(basename "$nome")=$valor"
   done > "$DEPLOY_DIR/deploy/.env"
+set -x
 
 # A tag da imagem vem do Terraform, nao do Parameter Store: e ela que define
 # QUAL versao sobe, e isso pertence ao deploy, nao a configuracao.
@@ -116,6 +154,7 @@ chmod +x "$DEPLOY_DIR"/deploy/scripts/*.sh || true
 # -----------------------------------------------------------------------------
 # 5. Backup: scripts, log e agendamento
 # -----------------------------------------------------------------------------
+mkdir -p /app
 install -m 0755 -o root -g root "$DEPLOY_DIR/infra/backup-db.sh"          /app/backup-db.sh
 install -m 0755 -o root -g root "$DEPLOY_DIR/infra/enviar-backup-email.py" /app/enviar-backup-email.py
 mkdir -p /app/backups/diario /app/backups/semanal /app/backups/mensal
@@ -132,6 +171,7 @@ chmod 0644 /etc/cron.d/fabiano-backup
 
 # /etc/fabiano-backup.env guarda a senha do SMTP e NAO vem do bundle — vem do
 # Parameter Store, pelo mesmo motivo do .env.
+set +x
 aws ssm get-parameters-by-path \
   --path "/$PROJETO/$AMBIENTE/backup" \
   --with-decryption --recursive \
@@ -139,13 +179,151 @@ aws ssm get-parameters-by-path \
 | while IFS=$'\t' read -r nome valor; do
     echo "$(basename "$nome")=$valor"
   done > /etc/fabiano-backup.env
+set -x
 chmod 600 /etc/fabiano-backup.env
+
+# -----------------------------------------------------------------------------
+# 5b. TLS minimo para o nginx conseguir subir
+# -----------------------------------------------------------------------------
+# MEDIDO NO ENSAIO DE 11/08/2026: a maquina nova nasceu com o nginx em restart
+# loop, com "open() /etc/letsencrypt/options-ssl-nginx.conf failed". Esses
+# arquivos sao criados pelo CERTBOT ao emitir um certificado — e uma maquina
+# recem-nascida nunca emitiu nenhum. A antiga funcionava porque tinha o
+# /etc/letsencrypt herdado no disco.
+#
+# nginx com ssl_certificate apontando para arquivo inexistente NAO SOBE: ele
+# morre e reinicia em loop, e o backend fica saudavel e inalcancavel.
+#
+# Aqui geramos o minimo para o nginx subir. Sao certificados AUTOASSINADOS, que
+# o navegador rejeita — de proposito: eles existem so para o nginx conseguir
+# abrir a porta 443 e o certbot ter onde responder o desafio. O
+# renovar-certificados.sh, no cron, troca pelos reais.
+mkdir -p /etc/letsencrypt
+
+if [ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]; then
+  cat > /etc/letsencrypt/options-ssl-nginx.conf <<'SSLCONF'
+ssl_session_cache shared:le_nginx_SSL:10m;
+ssl_session_timeout 1440m;
+ssl_session_tickets off;
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers off;
+ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+SSLCONF
+fi
+
+[ -f /etc/letsencrypt/ssl-dhparams.pem ] || openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048
+
+# Descobre os dominios LENDO o que o nginx do bundle referencia, em vez de
+# manter uma lista aqui que envelhece sem ninguem notar.
+NGINX_CONF=$(find "$DEPLOY_DIR" -name nginx.conf 2>/dev/null | head -1)
+# A lista vem dos server_name do nginx, nao de um grep por caminhos: o grep
+# antigo casava com qualquer /etc/letsencrypt/live/... achado no diretorio e
+# chegou a criar diretorios chamados "app", "bin" e "var".
+DOMINIOS=$(grep -hE '^[[:space:]]*server_name' "$NGINX_CONF" 2>/dev/null \
+  | sed 's/.*server_name//; s/;.*//' | tr ' ' '\n' \
+  | grep -E '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$' | sort -u)
+echo "dominios: $DOMINIOS"
+mkdir -p /var/www/certbot
+for D in $DOMINIOS; do
+  [ -f "/etc/letsencrypt/live/$D/fullchain.pem" ] && continue
+  mkdir -p "/etc/letsencrypt/live/$D"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -keyout "/etc/letsencrypt/live/$D/privkey.pem" \
+    -out    "/etc/letsencrypt/live/$D/fullchain.pem" \
+    -subj "/CN=$D" 2>/dev/null
+  cp "/etc/letsencrypt/live/$D/fullchain.pem" "/etc/letsencrypt/live/$D/chain.pem"
+  echo "TLS: autoassinado provisorio para $D"
+done
 
 # -----------------------------------------------------------------------------
 # 6. Subir a aplicacao
 # -----------------------------------------------------------------------------
 cd "$DEPLOY_DIR"
+# O bind mount de metrics-token aponta para um ARQUIVO. Quando ele nao existe,
+# o Docker cria um DIRETORIO vazio no lugar — sem erro nenhum. O Prometheus
+# entao tenta ler um diretorio como token, o backend devolve 401 e o painel fica
+# PARADA. Nas maquinas antigas o arquivo existia porque foi criado a mao um dia.
+TOKEN_FILE="$DEPLOY_DIR/deploy/observability/metrics-token"
+rm -rf "$TOKEN_FILE"
+set +x
+grep -m1 '^METRICS_SCRAPE_TOKEN=' "$DEPLOY_DIR/deploy/.env" | cut -d= -f2- \
+  | tr -d '\r\n' > "$TOKEN_FILE" || true
+set -x
+chmod 644 "$TOKEN_FILE"
+chown ec2-user:ec2-user "$TOKEN_FILE"
+[ -s "$TOKEN_FILE" ] \
+  || { echo "FATAL: METRICS_SCRAPE_TOKEN ausente no .env"; exit 1; }
+echo "metrics-token materializado ($(wc -c < "$TOKEN_FILE") bytes)"
+
+# Tres etapas, e a ordem nao e negociavel:
+#  1) O compose da APLICACAO e o dono da rede fabiano-internal — o de
+#     observabilidade a declara como external. Cria-la na mao nao serve: nasce
+#     sem os rotulos do compose e o "up" da aplicacao recusa.
+#  2) Mas o nginx tem upstream "grafana" e nao inicia se o nome nao resolver —
+#     morre em laco de restart enquanto o backend fica saudavel e inalcancavel.
+# Subir so o backend primeiro satisfaz as duas condicoes: cria a rede com os
+# rotulos certos sem expor o nginx a um upstream que ainda nao existe.
+sudo -u ec2-user docker compose -f deploy/docker-compose.yml up -d backend
+sudo -u ec2-user docker compose -f deploy/docker-compose.observability.yml up -d
 sudo -u ec2-user docker compose -f deploy/docker-compose.yml up -d
+
+# ── 6b. Certificados reais ────────────────────────────────────────────────────
+# So aqui, depois do nginx no ar: o desafio HTTP-01 precisa de alguem
+# respondendo na porta 80. Antes disto os certificados sao as pontes
+# autoassinadas do bloco 5b, que servem para o nginx iniciar e nada mais.
+cat > /app/renovar-certificados.sh <<'RENOVASH'
+#!/bin/bash
+set -u
+TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+mkdir -p "$TEXTFILE_DIR"
+
+certbot renew --webroot -w /var/www/certbot --quiet \
+  --deploy-hook 'docker exec fabiano-nginx nginx -s reload || true'
+
+TMP=$(mktemp)
+echo '# HELP certbot_fabiano_cert_expiry_seconds Epoch em que o certificado expira.' > "$TMP"
+echo '# TYPE certbot_fabiano_cert_expiry_seconds gauge' >> "$TMP"
+for C in /etc/letsencrypt/live/*/fullchain.pem; do
+  [ -f "$C" ] || continue
+  D=$(basename "$(dirname "$C")")
+  # Autoassinado nao entra na metrica: o painel ficaria verde exibindo a
+  # validade de um certificado que navegador nenhum aceita.
+  case "$(openssl x509 -issuer -noout -in "$C")" in
+    *"CN = $D"*|*"CN=$D"*) continue ;;
+  esac
+  FIM=$(openssl x509 -enddate -noout -in "$C" | cut -d= -f2)
+  EPOCH=$(date -d "$FIM" +%s 2>/dev/null) || continue
+  echo "certbot_fabiano_cert_expiry_seconds{dominio=\"$D\"} $EPOCH" >> "$TMP"
+done
+mv "$TMP" "$TEXTFILE_DIR/certbot_fabiano.prom"
+chmod 644 "$TEXTFILE_DIR/certbot_fabiano.prom"
+RENOVASH
+chmod +x /app/renovar-certificados.sh
+
+TOKEN=$(curl -s -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+MEU_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "IP publico: $MEU_IP"
+
+for D in $DOMINIOS; do
+  # So pede certificado para o nome que aponta para ESTA maquina. O nginx.conf
+  # e compartilhado e carrega tambem os server_name de producao; sem este
+  # filtro o certbot falha neles e derruba o pedido inteiro.
+  IPS=$(getent ahostsv4 "$D" | awk '{print $1}' | sort -u | tr '\n' ' ')
+  case " $IPS " in
+    *" $MEU_IP "*) ;;
+    *) echo "  pulado $D (aponta para: $IPS)"; continue ;;
+  esac
+  [ -f "/etc/letsencrypt/renewal/$D.conf" ] \
+    || rm -rf "/etc/letsencrypt/live/$D" "/etc/letsencrypt/archive/$D"
+  certbot certonly --webroot -w /var/www/certbot -d "$D" --cert-name "$D" \
+    --non-interactive --agree-tos -m vinicius.politta1@gmail.com \
+    --keep-until-expiring && echo "  emitido $D" || echo "  AVISO: falhou $D"
+done
+
+sudo -u ec2-user docker compose -f deploy/docker-compose.yml restart nginx
+/app/renovar-certificados.sh || true
 
 # -----------------------------------------------------------------------------
 # 7. Auto-verificacao — o teste de aceite do card, rodando sozinho

@@ -10,7 +10,7 @@
 # criar-role-fabiano.sh, preparado para quem tiver acesso de administrador.
 
 resource "aws_iam_role" "instancia" {
-  name        = "${var.project_name}-${var.ambiente}-ec2"
+  name        = "${var.project_name}-${var.ambiente}-ec2${var.sufixo_iam}"
   description = "Identidade da EC2 do projeto Fabiano (${var.ambiente})"
 
   # Somente o servico EC2 assume. Nenhuma pessoa, nenhuma outra conta.
@@ -63,6 +63,20 @@ resource "aws_iam_role_policy" "operacao" {
         Action   = ["s3:GetObject"]
         Resource = "arn:aws:s3:::${var.bucket_artefatos}/${var.ambiente}/*"
       },
+      # Imagens da aplicacao. Sem isto o upload falha com 403 do S3 e TODO o
+      # resto funciona — sintoma que se confunde facilmente com bug do app.
+      # Sem s3:DeleteBucket nem politica de bucket: a maquina escreve e le
+      # objetos, nunca administra o bucket.
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = "arn:aws:s3:::${var.bucket_imagens}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Resource = "arn:aws:s3:::${var.bucket_imagens}"
+      },
       {
         # LER os proprios segredos. Escopo fechado no ambiente: a maquina de
         # homologacao nao alcanca os parametros de producao.
@@ -109,6 +123,6 @@ resource "aws_iam_role_policy" "operacao" {
 }
 
 resource "aws_iam_instance_profile" "instancia" {
-  name = "${var.project_name}-${var.ambiente}-ec2"
+  name = "${var.project_name}-${var.ambiente}-ec2${var.sufixo_iam}"
   role = aws_iam_role.instancia.name
 }

@@ -118,3 +118,21 @@ variable "usar_alb" {
   type        = bool
   default     = false
 }
+
+# Sufixo opcional nos nomes de IAM. Existe porque a raiz do projeto ja gerencia
+# um perfil chamado "poc-fabiano-producao-ec2": sem isto, aplicar o modulo em
+# producao colide com ele e falha com EntityAlreadyExists. Padrao vazio para nao
+# alterar nada em homologacao.
+variable "sufixo_iam" {
+  description = "Sufixo aplicado ao nome do papel e do perfil IAM."
+  type        = string
+  default     = ""
+}
+
+# Bucket das imagens da aplicacao. Passou a ser necessario quando a aplicacao
+# deixou de usar chave estatica e passou a usar o papel da instancia
+# (FABIANO-79): antes a permissao vinha na chave, agora vem daqui.
+variable "bucket_imagens" {
+  description = "Bucket S3 onde a aplicacao grava imagens."
+  type        = string
+}
