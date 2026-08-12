@@ -266,6 +266,28 @@ echo "==> [1/5] Backup do banco (antes de qualquer migration)"
 # Base de comparacao para saber, depois, se alguma migration rodou.
 FLYWAY_ANTES=$($MYSQL_Q -e "SELECT COALESCE(MAX(installed_rank),0) FROM flyway_schema_history;" 2>/dev/null || echo "0")
 
+# O destino e checado ANTES do dump, e a mensagem diz o que realmente aconteceu.
+#
+# Em 12/08 este script abortou um deploy com "mysqldump retornou codigo 5". O
+# mysqldump estava perfeito: o diretorio de destino nao existia e o usuario do
+# deploy nao tinha permissao para cria-lo. O erro de redirecionamento do shell
+# chegou ao mysqldump como falha de escrita, e a mensagem apontou para o
+# componente errado — uma correcao de trinta segundos custou meia hora.
+DIR_BACKUP=$(dirname "$DB_BACKUP")
+if ! mkdir -p "$DIR_BACKUP" 2>/tmp/mkdir.err; then
+  echo "ERRO: nao consegui criar $DIR_BACKUP. Deploy abortado, PROD INTACTO."
+  echo "      $(cat /tmp/mkdir.err 2>/dev/null)"
+  echo "      dono atual: $(ls -ld "$(dirname "$DIR_BACKUP")" 2>/dev/null)"
+  echo "      quem sou eu: $(id -un)"
+  exit 2
+fi
+if ! : > "$DB_BACKUP" 2>/dev/null; then
+  echo "ERRO: sem permissao de escrita em $DIR_BACKUP. Deploy abortado, PROD INTACTO."
+  echo "      dono atual: $(ls -ld "$DIR_BACKUP")"
+  echo "      quem sou eu: $(id -un)"
+  exit 2
+fi
+
 # PIPESTATUS[0] captura o exit code do mysqldump, nao o do gzip. Sem isso, um
 # mysqldump que falha some atras de um gzip que "deu certo".
 mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
