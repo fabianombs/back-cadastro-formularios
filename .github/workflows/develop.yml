@@ -391,7 +391,12 @@ jobs:
           # config do Loki sao compartilhados com o ambiente de dev e vivem
           # fora de deploy/. Sem esta linha o compose de observabilidade sobe
           # na maquina apontando para arquivo que nao existe.
-          source:   "deploy/**,observability/**"
+          # infra/** entrou em 12/08: sem ele homolog nunca recebia os scripts
+          # operacionais por deploy — backup, renovacao de certificado e a
+          # varredura. Ela ficava dependendo do que viesse na AMI de producao,
+          # que e exatamente a heranca invisivel que este projeto passou o dia
+          # eliminando. producao ja enviava; homolog agora envia igual.
+          source:   "deploy/**,observability/**,infra/**"
           target:   "/home/ec2-user/fabiano/"
           strip_components: 0
           overwrite: true
