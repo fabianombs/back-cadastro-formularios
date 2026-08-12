@@ -584,13 +584,22 @@ CLOUDINIT
 # ATENCAO: passar --iam-instance-profile exige iam:PassRole no papel de quem roda
 # este script. Sem isso o RunInstances falha com UnauthorizedOperation, e a
 # mensagem fala em PassRole, nao em perfil de instancia.
+# O user-data cresceu com o bloco do S3, a remocao de chaves e a varredura de
+# segredos, e estourou o limite de 25600 bytes CODIFICADOS do RunInstances.
+# Comprimir resolve sem tirar nada: o cloud-init reconhece o gzip pelos bytes
+# magicos (1f 8b) e descomprime antes de interpretar. E o mesmo caminho que o
+# launch template do ASG usa via base64gzip.
+UD_GZ=$(mktemp /tmp/homolog-userdata-XXXXXX.gz)
+printf '%s' "$USER_DATA" | gzip -9 > "$UD_GZ"
+echo "user-data: $(printf '%s' "$USER_DATA" | wc -c) bytes -> $(wc -c < "$UD_GZ") comprimidos"
+
 INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --image-id "$AMI" \
   --instance-type "$HML_TIPO" \
   --key-name "$HML_CHAVE" \
   --security-group-ids "$HML_SG_EC2" \
   --subnet-id "$HML_SUBNET" \
-  --user-data "$USER_DATA" \
+  --user-data "fileb://$UD_GZ" \
   --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
   --instance-initiated-shutdown-behavior terminate \
   --iam-instance-profile "Name=poc-fabiano-homolog-ec2" \
