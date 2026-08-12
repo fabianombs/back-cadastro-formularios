@@ -85,6 +85,12 @@ DB_PORT=$(sudo grep '^DB_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 DB_NAME=$(sudo grep '^DB_NAME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 DB_USER=$(sudo grep '^DB_USER=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 DB_PASS=$(sudo grep '^DB_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
+# O bucket sai do MESMO arquivo que as credenciais. Antes ele so existia como
+# variavel de ambiente herdada da maquina antiga; na maquina nova o cron roda
+# com ambiente limpo, o teste 'if [ -n "$BUCKET_BACKUP" ]' la embaixo nao entra,
+# e o backup fica apenas no disco — sem uma linha de erro no log. Backup de
+# maquina descartavel que nao sai da maquina nao e backup.
+FABIANO_BACKUP_BUCKET="${FABIANO_BACKUP_BUCKET:-$(sudo grep '^FABIANO_BACKUP_BUCKET=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
 [ -z "$DB_PORT" ] && DB_PORT=3306
 
 [ -n "$DB_HOST" ] && [ -n "$DB_NAME" ] && [ -n "$DB_USER" ] \
