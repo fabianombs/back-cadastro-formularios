@@ -51,7 +51,7 @@ resource "aws_launch_template" "app" {
     enabled = true
   }
 
-  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tftpl", {
+  user_data = base64gzip(templatefile("${path.module}/templates/user_data.sh.tftpl", {
     ambiente          = var.ambiente
     project_name      = var.project_name
     regiao            = data.aws_region.atual.name

@@ -302,7 +302,13 @@ jobs:
         if: steps.existe.outputs.criar == 'sim'
         run: |
           for i in $(seq 1 40); do
-            if curl -fsS --max-time 5 https://api-hml.nexventa.com.br/actuator/health >/dev/null 2>&1; then
+            # -k SOMENTE em homolog. A maquina emite certificado no boot, e o
+            # Let's Encrypt limita a 5 certificados iguais por semana: cada
+            # recriacao gasta um, entao a auto-recuperacao consegue se
+            # autobloquear. Aqui o que se quer provar e que a APLICACAO subiu,
+            # nao a cadeia do certificado. Em producao a validacao continua sem
+            # -k, e deve continuar.
+            if curl -fsSk --max-time 5 https://api-hml.nexventa.com.br/actuator/health >/dev/null 2>&1; then
               echo "homolog respondendo apos $((i*15))s"
               exit 0
             fi

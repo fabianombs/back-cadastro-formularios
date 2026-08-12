@@ -29,7 +29,20 @@ set -euo pipefail
 REGIAO=us-east-1
 
 # --- producao, a fonte do espelho -------------------------------------------
-PROD_INSTANCIA=i-008f8d272588845ef
+# NAO fixar o ID da instancia. Desde 12/08 producao roda em Auto Scaling e a
+# maquina e trocada sem aviso — o ID fixo daqui apontava para uma instancia ja
+# terminada e o create-image morria com InvalidParameterValue.
+#
+# O que NAO muda e o Elastic IP. Nesta arquitetura, "a maquina de producao" e,
+# por definicao, a que detem este endereco: quem tem o EIP recebe o trafego.
+PROD_EIP=eipalloc-025082e8787508bb8          # 100.30.35.83, api e grafana
+PROD_INSTANCIA=$(aws ec2 describe-addresses --region "$REGIAO" \
+  --allocation-ids "$PROD_EIP" --query 'Addresses[0].InstanceId' --output text)
+case "$PROD_INSTANCIA" in
+  i-*) echo "producao detectada pelo EIP: $PROD_INSTANCIA" ;;
+  *)   echo "FATAL: nenhuma instancia associada ao EIP de producao ($PROD_EIP)"
+       exit 1 ;;
+esac
 PROD_BANCO=poc-fabiano-db
 
 # --- homolog, criado neste script -------------------------------------------
@@ -262,6 +275,45 @@ echo "17 3 * * * /app/renovar-certificados.sh" | crontab -
 # O renovar-certificados.sh descobre sozinho quais certificados apontam para
 # esta maquina — aqui vai renovar api-hml e grafana-hml, e pular os de producao.
 
+# --- 1b. segredos de producao que moram FORA de deploy/ ----------------------
+# O /etc/fabiano-backup.env carrega SMTP_USER e SMTP_PASS de producao e vem
+# dentro da AMI, entao toda homolog nascia com ele. A sanitizacao do passo 3 so
+# alcanca o .env do Compose — este arquivo escapava por estar fora de deploy/.
+#
+# Nao esta em uso aqui (o crontab acima foi substituido e a homolog nao roda o
+# backup-db.sh), mas esta maquina tem a 22 aberta e vive dias. Credencial de
+# producao parada tambem vaza.
+#
+# Sobrescrever, e nao apagar: se algum script herdado ainda fizer 'source' dele,
+# a ausencia do arquivo quebraria o boot com erro obscuro; com valores inertes
+# ele carrega e nao entrega nada. .invalid e reservado pela RFC 2606.
+if [ -f /etc/fabiano-backup.env ]; then
+  cat > /etc/fabiano-backup.env <<'INERTE'
+# Sanitizado pelo subir-homolog.sh (FABIANO-79). Os valores de producao que
+# vinham na AMI foram substituidos por valores que nao autenticam em lugar
+# nenhum. Nao repor credencial real aqui.
+SMTP_USER=homolog@exemplo.invalid
+SMTP_PASS=homolog
+MAIL_TO=homolog@exemplo.invalid
+INERTE
+  chmod 600 /etc/fabiano-backup.env
+fi
+
+# Conferir depois de transformar, e falhar ALTO. Sem esta guarda, um arquivo com
+# formato diferente do esperado passaria silenciosamente com a senha intacta.
+if grep -qiE 'nexventa|gmail|sendgrid|smtp\.' /etc/fabiano-backup.env 2>/dev/null; then
+  echo "ERRO: /etc/fabiano-backup.env ainda parece conter valor de producao." >&2
+  exit 1
+fi
+
+# Varredura do resto da maquina. Imprime NOMES DE ARQUIVO, nunca conteudo: o
+# objetivo e descobrir onde procurar, e um grep que ecoa a senha na tela do
+# cloud-init transformaria a busca por vazamento em um vazamento.
+echo "--- arquivos fora de deploy/ que parecem carregar segredo ---"
+grep -rlIE 'AKIA[0-9A-Z]{16}|SMTP_PASS=|DB_PASSWORD=|SECRET=' \
+  /etc /usr/local/bin /opt 2>/dev/null \
+  | grep -v '^/etc/fabiano-backup.env\$' || echo "  nenhum"
+
 # --- 2. certificados: os de producao saem daqui ------------------------------
 # A AMI carrega /etc/letsencrypt inteiro, inclusive a CHAVE PRIVADA dos
 # certificados de producao. Homolog e menos vigiado e tem a 22 aberta: material
@@ -487,6 +539,71 @@ docker run -d --name mailpit --network "\$REDE" \
 
 docker exec fabiano-nginx nginx -s reload || true
 
+# --- 6b. certificados REAIS de homolog ---------------------------------------
+# Ate 12/08 homolog HERDAVA os certificados de api-hml e grafana-hml da AMI,
+# porque a producao antiga os carregava no disco. A producao nova nao carrega:
+# ela cria ponte autoassinada para todo server_name e so emite de verdade os
+# nomes que apontam para ELA. Homolog passou a nascer com a ponte — aplicacao no
+# ar respondendo, e o navegador recusando. Verde mentiroso do pior tipo.
+#
+# UM certificado para os DOIS nomes, e nao um por nome. O Let's Encrypt limita a
+# 5 certificados por CONJUNTO EXATO de identificadores por semana: pedindo um
+# por dominio, cinco recriacoes de maquina esgotam a cota e a sexta nasce sem
+# HTTPS valido. Quanto melhor a auto-recuperacao funciona, mais rapido ela se
+# autobloqueia. O conjunto {api-hml, grafana-hml} tem cota propria.
+mkdir -p /var/www/certbot
+TOKEN=\$(curl -s -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+
+# O Elastic IP e associado pelo script DEPOIS do run-instances, ou seja, depois
+# que este user-data ja comecou. Sem esperar, o desafio HTTP-01 bate no IP
+# efemero e falha. A espera acaba quando o IP desta maquina vira uma das
+# respostas de DNS do dominio — a mesma condicao que o certbot precisa.
+for _ in \$(seq 1 30); do
+  MEU_IP=\$(curl -s -H "X-aws-ec2-metadata-token: \$TOKEN" \
+    http://169.254.169.254/latest/meta-data/public-ipv4)
+  IPS=\$(getent ahostsv4 api-hml.nexventa.com.br | awk '{print \$1}' | sort -u | tr '\n' ' ')
+  case " \$IPS " in *" \$MEU_IP "*) break ;; esac
+  sleep 10
+done
+echo "IP publico desta maquina: \$MEU_IP"
+
+# O nginx.conf procura um diretorio POR DOMINIO, mas o certificado e um so.
+# Este espelho evita mexer no nginx, e roda tambem a cada renovacao pelo hook.
+cat > /usr/local/bin/espelhar-cert-hml.sh <<'HOOK'
+#!/bin/bash
+set -u
+SRC="\${RENEWED_LINEAGE:-/etc/letsencrypt/live/hml-nexventa}"
+for D in api-hml.nexventa.com.br grafana-hml.nexventa.com.br; do
+  mkdir -p "/etc/letsencrypt/live/\$D"
+  cp -L "\$SRC/fullchain.pem" "/etc/letsencrypt/live/\$D/fullchain.pem"
+  cp -L "\$SRC/privkey.pem"   "/etc/letsencrypt/live/\$D/privkey.pem"
+  cp -L "\$SRC/chain.pem"     "/etc/letsencrypt/live/\$D/chain.pem"
+done
+docker exec fabiano-nginx nginx -s reload || true
+HOOK
+chmod +x /usr/local/bin/espelhar-cert-hml.sh
+
+IPS=\$(getent ahostsv4 api-hml.nexventa.com.br | awk '{print \$1}' | sort -u | tr '\n' ' ')
+case " \$IPS " in
+  *" \$MEU_IP "*)
+    certbot delete --cert-name api-hml.nexventa.com.br --non-interactive 2>/dev/null || true
+    certbot delete --cert-name grafana-hml.nexventa.com.br --non-interactive 2>/dev/null || true
+    rm -rf /etc/letsencrypt/live/api-hml.nexventa.com.br \
+           /etc/letsencrypt/live/grafana-hml.nexventa.com.br
+    certbot certonly --webroot -w /var/www/certbot \
+      -d api-hml.nexventa.com.br -d grafana-hml.nexventa.com.br \
+      --cert-name hml-nexventa --non-interactive --agree-tos \
+      -m vinicius.politta1@gmail.com --keep-until-expiring \
+      --deploy-hook /usr/local/bin/espelhar-cert-hml.sh \
+      && /usr/local/bin/espelhar-cert-hml.sh \
+      && echo "certificados de homolog emitidos" \
+      || echo "AVISO: emissao falhou — homolog fica com autoassinado"
+    ;;
+  *) echo "AVISO: api-hml aponta para \$IPS, nao para \$MEU_IP — sem emissao" ;;
+esac
+docker exec fabiano-nginx nginx -s reload || true
+
 # --- 7. o marcador so vale se for verdade ------------------------------------
 # A primeira versao deste script escrevia CONCLUIDO incondicionalmente. No
 # primeiro ciclo o 'up' falhou, NADA subiu, e o marcador disse que tinha
@@ -532,13 +649,22 @@ CLOUDINIT
 # ATENCAO: passar --iam-instance-profile exige iam:PassRole no papel de quem roda
 # este script. Sem isso o RunInstances falha com UnauthorizedOperation, e a
 # mensagem fala em PassRole, nao em perfil de instancia.
+# O user-data cresceu com o bloco do S3, a remocao de chaves e a varredura de
+# segredos, e estourou o limite de 25600 bytes CODIFICADOS do RunInstances.
+# Comprimir resolve sem tirar nada: o cloud-init reconhece o gzip pelos bytes
+# magicos (1f 8b) e descomprime antes de interpretar. E o mesmo caminho que o
+# launch template do ASG usa via base64gzip.
+UD_GZ=$(mktemp /tmp/homolog-userdata-XXXXXX.gz)
+printf '%s' "$USER_DATA" | gzip -9 > "$UD_GZ"
+echo "user-data: $(printf '%s' "$USER_DATA" | wc -c) bytes -> $(wc -c < "$UD_GZ") comprimidos"
+
 INSTANCIA=$(aws ec2 run-instances --region "$REGIAO" \
   --image-id "$AMI" \
   --instance-type "$HML_TIPO" \
   --key-name "$HML_CHAVE" \
   --security-group-ids "$HML_SG_EC2" \
   --subnet-id "$HML_SUBNET" \
-  --user-data "$USER_DATA" \
+  --user-data "fileb://$UD_GZ" \
   --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
   --instance-initiated-shutdown-behavior terminate \
   --iam-instance-profile "Name=poc-fabiano-homolog-ec2" \
