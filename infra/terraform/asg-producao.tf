@@ -44,7 +44,7 @@ module "asg_producao" {
   bucket_artefatos = "fabiano-artefatos-135133927228"
 
   # A mesma versao que producao roda agora e que homologacao acabou de validar.
-  backend_tag = "7ea097a"
+  backend_tag = "ed6adb6"
   ghcr_owner  = "fabianombs"
 
   # Vazio de proposito nesta primeira subida. Alarme por e-mail e uma variavel a

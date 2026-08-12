@@ -157,7 +157,15 @@ chmod +x "$DEPLOY_DIR"/deploy/scripts/*.sh || true
 mkdir -p /app
 install -m 0755 -o root -g root "$DEPLOY_DIR/infra/backup-db.sh"          /app/backup-db.sh
 install -m 0755 -o root -g root "$DEPLOY_DIR/infra/enviar-backup-email.py" /app/enviar-backup-email.py
-mkdir -p /app/backups/diario /app/backups/semanal /app/backups/mensal
+# pre-deploy entra aqui junto com os outros: o deploy-safe.sh tira um dump
+# ANTES de qualquer migration e precisa gravar nesse diretorio. Ele rodava sem
+# problema na maquina feita a mao porque alguem criou o diretorio um dia; na
+# maquina nova o deploy morria com "Permission denied" — e o proprio script
+# interpretava como falha do mysqldump, abortando o deploy com PROD INTACTO.
+mkdir -p /app/backups/pre-deploy /app/backups/diario /app/backups/semanal /app/backups/mensal
+# O deploy roda como ec2-user; o backup roda como root, que escreve em diretorio
+# de qualquer dono. Por isso o dono e o ec2-user, e nao o contrario.
+chown -R ec2-user:ec2-user /app/backups
 mkdir -p /var/lib/node_exporter/textfile_collector
 touch /var/log/backup-db.log
 
