@@ -54,7 +54,7 @@ module "asg_producao" {
 
   # Sem key pair: o acesso e por SSM Session Manager, que ja usamos a noite toda
   # e nao exige porta 22 aberta.
-  key_name = ""
+  key_name = "poc-fabiano-key"
 }
 
 output "asg_producao_nome" {

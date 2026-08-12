@@ -57,7 +57,7 @@ module "asg_homolog" {
 
   # Acesso por SSM Session Manager, sem key pair. E como ja entramos nas duas
   # maquinas hoje, e o caminho para fechar a porta 22 (FABIANO-45).
-  key_name = ""
+  key_name = "poc-fabiano-homolog-key"
 }
 
 output "asg_homolog_nome" {
