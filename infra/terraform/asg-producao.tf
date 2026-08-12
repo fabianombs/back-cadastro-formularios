@@ -50,7 +50,7 @@ module "asg_producao" {
   # Vazio de proposito nesta primeira subida. Alarme por e-mail e uma variavel a
   # mais para dar errado durante uma troca de producao; entra como passo proprio
   # depois que a maquina estiver estavel.
-  email_alertas = ""
+  email_alertas = "contato@resultatec.com.br"
 
   # Sem key pair: o acesso e por SSM Session Manager, que ja usamos a noite toda
   # e nao exige porta 22 aberta.
