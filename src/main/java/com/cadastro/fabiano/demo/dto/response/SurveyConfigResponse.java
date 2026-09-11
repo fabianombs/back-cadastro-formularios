@@ -54,6 +54,7 @@ public record SurveyConfigResponse(
         // Subtítulos e botões editáveis
         String welcomeSubtitle,
         String thankyouSubtitle,
+        String thankYouParagraph,
         String welcomeBtnText,
         String ratingBtnText
 ) {}

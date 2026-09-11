@@ -310,6 +310,10 @@ public class QuizService {
         quiz.setButtonTextColor(request.buttonTextColor());
         quiz.setReadyTitle(request.readyTitle());
         quiz.setReadyMessage(request.readyMessage());
+        quiz.setThankYouEnabled(request.thankYouEnabled());
+        quiz.setThankYouTitle(request.thankYouTitle());
+        quiz.setThankYouSubtitle(request.thankYouSubtitle());
+        quiz.setThankYouParagraph(request.thankYouParagraph());
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -371,7 +375,11 @@ public class QuizService {
                 quiz.getButtonColor(),
                 quiz.getButtonTextColor(),
                 quiz.getReadyTitle(),
-                quiz.getReadyMessage()
+                quiz.getReadyMessage(),
+                quiz.isThankYouEnabled(),
+                quiz.getThankYouTitle(),
+                quiz.getThankYouSubtitle(),
+                quiz.getThankYouParagraph()
         );
     }
 

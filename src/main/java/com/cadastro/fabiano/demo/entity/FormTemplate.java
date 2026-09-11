@@ -247,6 +247,23 @@ public class FormTemplate {
     private String lgpdText;
 
     // =====================
+    // TELA DE AGRADECIMENTO FINAL (opcional)
+    // =====================
+
+    @Column(name = "thank_you_enabled", nullable = false)
+    @Builder.Default
+    private boolean thankYouEnabled = false;
+
+    @Column(name = "thank_you_title", length = 255)
+    private String thankYouTitle;
+
+    @Column(name = "thank_you_subtitle", length = 255)
+    private String thankYouSubtitle;
+
+    @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
+    private String thankYouParagraph;
+
+    // =====================
     // QUIZ (opcional)
     // =====================
 

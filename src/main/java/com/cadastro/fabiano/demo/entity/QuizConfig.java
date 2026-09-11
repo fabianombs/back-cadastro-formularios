@@ -100,6 +100,21 @@ public class QuizConfig {
     @Column(name = "ready_message", length = 255)
     private String readyMessage;
 
+    // Tela de agradecimento final (opcional) — mostrada acima do resultado/pontuação
+    // quando habilitada; sem ela, comportamento de sempre (só a tela de resultado).
+    @Column(name = "thank_you_enabled", nullable = false)
+    @Builder.Default
+    private boolean thankYouEnabled = false;
+
+    @Column(name = "thank_you_title", length = 255)
+    private String thankYouTitle;
+
+    @Column(name = "thank_you_subtitle", length = 255)
+    private String thankYouSubtitle;
+
+    @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
+    private String thankYouParagraph;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

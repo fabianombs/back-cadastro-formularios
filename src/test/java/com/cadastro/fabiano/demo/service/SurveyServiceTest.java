@@ -62,7 +62,7 @@ class SurveyServiceTest {
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     // ── listAll ───────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ class SurveyServiceTest {
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
 
         when(surveyRepo.findById(1L)).thenReturn(Optional.of(existing));
         when(surveyRepo.existsBySlug("novo-slug")).thenReturn(true);

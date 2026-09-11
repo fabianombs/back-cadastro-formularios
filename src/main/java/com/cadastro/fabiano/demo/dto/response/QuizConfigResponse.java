@@ -35,5 +35,10 @@ public record QuizConfigResponse(
     String buttonTextColor,
     // Texto editável da tela "Tudo pronto!" — null = usar padrão no frontend
     String readyTitle,
-    String readyMessage
+    String readyMessage,
+    // Tela de agradecimento final (opcional) — mostrada acima do resultado/pontuação
+    boolean thankYouEnabled,
+    String thankYouTitle,
+    String thankYouSubtitle,
+    String thankYouParagraph
 ) {}

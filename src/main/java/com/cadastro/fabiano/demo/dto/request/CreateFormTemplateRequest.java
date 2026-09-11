@@ -10,6 +10,10 @@ public record CreateFormTemplateRequest(
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
         String lgpdText,
+        boolean thankYouEnabled,
+        String thankYouTitle,
+        String thankYouSubtitle,
+        String thankYouParagraph,
         // Quiz a vincular imediatamente após criar o template (opcional)
         Long quizId,
         // Slug personalizado do link de visualização do cliente (ex: "coca-cola")
