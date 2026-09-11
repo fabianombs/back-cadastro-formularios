@@ -56,4 +56,26 @@ public class FormSubmissionController {
         submissionService.deleteSubmission(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/template/{templateId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Limpar todas as respostas de um template",
+            description = "Apaga TODAS as submissões do template — usado para zerar respostas de teste antes de entregar ao cliente. Restrito a ADMIN.")
+    @ApiResponse(responseCode = "204", description = "Respostas apagadas")
+    public ResponseEntity<Void> deleteAllByTemplate(@PathVariable Long templateId) {
+        submissionService.deleteAllByTemplate(templateId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/template/{templateId}/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Excluir respostas selecionadas",
+            description = "Apaga somente as submissões cujos ids forem informados (e que pertençam a este template). Restrito a ADMIN.")
+    @ApiResponse(responseCode = "204", description = "Respostas selecionadas apagadas")
+    public ResponseEntity<Void> deleteByIds(@PathVariable Long templateId, @RequestBody DeleteSubmissionsRequest body) {
+        submissionService.deleteByIds(templateId, body.ids());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record DeleteSubmissionsRequest(java.util.List<Long> ids) {}
 }
