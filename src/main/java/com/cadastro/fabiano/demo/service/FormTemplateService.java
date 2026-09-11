@@ -167,6 +167,10 @@ public class FormTemplateService {
         // LGPD
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
+        template.setThankYouEnabled(request.thankYouEnabled());
+        template.setThankYouTitle(request.thankYouTitle());
+        template.setThankYouSubtitle(request.thankYouSubtitle());
+        template.setThankYouParagraph(request.thankYouParagraph());
 
         // Slug do link de visualização — definido pelo admin; obrigatório
         if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
@@ -267,6 +271,10 @@ public class FormTemplateService {
         // LGPD
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
+        template.setThankYouEnabled(request.thankYouEnabled());
+        template.setThankYouTitle(request.thankYouTitle());
+        template.setThankYouSubtitle(request.thankYouSubtitle());
+        template.setThankYouParagraph(request.thankYouParagraph());
 
         // Aplica toggles de visualização do cliente enviados pelo frontend
         if (request.viewAllowExport() != null)      template.setViewAllowExport(request.viewAllowExport());
@@ -601,6 +609,10 @@ public class FormTemplateService {
                 buildAppearanceResponse(template),
                 template.isLgpdEnabled(),
                 template.getLgpdText(),
+                template.isThankYouEnabled(),
+                template.getThankYouTitle(),
+                template.getThankYouSubtitle(),
+                template.getThankYouParagraph(),
                 hasQuiz,
                 quizId,
                 quizLink,

@@ -62,7 +62,7 @@ class SurveyControllerTest {
                 true, true, true,
                 null, null, null, null, null,
                 "Muito Satisfeito", "Satisfeito", "Regular", "Insatisfeito", "Muito Insatisfeito",
-                "Sua opinião é muito importante!", "Avaliação registrada com sucesso.",
+                "Sua opinião é muito importante!", "Avaliação registrada com sucesso.", null,
                 "Começar", "Enviar avaliação"
         );
     }
@@ -91,7 +91,7 @@ class SurveyControllerTest {
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
         when(surveyService.create(any())).thenReturn(buildResponse());
 
         mockMvc.perform(post("/surveys")
@@ -125,7 +125,7 @@ class SurveyControllerTest {
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
         when(surveyService.update(eq(1L), any())).thenReturn(buildResponse());
 
         mockMvc.perform(put("/surveys/1")

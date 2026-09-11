@@ -8,6 +8,10 @@ public record UpdateFormTemplateRequest(
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
         String lgpdText,
+        boolean thankYouEnabled,
+        String thankYouTitle,
+        String thankYouSubtitle,
+        String thankYouParagraph,
         // Toggles do link de visualização do cliente (null = não alterar)
         Boolean viewAllowExport,
         Boolean viewShowSubmissions,

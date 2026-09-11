@@ -169,6 +169,9 @@ public class SurveyConfig {
     @Column(name = "thankyou_subtitle")
     @Builder.Default private String thankyouSubtitle = "Avaliação registrada com sucesso.";
 
+    @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
+    private String thankYouParagraph;
+
     // Textos dos botões
     @Column(name = "welcome_btn_text")
     @Builder.Default private String welcomeBtnText = "Começar";

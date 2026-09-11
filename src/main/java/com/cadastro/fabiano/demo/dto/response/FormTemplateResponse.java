@@ -16,6 +16,10 @@ public record FormTemplateResponse(
         TemplateAppearanceResponse appearance,
         boolean lgpdEnabled,
         String lgpdText,
+        boolean thankYouEnabled,
+        String thankYouTitle,
+        String thankYouSubtitle,
+        String thankYouParagraph,
         // Quiz integrado: presentes apenas quando existe um QuizConfig ativo para o template
         boolean hasQuiz,
         Long quizId,
