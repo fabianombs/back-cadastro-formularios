@@ -40,5 +40,15 @@ public record QuizConfigResponse(
     boolean thankYouEnabled,
     String thankYouTitle,
     String thankYouSubtitle,
-    String thankYouParagraph
+    String thankYouParagraph,
+    String thankYouBgColor,
+    String thankYouBgGradient,
+    String thankYouBgImageUrl,
+    String thankYouBgImageMobileUrl,
+    String thankYouBgImageTabletUrl,
+    String thankYouIconColor,
+    String thankYouTitleColor,
+    String thankYouTextColor,
+    String thankYouFontFamily,
+    String thankYouTitleFontSize
 ) {}

@@ -20,6 +20,18 @@ public record UpdateFormTemplateRequest(
         // Slug personalizado do link do cliente (null = não alterar, ex: "coca-cola")
         String viewSlug,
         // ID da pesquisa de satisfação a vincular (null = não alterar, 0 = desvincular)
-        Long surveyConfigId
+        Long surveyConfigId,
+        // Aparência opcional e independente da tela de agradecimento final —
+        // qualquer campo null cai no valor equivalente da aparência do formulário
+        String thankYouBgColor,
+        String thankYouBgGradient,
+        String thankYouBgImageUrl,
+        String thankYouBgImageMobileUrl,
+        String thankYouBgImageTabletUrl,
+        String thankYouIconColor,
+        String thankYouTitleColor,
+        String thankYouTextColor,
+        String thankYouFontFamily,
+        String thankYouTitleFontSize
 ) {
 }

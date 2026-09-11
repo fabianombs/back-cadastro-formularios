@@ -69,7 +69,7 @@ class FormTemplateControllerTest {
                 true, true, true, true,
                 // survey
                 false, null, null, null,
-                "MEDIUM");
+                "MEDIUM", null, null, null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -86,7 +86,7 @@ class FormTemplateControllerTest {
     @DisplayName("POST /form-templates/create/{clientId}: cria template")
     void createTemplate_success() throws Exception {
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Novo Form", 1L, List.of(), null, null, false, null, false, null, null, null, null, null, null);
+                "Novo Form", 1L, List.of(), null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         when(templateService.createTemplate(any(), eq(1L))).thenReturn(buildResponse());
 
         mockMvc.perform(post("/form-templates/create/1")
@@ -107,7 +107,7 @@ class FormTemplateControllerTest {
     @Test
     @DisplayName("PUT /form-templates/{id}: atualiza template")
     void updateTemplate_success() throws Exception {
-        UpdateFormTemplateRequest request = new UpdateFormTemplateRequest("Novo Nome", null, null, false, null, false, null, null, null, null, null, null, null, null, null);
+        UpdateFormTemplateRequest request = new UpdateFormTemplateRequest("Novo Nome", null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         when(templateService.updateTemplate(eq(1L), any())).thenReturn(buildResponse());
 
         mockMvc.perform(put("/form-templates/1")
