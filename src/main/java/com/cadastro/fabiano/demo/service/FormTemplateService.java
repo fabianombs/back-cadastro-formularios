@@ -257,6 +257,8 @@ public class FormTemplateService {
         String oldHeader     = template.getHeaderImageUrl();
         String oldFooter     = template.getFooterImageUrl();
         String oldBackground = template.getBackgroundImageUrl();
+        String oldBackgroundMobile = template.getBackgroundImageMobileUrl();
+        String oldBackgroundTablet = template.getBackgroundImageTabletUrl();
 
         if (request.appearance() != null) {
             applyAppearance(template, request.appearance());
@@ -303,6 +305,8 @@ public class FormTemplateService {
             tryDeleteOrphanedImage(oldHeader,     request.appearance().headerImageUrl());
             tryDeleteOrphanedImage(oldFooter,     request.appearance().footerImageUrl());
             tryDeleteOrphanedImage(oldBackground, request.appearance().backgroundImageUrl());
+            tryDeleteOrphanedImage(oldBackgroundMobile, request.appearance().backgroundImageMobileUrl());
+            tryDeleteOrphanedImage(oldBackgroundTablet, request.appearance().backgroundImageTabletUrl());
         }
 
         metricas.templateEditado();
@@ -466,6 +470,8 @@ public class FormTemplateService {
         tryDeleteOrphanedImageExcluding(template.getHeaderImageUrl(),     template.getId());
         tryDeleteOrphanedImageExcluding(template.getFooterImageUrl(),     template.getId());
         tryDeleteOrphanedImageExcluding(template.getBackgroundImageUrl(), template.getId());
+        tryDeleteOrphanedImageExcluding(template.getBackgroundImageMobileUrl(), template.getId());
+        tryDeleteOrphanedImageExcluding(template.getBackgroundImageTabletUrl(), template.getId());
     }
 
     // ==========================
@@ -475,6 +481,8 @@ public class FormTemplateService {
         template.setBackgroundColor(a.backgroundColor());
         template.setBackgroundGradient(a.backgroundGradient());
         template.setBackgroundImageUrl(a.backgroundImageUrl());
+        template.setBackgroundImageMobileUrl(a.backgroundImageMobileUrl());
+        template.setBackgroundImageTabletUrl(a.backgroundImageTabletUrl());
         template.setHeaderImageUrl(a.headerImageUrl());
         template.setFooterImageUrl(a.footerImageUrl());
         template.setPrimaryColor(a.primaryColor());
@@ -493,6 +501,8 @@ public class FormTemplateService {
         if (t.getBackgroundColor() == null
                 && t.getBackgroundGradient() == null
                 && t.getBackgroundImageUrl() == null
+                && t.getBackgroundImageMobileUrl() == null
+                && t.getBackgroundImageTabletUrl() == null
                 && t.getHeaderImageUrl() == null
                 && t.getFooterImageUrl() == null
                 && t.getPrimaryColor() == null
@@ -511,6 +521,8 @@ public class FormTemplateService {
                 t.getBackgroundColor(),
                 t.getBackgroundGradient(),
                 t.getBackgroundImageUrl(),
+                t.getBackgroundImageMobileUrl(),
+                t.getBackgroundImageTabletUrl(),
                 t.getHeaderImageUrl(),
                 t.getFooterImageUrl(),
                 t.getPrimaryColor(),

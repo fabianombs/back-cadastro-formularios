@@ -57,7 +57,7 @@ class SurveyControllerTest {
                 "http://localhost:4200/survey/nps",
                 "http://localhost:4200/survey/nps/report",
                 LocalDateTime.now(), LocalDateTime.now(),
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 50.0, 12.0, 120, 50.0, 55.0,
                 true, true, true,
                 null, null, null, null, null,
@@ -86,7 +86,7 @@ class SurveyControllerTest {
     void create_success() throws Exception {
         CreateSurveyRequest req = new CreateSurveyRequest("NPS", "nps",
                 "Empresa X", null, "Como foi?", "Satisfação?", false, "Obrigado!",
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,
@@ -120,7 +120,7 @@ class SurveyControllerTest {
     void update_success() throws Exception {
         CreateSurveyRequest req = new CreateSurveyRequest("NPS Atualizado", "nps",
                 null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,

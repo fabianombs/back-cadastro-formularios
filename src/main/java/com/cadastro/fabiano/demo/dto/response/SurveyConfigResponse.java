@@ -21,6 +21,8 @@ public record SurveyConfigResponse(
         String backgroundColor,
         String backgroundGradient,
         String backgroundImageUrl,
+        String backgroundImageMobileUrl,
+        String backgroundImageTabletUrl,
         String primaryColor,
         String textColor,
         String cardColor,

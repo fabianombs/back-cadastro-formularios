@@ -298,6 +298,8 @@ public class QuizService {
         quiz.setBackgroundColor(request.backgroundColor());
         quiz.setBackgroundGradient(request.backgroundGradient());
         quiz.setBackgroundImageUrl(request.backgroundImageUrl());
+        quiz.setBackgroundImageMobileUrl(request.backgroundImageMobileUrl());
+        quiz.setBackgroundImageTabletUrl(request.backgroundImageTabletUrl());
         quiz.setPrimaryColor(request.primaryColor());
         quiz.setTextColor(request.textColor());
         quiz.setCardColor(request.cardColor());
@@ -358,6 +360,8 @@ public class QuizService {
                 quiz.getBackgroundColor(),
                 quiz.getBackgroundGradient(),
                 quiz.getBackgroundImageUrl(),
+                quiz.getBackgroundImageMobileUrl(),
+                quiz.getBackgroundImageTabletUrl(),
                 quiz.getPrimaryColor(),
                 quiz.getTextColor(),
                 quiz.getCardColor(),

@@ -55,6 +55,14 @@ public class QuizConfig {
     @Column(name = "background_image_url")
     private String backgroundImageUrl;
 
+    /** Imagem de fundo específica para celular (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_mobile_url")
+    private String backgroundImageMobileUrl;
+
+    /** Imagem de fundo específica para tablet (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_tablet_url")
+    private String backgroundImageTabletUrl;
+
     @Column(name = "primary_color")
     private String primaryColor;
 

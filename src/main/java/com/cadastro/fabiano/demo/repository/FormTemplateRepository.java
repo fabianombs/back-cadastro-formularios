@@ -36,14 +36,14 @@ public interface FormTemplateRepository extends JpaRepository<FormTemplate, Long
      * em qualquer um dos campos de imagem. Usado para decidir se o arquivo pode ser removido
      * do disco com segurança após uma edição ou exclusão de template.
      */
-    @Query("SELECT COUNT(t) FROM FormTemplate t WHERE t.headerImageUrl = :url OR t.footerImageUrl = :url OR t.backgroundImageUrl = :url")
+    @Query("SELECT COUNT(t) FROM FormTemplate t WHERE t.headerImageUrl = :url OR t.footerImageUrl = :url OR t.backgroundImageUrl = :url OR t.backgroundImageMobileUrl = :url OR t.backgroundImageTabletUrl = :url")
     long countUsingImageUrl(@Param("url") String url);
 
     /**
      * Mesmo que {@link #countUsingImageUrl} mas exclui um template específico pelo ID.
      * Usado durante soft-delete para não depender do flush do @SQLRestriction na mesma transação.
      */
-    @Query("SELECT COUNT(t) FROM FormTemplate t WHERE (t.headerImageUrl = :url OR t.footerImageUrl = :url OR t.backgroundImageUrl = :url) AND t.id <> :excludeId")
+    @Query("SELECT COUNT(t) FROM FormTemplate t WHERE (t.headerImageUrl = :url OR t.footerImageUrl = :url OR t.backgroundImageUrl = :url OR t.backgroundImageMobileUrl = :url OR t.backgroundImageTabletUrl = :url) AND t.id <> :excludeId")
     long countUsingImageUrlExcluding(@Param("url") String url, @Param("excludeId") Long excludeId);
 
     long countByHasScheduleTrue();

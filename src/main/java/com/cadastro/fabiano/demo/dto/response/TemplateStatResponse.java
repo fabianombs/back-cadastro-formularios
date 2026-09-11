@@ -1,10 +1,13 @@
 package com.cadastro.fabiano.demo.dto.response;
 
+import java.time.LocalDateTime;
+
 public record TemplateStatResponse(
         Long id,
         String name,
         String slug,
         String clientName,
+        LocalDateTime createdAt,
         boolean hasSchedule,
         int fieldCount,
         long submissionCount,
