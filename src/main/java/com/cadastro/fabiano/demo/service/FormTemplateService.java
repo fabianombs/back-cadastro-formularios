@@ -171,6 +171,16 @@ public class FormTemplateService {
         template.setThankYouTitle(request.thankYouTitle());
         template.setThankYouSubtitle(request.thankYouSubtitle());
         template.setThankYouParagraph(request.thankYouParagraph());
+        template.setThankYouBgColor(request.thankYouBgColor());
+        template.setThankYouBgGradient(request.thankYouBgGradient());
+        template.setThankYouBgImageUrl(request.thankYouBgImageUrl());
+        template.setThankYouBgImageMobileUrl(request.thankYouBgImageMobileUrl());
+        template.setThankYouBgImageTabletUrl(request.thankYouBgImageTabletUrl());
+        template.setThankYouIconColor(request.thankYouIconColor());
+        template.setThankYouTitleColor(request.thankYouTitleColor());
+        template.setThankYouTextColor(request.thankYouTextColor());
+        template.setThankYouFontFamily(request.thankYouFontFamily());
+        template.setThankYouTitleFontSize(request.thankYouTitleFontSize());
 
         // Slug do link de visualização — definido pelo admin; obrigatório
         if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
@@ -275,6 +285,16 @@ public class FormTemplateService {
         template.setThankYouTitle(request.thankYouTitle());
         template.setThankYouSubtitle(request.thankYouSubtitle());
         template.setThankYouParagraph(request.thankYouParagraph());
+        template.setThankYouBgColor(request.thankYouBgColor());
+        template.setThankYouBgGradient(request.thankYouBgGradient());
+        template.setThankYouBgImageUrl(request.thankYouBgImageUrl());
+        template.setThankYouBgImageMobileUrl(request.thankYouBgImageMobileUrl());
+        template.setThankYouBgImageTabletUrl(request.thankYouBgImageTabletUrl());
+        template.setThankYouIconColor(request.thankYouIconColor());
+        template.setThankYouTitleColor(request.thankYouTitleColor());
+        template.setThankYouTextColor(request.thankYouTextColor());
+        template.setThankYouFontFamily(request.thankYouFontFamily());
+        template.setThankYouTitleFontSize(request.thankYouTitleFontSize());
 
         // Aplica toggles de visualização do cliente enviados pelo frontend
         if (request.viewAllowExport() != null)      template.setViewAllowExport(request.viewAllowExport());
@@ -634,7 +654,17 @@ public class FormTemplateService {
                 surveyId,
                 surveySlug,
                 surveyPublicLink,
-                template.getAttendanceFontScale()
+                template.getAttendanceFontScale(),
+                template.getThankYouBgColor(),
+                template.getThankYouBgGradient(),
+                template.getThankYouBgImageUrl(),
+                template.getThankYouBgImageMobileUrl(),
+                template.getThankYouBgImageTabletUrl(),
+                template.getThankYouIconColor(),
+                template.getThankYouTitleColor(),
+                template.getThankYouTextColor(),
+                template.getThankYouFontFamily(),
+                template.getThankYouTitleFontSize()
         );
     }
 }

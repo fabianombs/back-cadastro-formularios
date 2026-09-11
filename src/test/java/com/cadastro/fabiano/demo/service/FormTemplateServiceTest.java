@@ -89,7 +89,7 @@ class FormTemplateServiceTest {
     void createTemplate_success_noSchedule() {
         FormFieldRequest field = new FormFieldRequest("Nome", "text", true, null, 2, null);
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Formulário de Contato", 1L, List.of(field), null, null, false, null, false, null, null, null, null, null, null);
+                "Formulário de Contato", 1L, List.of(field), null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         FormTemplate saved = buildTemplate("Formulário de Contato", "formulario-de-contato");
 
@@ -110,7 +110,7 @@ class FormTemplateServiceTest {
                 LocalTime.of(8, 0), LocalTime.of(17, 0), 30, 7, 3, List.of("CPF"));
 
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Agenda Médica", 1L, List.of(), sc, null, false, null, false, null, null, null, null, null, null);
+                "Agenda Médica", 1L, List.of(), sc, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         FormTemplate saved = buildTemplate("Agenda Médica", "agenda-medica");
         saved.setHasSchedule(true);
@@ -136,7 +136,7 @@ class FormTemplateServiceTest {
     void createTemplate_slugConflict_generatesUnique() {
         // "Formulario" (sem acento) → slug "formulario"
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Formulario", 1L, List.of(), null, null, false, null, false, null, null, null, null, null, null);
+                "Formulario", 1L, List.of(), null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         FormTemplate saved = buildTemplate("Formulario", "formulario-1");
 
@@ -154,7 +154,7 @@ class FormTemplateServiceTest {
     @DisplayName("createTemplate: lança exceção se cliente não encontrado")
     void createTemplate_clientNotFound_throws() {
         CreateFormTemplateRequest request = new CreateFormTemplateRequest(
-                "Form", 99L, List.of(), null, null, false, null, false, null, null, null, null, null, null);
+                "Form", 99L, List.of(), null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(clientRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -301,7 +301,7 @@ class FormTemplateServiceTest {
     @DisplayName("updateTemplate: atualiza nome do template")
     void updateTemplate_updateName() {
         FormTemplate t = buildTemplate("Antigo", "antigo");
-        UpdateFormTemplateRequest request = new UpdateFormTemplateRequest("Novo Nome", null, null, false, null, false, null, null, null, null, null, null, null, null, null);
+        UpdateFormTemplateRequest request = new UpdateFormTemplateRequest("Novo Nome", null, null, false, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(templateRepository.findById(1L)).thenReturn(Optional.of(t));
         when(templateRepository.save(any())).thenAnswer(inv -> {

@@ -43,5 +43,15 @@ public record FormTemplateResponse(
         Long surveyId,
         String surveySlug,
         String surveyPublicLink,
-        String attendanceFontScale
+        String attendanceFontScale,
+        String thankYouBgColor,
+        String thankYouBgGradient,
+        String thankYouBgImageUrl,
+        String thankYouBgImageMobileUrl,
+        String thankYouBgImageTabletUrl,
+        String thankYouIconColor,
+        String thankYouTitleColor,
+        String thankYouTextColor,
+        String thankYouFontFamily,
+        String thankYouTitleFontSize
 ) {}
