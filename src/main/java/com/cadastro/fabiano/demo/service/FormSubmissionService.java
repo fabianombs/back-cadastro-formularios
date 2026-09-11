@@ -97,6 +97,20 @@ public class FormSubmissionService {
     }
 
     // =========================
+    // LIMPAR TODAS AS RESPOSTAS DE UM TEMPLATE
+    // =========================
+    // Uso: zerar as respostas de teste antes de entregar o template ao cliente.
+    // Restrito a ADMIN no controller — apaga sem confirmação adicional aqui,
+    // a confirmação é responsabilidade da tela.
+    @Transactional
+    public void deleteAllByTemplate(Long templateId) {
+        if (!templateRepository.existsById(templateId)) {
+            throw new RuntimeException("Template não encontrado");
+        }
+        submissionRepository.deleteByTemplate_Id(templateId);
+    }
+
+    // =========================
     // MAPPER
     // =========================
     private FormSubmissionResponse toResponse(FormSubmission s) {
