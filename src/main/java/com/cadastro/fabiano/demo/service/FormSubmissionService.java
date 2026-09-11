@@ -111,6 +111,20 @@ public class FormSubmissionService {
     }
 
     // =========================
+    // DELETAR SOMENTE AS SELECIONADAS
+    // =========================
+    // Só apaga os ids que pertencem a este templateId — ver comentário no
+    // repositório. Assim um id de outro template (por engano ou manipulado
+    // no request) é simplesmente ignorado, nunca apagado.
+    @Transactional
+    public void deleteByIds(Long templateId, java.util.List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        submissionRepository.deleteByIdInAndTemplate_Id(ids, templateId);
+    }
+
+    // =========================
     // MAPPER
     // =========================
     private FormSubmissionResponse toResponse(FormSubmission s) {

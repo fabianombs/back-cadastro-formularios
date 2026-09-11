@@ -24,6 +24,10 @@ public interface FormSubmissionRepository extends JpaRepository<FormSubmission, 
 
     void deleteByTemplate_Id(Long templateId);
 
+    // Exclusão seletiva: só apaga os ids que realmente pertencem a este template,
+    // então um id de outro template enviado por engano/tampering é ignorado, não apagado.
+    void deleteByIdInAndTemplate_Id(java.util.List<Long> ids, Long templateId);
+
     long countByTemplate_Id(Long templateId);
 
     long countByTemplate_Client(Client client);
