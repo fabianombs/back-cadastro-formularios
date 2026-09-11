@@ -314,6 +314,16 @@ public class QuizService {
         quiz.setThankYouTitle(request.thankYouTitle());
         quiz.setThankYouSubtitle(request.thankYouSubtitle());
         quiz.setThankYouParagraph(request.thankYouParagraph());
+        quiz.setThankYouBgColor(request.thankYouBgColor());
+        quiz.setThankYouBgGradient(request.thankYouBgGradient());
+        quiz.setThankYouBgImageUrl(request.thankYouBgImageUrl());
+        quiz.setThankYouBgImageMobileUrl(request.thankYouBgImageMobileUrl());
+        quiz.setThankYouBgImageTabletUrl(request.thankYouBgImageTabletUrl());
+        quiz.setThankYouIconColor(request.thankYouIconColor());
+        quiz.setThankYouTitleColor(request.thankYouTitleColor());
+        quiz.setThankYouTextColor(request.thankYouTextColor());
+        quiz.setThankYouFontFamily(request.thankYouFontFamily());
+        quiz.setThankYouTitleFontSize(request.thankYouTitleFontSize());
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -379,7 +389,17 @@ public class QuizService {
                 quiz.isThankYouEnabled(),
                 quiz.getThankYouTitle(),
                 quiz.getThankYouSubtitle(),
-                quiz.getThankYouParagraph()
+                quiz.getThankYouParagraph(),
+                quiz.getThankYouBgColor(),
+                quiz.getThankYouBgGradient(),
+                quiz.getThankYouBgImageUrl(),
+                quiz.getThankYouBgImageMobileUrl(),
+                quiz.getThankYouBgImageTabletUrl(),
+                quiz.getThankYouIconColor(),
+                quiz.getThankYouTitleColor(),
+                quiz.getThankYouTextColor(),
+                quiz.getThankYouFontFamily(),
+                quiz.getThankYouTitleFontSize()
         );
     }
 

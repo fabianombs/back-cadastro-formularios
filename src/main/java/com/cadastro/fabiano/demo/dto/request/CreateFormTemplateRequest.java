@@ -19,6 +19,18 @@ public record CreateFormTemplateRequest(
         // Slug personalizado do link de visualização do cliente (ex: "coca-cola")
         String viewSlug,
         // Pesquisa de satisfação a vincular imediatamente após criar o template (opcional)
-        Long surveyConfigId
+        Long surveyConfigId,
+        // Aparência opcional e independente da tela de agradecimento final —
+        // qualquer campo null cai no valor equivalente da aparência do formulário
+        String thankYouBgColor,
+        String thankYouBgGradient,
+        String thankYouBgImageUrl,
+        String thankYouBgImageMobileUrl,
+        String thankYouBgImageTabletUrl,
+        String thankYouIconColor,
+        String thankYouTitleColor,
+        String thankYouTextColor,
+        String thankYouFontFamily,
+        String thankYouTitleFontSize
 ) {
 }

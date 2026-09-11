@@ -35,5 +35,17 @@ public record QuizConfigRequest(
     boolean thankYouEnabled,
     String thankYouTitle,
     String thankYouSubtitle,
-    String thankYouParagraph
+    String thankYouParagraph,
+    // Aparência opcional e independente da tela de agradecimento final —
+    // qualquer campo null cai no valor equivalente da aparência do quiz
+    String thankYouBgColor,
+    String thankYouBgGradient,
+    String thankYouBgImageUrl,
+    String thankYouBgImageMobileUrl,
+    String thankYouBgImageTabletUrl,
+    String thankYouIconColor,
+    String thankYouTitleColor,
+    String thankYouTextColor,
+    String thankYouFontFamily,
+    String thankYouTitleFontSize
 ) {}

@@ -115,6 +115,36 @@ public class QuizConfig {
     @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
     private String thankYouParagraph;
 
+    @Column(name = "thank_you_bg_color", length = 20)
+    private String thankYouBgColor;
+
+    @Column(name = "thank_you_bg_gradient", length = 255)
+    private String thankYouBgGradient;
+
+    @Column(name = "thank_you_bg_image_url", length = 500)
+    private String thankYouBgImageUrl;
+
+    @Column(name = "thank_you_bg_image_mobile_url", length = 500)
+    private String thankYouBgImageMobileUrl;
+
+    @Column(name = "thank_you_bg_image_tablet_url", length = 500)
+    private String thankYouBgImageTabletUrl;
+
+    @Column(name = "thank_you_icon_color", length = 20)
+    private String thankYouIconColor;
+
+    @Column(name = "thank_you_title_color", length = 20)
+    private String thankYouTitleColor;
+
+    @Column(name = "thank_you_text_color", length = 20)
+    private String thankYouTextColor;
+
+    @Column(name = "thank_you_font_family", length = 100)
+    private String thankYouFontFamily;
+
+    @Column(name = "thank_you_title_font_size", length = 20)
+    private String thankYouTitleFontSize;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
