@@ -12,6 +12,8 @@ public record QuizConfigRequest(
     String backgroundColor,
     String backgroundGradient,
     String backgroundImageUrl,
+    String backgroundImageMobileUrl,
+    String backgroundImageTabletUrl,
     String primaryColor,
     String textColor,
     // Cor dos cards de resposta — null usa o padrão glassmorphism
@@ -28,5 +30,10 @@ public record QuizConfigRequest(
     String buttonTextColor,
     // Texto editável da tela "Tudo pronto!" — null usa padrão do frontend
     String readyTitle,
-    String readyMessage
+    String readyMessage,
+    // Tela de agradecimento final (opcional) — mostrada acima do resultado/pontuação
+    boolean thankYouEnabled,
+    String thankYouTitle,
+    String thankYouSubtitle,
+    String thankYouParagraph
 ) {}

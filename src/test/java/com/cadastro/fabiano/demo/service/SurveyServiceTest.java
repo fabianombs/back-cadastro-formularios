@@ -57,12 +57,12 @@ class SurveyServiceTest {
     private CreateSurveyRequest buildRequest(String name, String slug) {
         return new CreateSurveyRequest(name, slug, "Empresa X", null,
                 "Como foi?", "Qual sua satisfação?", false, "Obrigado!",
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     // ── listAll ───────────────────────────────────────────────────────────────
@@ -168,12 +168,12 @@ class SurveyServiceTest {
         SurveyConfig other = buildSurvey(2L, "Outro", "novo-slug");
         CreateSurveyRequest req = new CreateSurveyRequest("NPS", "novo-slug",
                 null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
 
         when(surveyRepo.findById(1L)).thenReturn(Optional.of(existing));
         when(surveyRepo.existsBySlug("novo-slug")).thenReturn(true);

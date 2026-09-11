@@ -298,6 +298,8 @@ public class QuizService {
         quiz.setBackgroundColor(request.backgroundColor());
         quiz.setBackgroundGradient(request.backgroundGradient());
         quiz.setBackgroundImageUrl(request.backgroundImageUrl());
+        quiz.setBackgroundImageMobileUrl(request.backgroundImageMobileUrl());
+        quiz.setBackgroundImageTabletUrl(request.backgroundImageTabletUrl());
         quiz.setPrimaryColor(request.primaryColor());
         quiz.setTextColor(request.textColor());
         quiz.setCardColor(request.cardColor());
@@ -308,6 +310,10 @@ public class QuizService {
         quiz.setButtonTextColor(request.buttonTextColor());
         quiz.setReadyTitle(request.readyTitle());
         quiz.setReadyMessage(request.readyMessage());
+        quiz.setThankYouEnabled(request.thankYouEnabled());
+        quiz.setThankYouTitle(request.thankYouTitle());
+        quiz.setThankYouSubtitle(request.thankYouSubtitle());
+        quiz.setThankYouParagraph(request.thankYouParagraph());
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -358,6 +364,8 @@ public class QuizService {
                 quiz.getBackgroundColor(),
                 quiz.getBackgroundGradient(),
                 quiz.getBackgroundImageUrl(),
+                quiz.getBackgroundImageMobileUrl(),
+                quiz.getBackgroundImageTabletUrl(),
                 quiz.getPrimaryColor(),
                 quiz.getTextColor(),
                 quiz.getCardColor(),
@@ -367,7 +375,11 @@ public class QuizService {
                 quiz.getButtonColor(),
                 quiz.getButtonTextColor(),
                 quiz.getReadyTitle(),
-                quiz.getReadyMessage()
+                quiz.getReadyMessage(),
+                quiz.isThankYouEnabled(),
+                quiz.getThankYouTitle(),
+                quiz.getThankYouSubtitle(),
+                quiz.getThankYouParagraph()
         );
     }
 

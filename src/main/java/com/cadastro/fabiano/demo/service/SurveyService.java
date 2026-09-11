@@ -199,6 +199,7 @@ public class SurveyService {
                 s.getCreatedAt(), s.getUpdatedAt(),
                 // Aparência
                 s.getBackgroundColor(), s.getBackgroundGradient(), s.getBackgroundImageUrl(),
+                s.getBackgroundImageMobileUrl(), s.getBackgroundImageTabletUrl(),
                 s.getPrimaryColor(), s.getTextColor(), s.getCardColor(),
                 s.getButtonColor(), s.getButtonTextColor(), s.getLogoBorderRadius(),
                 // Posições livres
@@ -213,7 +214,7 @@ public class SurveyService {
                 s.getScore5Label(), s.getScore4Label(), s.getScore3Label(),
                 s.getScore2Label(), s.getScore1Label(),
                 // Subtítulos e botões
-                s.getWelcomeSubtitle(), s.getThankyouSubtitle(),
+                s.getWelcomeSubtitle(), s.getThankyouSubtitle(), s.getThankYouParagraph(),
                 s.getWelcomeBtnText(), s.getRatingBtnText()
         );
     }
@@ -222,6 +223,8 @@ public class SurveyService {
         s.setBackgroundColor(req.backgroundColor());
         s.setBackgroundGradient(req.backgroundGradient());
         s.setBackgroundImageUrl(req.backgroundImageUrl());
+        s.setBackgroundImageMobileUrl(req.backgroundImageMobileUrl());
+        s.setBackgroundImageTabletUrl(req.backgroundImageTabletUrl());
         s.setPrimaryColor(req.primaryColor());
         s.setTextColor(req.textColor());
         s.setCardColor(req.cardColor());
@@ -253,6 +256,7 @@ public class SurveyService {
         // Subtítulos e botões
         if (req.welcomeSubtitle()  != null) s.setWelcomeSubtitle(req.welcomeSubtitle());
         if (req.thankyouSubtitle() != null) s.setThankyouSubtitle(req.thankyouSubtitle());
+        if (req.thankYouParagraph() != null) s.setThankYouParagraph(req.thankYouParagraph());
         if (req.welcomeBtnText()   != null && !req.welcomeBtnText().isBlank())  s.setWelcomeBtnText(req.welcomeBtnText());
         if (req.ratingBtnText()    != null && !req.ratingBtnText().isBlank())   s.setRatingBtnText(req.ratingBtnText());
     }

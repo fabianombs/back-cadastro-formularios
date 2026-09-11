@@ -1,0 +1,3608 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexventa · O que existe por trás do sistema</title>
+<style>
+/* ==========================================================================
+   Documento de transparência — arquivo único, sem internet, sem dependência.
+   Paleta validada para tema escuro: as três cores de série passam na
+   verificação de daltonismo (pior par ΔE 17.3). Cor de estado nunca aparece
+   sozinha — sempre com rótulo ao lado.
+   ========================================================================== */
+:root{
+  --fundo:#0b0e14; --fundo2:#111622; --painel:#161c2a; --painel2:#1b2333;
+  --borda:#233046; --borda2:#2e3d57;
+  --texto:#e6ecf5; --suave:#93a3bd; --fraco:#5f6f8a;
+
+  /* séries (validadas) */
+  --s1:#4a93e8; --s2:#b8842a; --s3:#1fa871;
+  /* estado — sempre com rótulo */
+  --bom:#3ddc97; --atencao:#ffc857; --grave:#ff5c6c; --info:#4c9aff; --roxo:#a78bfa;
+
+  --max:1180px;
+  --r:14px;
+  --sombra:0 18px 50px -18px rgba(0,0,0,.75);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--fundo); color:var(--texto);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+h1,h2,h3,h4{line-height:1.2; margin:0; font-weight:650; letter-spacing:-.02em}
+p{margin:0 0 1em}
+a{color:var(--info)}
+
+/* --- aurora de fundo: preservada do documento original ------------------- */
+.aurora{position:fixed; inset:-25vh -25vw; z-index:0; pointer-events:none; filter:blur(90px); opacity:.5}
+.aurora i{position:absolute; display:block; border-radius:50%; mix-blend-mode:screen}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:2%;top:2%;background:#1d4ed8;animation:flutua 26s ease-in-out infinite}
+.aurora i:nth-child(2){width:38vw;height:38vw;right:4%;top:14%;background:#0f766e;animation:flutua 32s ease-in-out infinite reverse}
+.aurora i:nth-child(3){width:34vw;height:34vw;left:28%;bottom:2%;background:#6d28d9;animation:flutua 38s ease-in-out infinite}
+@keyframes flutua{
+  0%,100%{transform:translate3d(0,0,0) scale(1)}
+  33%{transform:translate3d(6vw,-4vh,0) scale(1.12)}
+  66%{transform:translate3d(-5vw,5vh,0) scale(.92)}
+}
+
+.faixa{position:relative; z-index:1; max-width:var(--max); margin:0 auto; padding:0 22px}
+
+/* --- cabeçalho ----------------------------------------------------------- */
+header.topo{padding:64px 0 30px}
+.marca{display:inline-flex; align-items:center; gap:9px; font-size:12px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--suave); border:1px solid var(--borda);
+  background:rgba(22,28,42,.6); padding:7px 14px; border-radius:999px; backdrop-filter:blur(6px)}
+.marca b{width:7px;height:7px;border-radius:50%;background:var(--bom);box-shadow:0 0 12px var(--bom)}
+header.topo h1{font-size:clamp(30px,5.2vw,54px); margin:22px 0 14px; max-width:22ch}
+header.topo h1 span{background:linear-gradient(100deg,var(--s1),var(--roxo) 60%,var(--bom));
+  -webkit-background-clip:text; background-clip:text; color:transparent}
+header.topo .chamada{font-size:clamp(16px,2.1vw,19px); color:var(--suave); max-width:60ch}
+
+/* --- navegação por abas -------------------------------------------------- */
+nav.abas{position:sticky; top:0; z-index:20; margin-top:30px;
+  background:rgba(11,14,20,.82); backdrop-filter:blur(14px);
+  border-top:1px solid var(--borda); border-bottom:1px solid var(--borda)}
+nav.abas .faixa{display:flex; gap:2px; overflow-x:auto; scrollbar-width:none}
+/* Em tela larga as abas QUEBRAM em vez de rolar: aba que fica fora da tela e aba
+   que ninguem descobre — e as duas ultimas sao justamente as mais honestas. */
+@media (min-width:900px){ nav.abas .faixa{flex-wrap:wrap; overflow:visible} }
+nav.abas .faixa::-webkit-scrollbar{display:none}
+nav.abas button{
+  flex:0 0 auto; background:none; border:0; border-bottom:2px solid transparent;
+  color:var(--fraco); font:inherit; font-size:14px; font-weight:600;
+  padding:16px 14px; cursor:pointer; white-space:nowrap; transition:color .18s, border-color .18s;
+}
+nav.abas button:hover{color:var(--suave)}
+nav.abas button[aria-selected="true"]{color:var(--texto); border-color:var(--s1)}
+nav.abas button i{font-style:normal; color:var(--fraco); margin-right:7px; font-variant-numeric:tabular-nums}
+nav.abas button[aria-selected="true"] i{color:var(--s1)}
+
+main{position:relative; z-index:1; padding:0 0 90px}
+section.aba{display:none}
+section.aba.ativa{display:block; animation:entra .38s ease both}
+@keyframes entra{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+
+.cabeca{padding:52px 0 12px; max-width:70ch}
+.olho{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--s1); font-weight:700}
+.cabeca h2{font-size:clamp(24px,3.6vw,36px); margin:12px 0 14px}
+.cabeca p{color:var(--suave); font-size:17px}
+
+/* --- blocos genéricos ---------------------------------------------------- */
+.painel{background:linear-gradient(180deg,var(--painel),var(--fundo2));
+  border:1px solid var(--borda); border-radius:var(--r); padding:26px; box-shadow:var(--sombra)}
+.grade{display:grid; gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.bl{margin:26px 0}
+
+.revela{opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease}
+.revela.vis{opacity:1; transform:none}
+
+.rotulo{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--fraco); font-weight:700}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+.selo{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; border-radius:999px; border:1px solid}
+.selo.bom{color:var(--bom); border-color:rgba(61,220,151,.35); background:rgba(61,220,151,.1)}
+.selo.at{color:var(--atencao); border-color:rgba(255,200,87,.35); background:rgba(255,200,87,.1)}
+.selo.gr{color:var(--grave); border-color:rgba(255,92,108,.35); background:rgba(255,92,108,.1)}
+.selo.nt{color:var(--suave); border-color:var(--borda2); background:rgba(147,163,189,.08)}
+
+.nota{border-left:3px solid var(--s1); padding:14px 18px; background:rgba(74,147,232,.07);
+  border-radius:0 10px 10px 0; color:var(--suave); font-size:15px}
+.nota.at{border-color:var(--atencao); background:rgba(255,200,87,.07)}
+.nota.gr{border-color:var(--grave); background:rgba(255,92,108,.07)}
+
+table{width:100%; border-collapse:collapse; font-size:14.5px}
+th,td{padding:12px 14px; text-align:left; border-bottom:1px solid var(--borda)}
+th{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--fraco); font-weight:700}
+tbody tr:last-child td{border-bottom:0}
+
+.numerao{font-size:clamp(30px,4.6vw,46px); font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+
+/* --- rodapé -------------------------------------------------------------- */
+footer{border-top:1px solid var(--borda); margin-top:40px; padding:34px 0 60px; color:var(--fraco); font-size:13.5px}
+
+@media (max-width:760px){
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .painel{padding:20px}
+  header.topo{padding:40px 0 20px}
+  nav.abas button{padding:14px 11px; font-size:13px}
+}
+
+/* ---- controles falsos ilustrando o painel ---- */
+.falso-ctrl{display:inline-block; background:#0d1119; border:1px solid var(--borda2);
+  border-radius:8px; padding:9px 14px; font-size:13.5px; color:var(--suave); margin-top:10px}
+/* ---- receitas numeradas ---- */
+.receitas{counter-reset:r; list-style:none; margin:0; padding:0}
+.receitas > li{counter-increment:r; padding:20px 0; border-bottom:1px solid var(--borda)}
+.receitas > li:first-child{padding-top:0}
+.receitas > li:last-child{border-bottom:0; padding-bottom:0}
+.receitas > li > h4{font-size:17px; margin:0 0 12px; display:flex; gap:12px; align-items:baseline}
+.receitas > li > h4::before{content:counter(r); color:var(--s1); font-size:13px; font-weight:700;
+  border:1px solid var(--s1); border-radius:50%; width:26px; height:26px; display:inline-grid;
+  place-items:center; flex:0 0 auto}
+.receitas ol{margin:0; padding-left:20px; color:var(--suave); font-size:14.5px}
+.receitas ol li{padding:4px 0}
+
+
+.bg-svg text, .bg-svg rect, .bg-svg path{transition:opacity .55s ease, stroke .45s ease,
+  stroke-width .45s ease, stroke-dasharray .45s ease, fill .45s ease}
+#bg-legenda{font-family:var(--corpo)}
+
+
+/* ---- comparativo de-para ---- */
+.dp-grade{display:grid; grid-template-columns:1.05fr 1.25fr 1.25fr; gap:0}
+.dp-grade > div{padding:15px 16px; border-bottom:1px solid var(--borda); font-size:14.5px; color:var(--suave)}
+.dp-cab{border-bottom:1px solid var(--borda2) !important; padding-bottom:12px !important}
+.dp-item{color:var(--texto); font-weight:600; font-family:var(--titulo); font-size:15.5px}
+.dp-antes{color:var(--fraco); background:rgba(255,92,108,.035)}
+.dp-depois{background:rgba(61,220,151,.05)}
+.dp-depois strong{color:var(--bom)}
+.dp-grade > div:nth-last-child(-n+3){border-bottom:0}
+@media (max-width:760px){
+  .dp-grade{grid-template-columns:1fr}
+  .dp-cab:first-child{display:none}
+  .dp-item{background:rgba(74,147,232,.08); margin-top:12px; border-radius:8px 8px 0 0}
+}
+/* ---- barras de mercado ---- */
+.barras-mercado{display:grid; gap:16px}
+.bm{display:grid; grid-template-columns:1fr; gap:7px}
+.bm-t{font-size:14.5px; color:var(--texto)}
+.bm-tr{height:14px; background:var(--painel2); border:1px solid var(--borda); border-radius:999px; overflow:hidden}
+.bm-tr i{display:block; height:100%; width:0; border-radius:999px;
+  transition:width 1.1s cubic-bezier(.22,1,.36,1)}
+.vis .bm-tr i{width:var(--w)}
+.bm-v{font-size:12.5px; color:var(--fraco)}
+/* ---- catalogo de registros ---- */
+.lista-log{margin-top:20px; display:grid; gap:10px}
+.item-log{background:#0d1119; border:1px solid var(--borda); border-radius:11px; overflow:hidden;
+  transition:border-color .22s}
+.item-log:hover{border-color:var(--borda2)}
+.item-log > button{width:100%; background:none; border:0; color:inherit; font:inherit;
+  display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; text-align:left}
+.item-log h4{font-size:15.5px; margin:0; flex:1; font-family:var(--corpo); font-weight:600}
+.item-log .freq{font-size:11.5px; color:var(--fraco); font-family:var(--dado); white-space:nowrap}
+.item-log .seta{color:var(--fraco); transition:transform .3s}
+.item-log.aberto .seta{transform:rotate(90deg)}
+.item-log .corpo{display:none; padding:0 16px 18px; border-top:1px solid var(--borda)}
+.item-log.aberto .corpo{display:block; animation:entra .32s ease both}
+.item-log .ex{background:#080b11; border:1px solid var(--borda); border-left:3px solid var(--s1);
+  border-radius:7px; padding:11px 13px; margin:14px 0; font-family:var(--dado); font-size:12.5px;
+  color:var(--suave); white-space:pre-wrap; word-break:break-word}
+
+.cen b{background:rgba(147,163,189,.14); border-radius:999px; padding:1px 7px; margin-left:7px; font-size:11.5px}
+/* ---- manual de plantao ---- */
+.email-falso{background:#0d1119; border:1px solid var(--borda2); border-radius:11px; overflow:hidden; margin-top:14px}
+.ef-topo{display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--borda);
+  background:rgba(255,92,108,.06); flex-wrap:wrap}
+.ef-assunto{font-weight:600; font-size:15px}
+.ef-corpo{padding:14px 16px; font-size:12.5px; color:var(--suave); line-height:1.9}
+.runbook{list-style:none; margin:0; padding:0; counter-reset:rb}
+.runbook > li{display:grid; grid-template-columns:56px 1fr; gap:18px; padding:22px 0;
+  border-bottom:1px solid var(--borda)}
+.runbook > li:first-child{padding-top:0}
+.runbook > li:last-child{border-bottom:0; padding-bottom:0}
+.rb-num{width:42px; height:42px; border-radius:50%; display:grid; place-items:center;
+  border:1px solid var(--s1); color:var(--s1); font-family:var(--dado); font-weight:700; font-size:16px;
+  background:rgba(74,147,232,.08)}
+.rb-corpo h4{font-size:18px; margin:6px 0 8px}
+.rb-obj{color:var(--fraco); font-size:14px; margin:0 0 14px}
+/* o rotulo vira etiqueta em linha: o texto flui depois dela em vez de ser
+   espremido numa coluna estreita, que quebrava frases no meio */
+.rb-passos{display:grid; gap:8px}
+.rb-passos > div{font-size:14.7px; line-height:1.62; color:var(--suave);
+  padding:10px 14px 11px; background:rgba(13,17,25,.62); border-radius:8px;
+  border-left:2px solid rgba(74,147,232,.34)}
+.rb-passos b{display:inline-block; white-space:nowrap; color:var(--s1);
+  font-family:var(--dado); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  background:rgba(74,147,232,.10); border:1px solid rgba(74,147,232,.22);
+  border-radius:5px; padding:2px 8px 3px; margin:0 9px 2px 0; vertical-align:1px}
+/* trechos de comando nunca quebram no meio da expressao */
+.rb-passos .mono{white-space:nowrap}
+.rb-nota{margin-top:14px; border-left:3px solid var(--s2); background:rgba(184,132,42,.07);
+  padding:11px 14px; border-radius:0 8px 8px 0; color:var(--suave); font-size:14px}
+@media (max-width:640px){
+  .runbook > li{grid-template-columns:1fr; gap:10px}
+  .rb-passos .mono{white-space:normal}
+}
+
+
+/* ---- mapa de enderecos: producao x homologacao ---- */
+.enderecos .painel{padding-top:18px}
+.amb-topo{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;
+  padding-bottom:14px; border-bottom:1px solid var(--borda)}
+.amb-frase{color:var(--fraco); font-size:13.5px}
+.amb-prod{border-top:2px solid var(--bom)}
+.amb-hml{border-top:2px solid var(--atencao)}
+.end{display:block; text-decoration:none; padding:13px 15px; border-radius:10px;
+  background:rgba(13,17,25,.62); border:1px solid var(--borda); margin-bottom:10px;
+  transition:border-color .25s, transform .25s, background .25s}
+.end:last-child{margin-bottom:0}
+.end:hover{border-color:var(--s1); transform:translateX(3px); background:rgba(74,147,232,.07)}
+.end-papel{display:block; font-family:var(--dado); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--fraco)}
+.end-url{display:block; font-size:15.5px; color:var(--info); margin:4px 0 6px; word-break:break-all}
+.amb-hml .end-url{color:var(--atencao)}
+.end-desc{display:block; color:var(--suave); font-size:13.6px; line-height:1.55}
+
+
+/* ==========================================================================
+   CAMADA DE ACABAMENTO — movimento com funcao, nunca decorativo puro.
+   Cada efeito daqui responde a uma pergunta de quem le: onde eu estou,
+   para onde posso ir, o que e clicavel, e o que acabou de mudar.
+   ========================================================================== */
+
+/* --- inclinacao 3D do painel sob o cursor: profundidade real, nao sombra --- */
+.faixa{perspective:1400px}
+.painel{transform-style:preserve-3d}
+.painel.inclina{
+  transform:translateY(-3px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  box-shadow:0 26px 60px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(74,147,232,.10) inset;
+}
+
+/* --- entrada escalonada dos filhos diretos da aba ativa ------------------- */
+section.aba.ativa > .faixa > *{animation:sobe-bloco .55s cubic-bezier(.22,1,.36,1) both}
+@keyframes sobe-bloco{
+  from{opacity:0; transform:translateY(16px); filter:blur(5px)}
+  to{opacity:1; transform:none; filter:blur(0)}
+}
+section.aba.ativa > .faixa > *:nth-child(1){animation-delay:.02s}
+section.aba.ativa > .faixa > *:nth-child(2){animation-delay:.08s}
+section.aba.ativa > .faixa > *:nth-child(3){animation-delay:.14s}
+section.aba.ativa > .faixa > *:nth-child(4){animation-delay:.20s}
+section.aba.ativa > .faixa > *:nth-child(n+5){animation-delay:.24s}
+
+/* --- brilho que atravessa o titulo de tempos em tempos -------------------- */
+header.topo h1{position:relative; overflow:hidden}
+header.topo h1::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);
+  transform:translateX(-120%); animation:lustro 7.5s ease-in-out 1.4s infinite;
+}
+@keyframes lustro{0%,72%{transform:translateX(-120%)} 88%,100%{transform:translateX(120%)}}
+
+/* --- botao de aba com leve atracao magnetica ------------------------------ */
+nav.abas button{transition:color .25s, transform .3s cubic-bezier(.22,1,.36,1)}
+
+/* --- onda no clique dos botoes de acao ------------------------------------ */
+.acao,.cen{position:relative; overflow:hidden}
+.onda{position:absolute; border-radius:50%; transform:scale(0); pointer-events:none;
+  background:rgba(74,147,232,.35); animation:espalha .6s ease-out forwards}
+@keyframes espalha{to{transform:scale(3.2); opacity:0}}
+
+/* --- navegacao flutuante: a proxima aba sempre a um clique ---------------- */
+#proxima{position:fixed; right:22px; bottom:22px; z-index:58; display:flex; gap:8px;
+  opacity:0; transform:translateY(14px); pointer-events:none; transition:opacity .35s, transform .35s}
+#proxima.vis{opacity:1; transform:none; pointer-events:auto}
+#proxima button{
+  display:flex; align-items:center; gap:9px; font:inherit; font-size:13.5px; font-weight:600;
+  color:var(--texto); cursor:pointer; padding:11px 16px; border-radius:999px;
+  border:1px solid var(--borda2); background:rgba(17,22,34,.94); backdrop-filter:blur(8px);
+  box-shadow:0 16px 40px -20px rgba(0,0,0,.9); transition:border-color .25s, transform .25s}
+#proxima button:hover{border-color:var(--s1); transform:translateY(-2px)}
+#proxima button span{color:var(--fraco); font-family:var(--dado); font-size:11px; letter-spacing:.1em}
+#proxima .so-seta{padding:11px 14px}
+
+/* --- dica de teclado, aparece uma vez ------------------------------------- */
+#dica-teclas{position:fixed; left:50%; bottom:24px; transform:translate(-50%,16px); z-index:58;
+  background:rgba(17,22,34,.95); border:1px solid var(--borda2); border-radius:999px;
+  padding:9px 18px; font-size:13px; color:var(--suave); opacity:0; pointer-events:none;
+  transition:opacity .5s, transform .5s; backdrop-filter:blur(8px)}
+#dica-teclas.vis{opacity:1; transform:translate(-50%,0)}
+#dica-teclas kbd{font-family:var(--dado); font-size:11.5px; background:rgba(74,147,232,.14);
+  border:1px solid rgba(74,147,232,.28); border-radius:5px; padding:1px 6px; color:var(--texto); margin:0 2px}
+
+/* --- copiar endereco: micro-interacao com resposta visivel ---------------- */
+.end{position:relative}
+.end-copiar{position:absolute; top:11px; right:11px; font:inherit; font-family:var(--dado);
+  font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; cursor:pointer;
+  color:var(--fraco); background:rgba(147,163,189,.08); border:1px solid var(--borda);
+  border-radius:6px; padding:4px 9px; opacity:0; transition:opacity .25s, color .25s, border-color .25s}
+.end:hover .end-copiar, .end-copiar:focus{opacity:1}
+.end-copiar:hover{color:var(--texto); border-color:var(--s1)}
+.end-copiar.ok{color:var(--bom); border-color:var(--bom); opacity:1}
+
+/* --- numero grande pulsa uma vez quando termina de contar ----------------- */
+.numerao.pronto{animation:bate .5s cubic-bezier(.22,1,.36,1)}
+@keyframes bate{0%{transform:scale(1)} 40%{transform:scale(1.06)} 100%{transform:scale(1)}}
+
+/* --- linha da tabela: barra que cresce a esquerda ao passar --------------- */
+tbody tr{position:relative}
+tbody tr td:first-child{position:relative}
+tbody tr td:first-child::before{content:""; position:absolute; left:-14px; top:8px; bottom:8px;
+  width:2px; background:var(--s1); border-radius:2px; transform:scaleY(0); transform-origin:top;
+  transition:transform .28s cubic-bezier(.22,1,.36,1)}
+tbody tr:hover td:first-child::before{transform:scaleY(1)}
+
+@media (max-width:900px){
+  .painel.inclina{transform:none}
+  #proxima{right:14px; bottom:14px}
+}
+@media (prefers-reduced-motion: reduce){
+  section.aba.ativa > .faixa > *{animation:none}
+  header.topo h1::after{display:none}
+  .painel.inclina{transform:none}
+}
+
+
+/* camadas de atmosfera sao fixas e maiores que a tela; sem isso o documento
+   ganha uma barra horizontal fantasma e a impressao sai deslocada */
+html{overflow-x:clip}
+
+@media print{ .revela{opacity:1 !important; transform:none !important} .aurora{display:none} section.aba{display:block !important} nav.abas{display:none} }
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important}
+  .revela{opacity:1; transform:none}
+  .aurora{opacity:.32}
+}
+
+/* ===================== mapa da infraestrutura ============================= */
+.mapa{width:100%; height:auto; display:block}
+.caixa{cursor:pointer}
+.caixa rect{transition:stroke .2s, filter .2s}
+.caixa:hover rect,.caixa:focus rect{stroke:var(--s1); filter:drop-shadow(0 0 12px rgba(74,147,232,.35))}
+.caixa:focus{outline:none}
+.caixa.sel rect{stroke:var(--s1); filter:drop-shadow(0 0 16px rgba(74,147,232,.5))}
+.fio{stroke-dasharray:7 7; stroke-dashoffset:0; animation:corre 1.6s linear infinite}
+@keyframes corre{to{stroke-dashoffset:-28}}
+.detalhe{margin-top:20px; border-top:1px solid var(--borda); padding-top:18px; min-height:96px}
+.detalhe h4{font-size:17px; margin:0 0 8px}
+/* rotulo como etiqueta em linha: o texto flui ao lado em vez de ficar preso
+   numa coluna estreita, que quebrava frases no meio e ficava desalinhado */
+.par{display:grid; gap:8px; margin-top:4px}
+.par > div{font-size:14.6px; line-height:1.6; color:var(--suave);
+  padding:10px 14px 11px; background:rgba(13,17,25,.62); border-radius:8px;
+  border-left:2px solid rgba(74,147,232,.30)}
+.par b{display:inline-block; white-space:nowrap; color:var(--s1);
+  font-family:var(--dado); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  background:rgba(74,147,232,.10); border:1px solid rgba(74,147,232,.22);
+  border-radius:5px; padding:2px 8px 3px; margin:0 9px 2px 0; vertical-align:1px}
+
+/* ===================== cenários e barras ================================== */
+.cenarios{display:flex; gap:8px; flex-wrap:wrap}
+.cen{background:var(--painel2); border:1px solid var(--borda2); color:var(--suave);
+  font:inherit; font-size:14px; font-weight:600; padding:9px 16px; border-radius:999px; cursor:pointer;
+  transition:all .18s}
+.cen:hover{border-color:var(--s1); color:var(--texto)}
+.cen.ativo{background:rgba(74,147,232,.16); border-color:var(--s1); color:var(--texto)}
+.ponto{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle}
+.barra{height:12px; background:var(--painel2); border:1px solid var(--borda); border-radius:999px;
+  overflow:hidden; margin-top:12px}
+.barra i{display:block; height:100%; width:0; border-radius:999px; transition:width .9s cubic-bezier(.22,1,.36,1)}
+.legenda{display:flex; gap:18px; flex-wrap:wrap; font-size:13px; color:var(--suave); margin:6px 0 12px}
+.legenda i{display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:7px; vertical-align:-1px}
+
+/* ===================== gráficos =========================================== */
+.grafico{width:100%; height:auto; display:block; overflow:visible}
+.grafico rect.b{transform-box:fill-box; transform-origin:bottom; transform:scaleY(0);
+  transition:transform .9s cubic-bezier(.22,1,.36,1)}
+.vis .grafico rect.b{transform:scaleY(1)}
+.medidor .arco{stroke-dasharray:100; stroke-dashoffset:100; transition:stroke-dashoffset 1.2s ease .2s}
+.vis .medidor .arco{stroke-dashoffset:96}
+.tiras{display:grid; grid-template-columns:repeat(30,1fr); gap:4px}
+.tiras i{display:block; aspect-ratio:1/2.4; border-radius:3px; background:var(--s3); opacity:0;
+  transition:opacity .5s ease}
+.vis .tiras i{opacity:1}
+.tiras i.man{background:var(--s2)}
+@media (max-width:600px){ .tiras{grid-template-columns:repeat(15,1fr)} }
+
+/* ===================== linha de log ====================================== */
+.linha-log{background:#0d1119; border:1px solid var(--borda); border-radius:12px; padding:18px;
+  font-size:13.5px; line-height:2.1; word-break:break-word; color:var(--fraco)}
+.linha-log .cmp{cursor:pointer; padding:3px 6px; border-radius:6px; transition:background .16s}
+.linha-log .cmp:hover{background:rgba(74,147,232,.14)}
+.linha-log .cmp.sel{background:rgba(74,147,232,.22); outline:1px solid var(--s1)}
+.linha-log b{color:var(--s1); font-weight:600}
+.linha-log em{color:var(--bom); font-style:normal}
+
+/* ===================== busca de código =================================== */
+.busca{display:flex; gap:10px; flex-wrap:wrap}
+.busca input{flex:1 1 240px; background:#0d1119; border:1px solid var(--borda2); color:var(--texto);
+  font-size:15px; padding:12px 16px; border-radius:10px}
+.busca input:focus{outline:none; border-color:var(--s1)}
+.busca button, .acao{background:var(--s1); border:0; color:#08111f; font:inherit; font-weight:700;
+  padding:12px 22px; border-radius:10px; cursor:pointer; transition:filter .18s}
+.busca button:hover, .acao:hover{filter:brightness(1.1)}
+.acao.secundaria{background:var(--painel2); color:var(--suave); border:1px solid var(--borda2)}
+.atalhos{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+.chip{background:var(--painel2); border:1px solid var(--borda2); color:var(--suave);
+  font:inherit; font-size:13px; padding:6px 12px; border-radius:999px; cursor:pointer;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.chip:hover{border-color:var(--s1); color:var(--texto)}
+.resultado{margin-top:20px; border-top:1px solid var(--borda); padding-top:18px; min-height:80px}
+.res-linha{background:#0d1119; border:1px solid var(--borda); border-left:3px solid var(--s1);
+  border-radius:8px; padding:12px 14px; margin-bottom:9px; font-size:13px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--suave);
+  animation:entra .3s ease both}
+.res-linha.err{border-left-color:var(--grave)}
+.res-linha .h{color:var(--fraco)}
+
+/* ===================== cofre de senhas =================================== */
+.cofre{display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center}
+.maquina{background:#0d1119; border:1px solid var(--borda2); border-radius:12px; padding:18px; margin-top:12px}
+.cofre-cx{border-color:var(--s3)}
+.arq{background:rgba(255,92,108,.12); border:1px dashed var(--grave); color:var(--grave);
+  border-radius:8px; padding:10px 12px; font-size:13px; text-align:center; font-weight:600}
+.arq.guardado{background:rgba(61,220,151,.1); border:1px solid var(--bom); border-style:solid; color:var(--bom)}
+.seta{display:flex; align-items:center; justify-content:center}
+@media (max-width:760px){ .cofre{grid-template-columns:1fr} .seta{transform:rotate(90deg); margin:4px 0} }
+
+/* ===================== simulação da queda ================================ */
+.controles{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+.relogio{margin-left:auto; font-size:26px; font-weight:700; color:var(--s1); font-variant-numeric:tabular-nums}
+.coluna{background:#0d1119; border:1px solid var(--borda); border-radius:12px; padding:18px}
+.col-topo{display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap}
+.col-tit{font-size:14px; color:var(--suave); font-weight:600}
+.passos{list-style:none; margin:0; padding:0}
+.passos li{display:grid; grid-template-columns:64px 1fr; gap:12px; padding:11px 0;
+  border-bottom:1px solid rgba(35,48,70,.6); opacity:.28; transition:opacity .4s ease, transform .4s ease}
+.passos li:last-child{border-bottom:0}
+.passos li.on{opacity:1}
+.passos li b{color:var(--fraco); font-size:13px; font-variant-numeric:tabular-nums; padding-top:1px}
+.passos li span{font-size:14.5px; color:var(--suave)}
+.passos li.on.bom b{color:var(--bom)} .passos li.on.bom span{color:var(--texto); font-weight:600}
+.passos li.on.ruim b{color:var(--grave)} .passos li.on.ruim span{color:var(--texto); font-weight:600}
+
+.lista-defeitos > div{display:flex; gap:10px; align-items:flex-start; padding:10px 0;
+  border-bottom:1px solid rgba(35,48,70,.6); font-size:14px; color:var(--suave)}
+.lista-defeitos > div:last-child{border-bottom:0}
+.lista-defeitos .selo{flex:0 0 auto}
+
+/* ===================== cópias ============================================= */
+.copia{position:relative}
+.badge-num{width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
+  background:rgba(31,168,113,.14); border:1px solid var(--s3); color:var(--bom);
+  font-weight:700; font-size:15px}
+
+/* ===================== cronologia ======================================== */
+.cronologia{list-style:none; margin:16px 0 0; padding:0; position:relative}
+.cronologia::before{content:""; position:absolute; left:76px; top:8px; bottom:8px; width:2px;
+  background:linear-gradient(180deg,var(--s1),rgba(74,147,232,.12))}
+.cronologia li{display:grid; grid-template-columns:76px 1fr; gap:22px; padding:0 0 26px; position:relative}
+.cronologia li::before{content:""; position:absolute; left:71px; top:7px; width:12px; height:12px;
+  border-radius:50%; background:var(--fundo); border:2px solid var(--s1)}
+.cronologia .hora{font-size:12.5px; color:var(--fraco); font-weight:700; text-align:right;
+  letter-spacing:.04em; padding-top:2px}
+.cronologia h4{font-size:16.5px; margin:0 0 6px}
+.cronologia p{color:var(--suave); font-size:14.5px; margin:0}
+@media (max-width:600px){
+  .cronologia::before{left:5px}
+  .cronologia li{grid-template-columns:1fr; gap:4px; padding-left:26px}
+  .cronologia li::before{left:0}
+  .cronologia .hora{text-align:left}
+}
+
+
+/* ==========================================================================
+   ACABAMENTO — tipografia editorial, textura, movimento com proposito.
+   Nenhuma fonte e baixada: o arquivo tem que abrir sem internet. As pilhas
+   abaixo usam o que ja existe no sistema, comecando pelas mais bonitas.
+   ========================================================================== */
+:root{
+  --titulo:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --corpo:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --dado:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+body{font-family:var(--corpo); letter-spacing:-.003em}
+h1,h2,h3,h4,.numerao{font-family:var(--titulo); font-weight:600; letter-spacing:-.015em}
+h1{letter-spacing:-.028em}
+.rotulo,.olho,.selo,nav.abas button i{font-family:var(--dado); letter-spacing:.13em}
+.numerao{font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+.cabeca p,.chamada{font-size:17.5px; line-height:1.7}
+
+/* grão sutil por cima de tudo: tira o aspecto de gradiente digital limpo demais */
+body::after{
+  content:""; position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.05;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.55'/></svg>");
+}
+
+/* barra de progresso de leitura — documento longo precisa de orientacao */
+#progresso{position:fixed; top:0; left:0; height:2px; width:0; z-index:60;
+  background:linear-gradient(90deg,var(--s1),var(--roxo),var(--bom)); transition:width .12s linear}
+
+/* indicador de aba que desliza entre os botoes */
+nav.abas .faixa{position:relative}
+#indicador{position:absolute; bottom:0; height:2px; background:var(--s1); border-radius:2px;
+  transition:transform .42s cubic-bezier(.65,0,.35,1), width .42s cubic-bezier(.65,0,.35,1);
+  pointer-events:none; will-change:transform,width}
+nav.abas button[aria-selected="true"]{border-color:transparent}
+nav.abas button{position:relative}
+nav.abas button::after{content:""; position:absolute; inset:6px 6px; border-radius:9px;
+  background:rgba(74,147,232,0); transition:background .22s; z-index:-1}
+nav.abas button:hover::after{background:rgba(74,147,232,.08)}
+
+/* transicao entre abas, com sentido: avanca pela direita, volta pela esquerda */
+section.aba.ativa{animation:none}
+section.aba.entra-dir{animation:desliza-dir .46s cubic-bezier(.22,1,.36,1) both}
+section.aba.entra-esq{animation:desliza-esq .46s cubic-bezier(.22,1,.36,1) both}
+@keyframes desliza-dir{from{opacity:0; transform:translateX(26px)} to{opacity:1; transform:none}}
+@keyframes desliza-esq{from{opacity:0; transform:translateX(-26px)} to{opacity:1; transform:none}}
+
+/* painel: relevo ao passar o mouse, discreto */
+.painel{transition:transform .3s cubic-bezier(.22,1,.36,1), border-color .3s, box-shadow .3s;
+  position:relative; overflow:hidden}
+.painel::before{content:""; position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(74,147,232,.09),transparent 62%);
+  transition:opacity .35s}
+.painel:hover{transform:translateY(-2px); border-color:var(--borda2)}
+.painel:hover::before{opacity:1}
+
+/* revelacao escalonada dentro das grades */
+.grade > .revela:nth-child(1){transition-delay:0ms}
+.grade > .revela:nth-child(2){transition-delay:80ms}
+.grade > .revela:nth-child(3){transition-delay:160ms}
+.grade > .revela:nth-child(4){transition-delay:240ms}
+.grade > .revela:nth-child(5){transition-delay:320ms}
+.grade > .revela:nth-child(6){transition-delay:400ms}
+.revela{transition:opacity .7s cubic-bezier(.22,1,.36,1), transform .7s cubic-bezier(.22,1,.36,1)}
+
+/* linhas de tabela reagem ao passar */
+tbody tr{transition:background .18s}
+tbody tr:hover{background:rgba(74,147,232,.05)}
+
+/* selos ganham vida ao passar no cartao */
+.painel:hover .selo{transform:translateY(-1px)}
+.selo{transition:transform .25s}
+
+/* dica flutuante dos graficos */
+#dica{position:fixed; z-index:70; pointer-events:none; opacity:0; transform:translate(-50%,-118%);
+  background:rgba(13,17,25,.97); border:1px solid var(--borda2); border-radius:9px;
+  padding:9px 12px; font-size:12.5px; color:var(--texto); white-space:nowrap;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.8); transition:opacity .14s}
+#dica.on{opacity:1}
+#dica b{display:block; font-family:var(--dado); font-size:11px; color:var(--fraco);
+  letter-spacing:.1em; margin-bottom:4px}
+#dica i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:7px}
+.grafico rect.b{cursor:crosshair}
+.grafico rect.b:hover{filter:brightness(1.22)}
+
+/* o pacote que percorre o mapa: mostra o caminho do dado, nao enfeita */
+.pacote{fill:var(--s1); filter:drop-shadow(0 0 6px rgba(74,147,232,.9))}
+
+/* cofre: o arquivo sai do servidor e entra no cofre */
+.arq{transition:transform .8s cubic-bezier(.65,0,.35,1), opacity .5s}
+.vis .cofre .arq{animation:sai-arq 2.4s ease-in-out .6s both}
+@keyframes sai-arq{
+  0%{transform:none} 45%{transform:translateX(14px) scale(.96); opacity:.55}
+  55%{transform:translateX(14px) scale(.96); opacity:.55} 100%{transform:none; opacity:1}
+}
+.vis .cofre-cx{animation:pulsa-cofre 2.4s ease-out .6s both}
+@keyframes pulsa-cofre{
+  0%,45%{box-shadow:0 0 0 0 rgba(31,168,113,0)}
+  60%{box-shadow:0 0 0 8px rgba(31,168,113,.16)}
+  100%{box-shadow:0 0 0 0 rgba(31,168,113,0)}
+}
+
+/* cronometro da simulacao com barra de avanco */
+.relogio{position:relative}
+#avanco{height:3px; background:var(--painel2); border-radius:3px; margin-top:16px; overflow:hidden}
+#avanco i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--grave),var(--s2),var(--bom));
+  transition:width .5s linear}
+.coluna{transition:border-color .4s, box-shadow .4s}
+.coluna.caindo{border-color:rgba(255,92,108,.5); box-shadow:0 0 0 1px rgba(255,92,108,.18)}
+.coluna.recuperado{border-color:rgba(61,220,151,.5); box-shadow:0 0 0 1px rgba(61,220,151,.18)}
+.passos li{transition:opacity .45s ease, transform .45s cubic-bezier(.22,1,.36,1)}
+.passos li:not(.on){transform:translateX(-6px)}
+
+/* numeros que contam ao aparecer */
+.conta{font-variant-numeric:tabular-nums}
+
+/* cartoes de copia: entram em leque */
+.copia{transition:transform .55s cubic-bezier(.22,1,.36,1), opacity .55s}
+.grade > .copia:nth-child(1){transition-delay:0ms}
+.grade > .copia:nth-child(2){transition-delay:130ms}
+.grade > .copia:nth-child(3){transition-delay:260ms}
+
+/* foco visivel para quem navega por teclado */
+a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+  outline:2px solid var(--s1); outline-offset:3px; border-radius:6px}
+
+@media (prefers-reduced-motion: reduce){
+  #progresso{display:none}
+  section.aba.entra-dir, section.aba.entra-esq{animation:none}
+  .vis .cofre .arq, .vis .cofre-cx{animation:none}
+  .painel:hover{transform:none}
+  .pacote{display:none}
+  .fio{animation:none}
+}
+
+
+/* ==========================================================================
+   ATMOSFERA — profundidade sem lavar o texto.
+   A versao anterior usava tres manchas de cor forte em blur: bonito parado,
+   ilegivel atras de texto. Aqui a cor fica contida, e a sensacao de
+   profundidade vem de camadas fracas somadas: malha, particulas, vinheta.
+   ========================================================================== */
+.aurora{
+  position:fixed; inset:-20vh -20vw; z-index:0; pointer-events:none;
+  filter:blur(110px); opacity:.30;
+  -webkit-mask-image:radial-gradient(120% 90% at 50% 0%,#000 15%,transparent 72%);
+          mask-image:radial-gradient(120% 90% at 50% 0%,#000 15%,transparent 72%);
+}
+.aurora i:nth-child(1){width:40vw;height:40vw;left:-4%;top:-6%;background:#1e3a8a}
+.aurora i:nth-child(2){width:34vw;height:34vw;right:-2%;top:4%;background:#0e7490}
+.aurora i:nth-child(3){width:30vw;height:30vw;left:34%;top:24%;background:#4c1d95}
+
+/* malha tecnica que deriva devagar — da a sensacao de sistema, nao de poster */
+.malha{
+  position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+  background-image:
+    linear-gradient(rgba(74,147,232,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,147,232,.055) 1px, transparent 1px);
+  background-size:64px 64px;
+  -webkit-mask-image:radial-gradient(130% 100% at 50% 0%,#000 0%,transparent 68%);
+          mask-image:radial-gradient(130% 100% at 50% 0%,#000 0%,transparent 68%);
+  animation:deriva 58s linear infinite;
+}
+@keyframes deriva{ to{ background-position:64px 64px, 64px 64px } }
+
+/* varredura horizontal lenta, quase imperceptivel — o "pulso" do sistema */
+.varredura{
+  position:fixed; left:0; right:0; height:220px; z-index:0; pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(74,147,232,.055) 45%,transparent);
+  animation:varre 14s cubic-bezier(.5,0,.5,1) infinite; opacity:.85;
+}
+@keyframes varre{
+  0%{transform:translateY(-260px)} 100%{transform:translateY(105vh)}
+}
+
+/* particulas de dado subindo — poucas, lentas, sem chamar atencao */
+.particulas{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+.particulas b{
+  position:absolute; bottom:-12px; width:2px; height:2px; border-radius:50%;
+  background:var(--s1); opacity:0; box-shadow:0 0 8px rgba(74,147,232,.8);
+  animation:sobe linear infinite;
+}
+@keyframes sobe{
+  0%{transform:translateY(0) scale(1); opacity:0}
+  8%{opacity:.75}
+  85%{opacity:.5}
+  100%{transform:translateY(-104vh) scale(.6); opacity:0}
+}
+
+/* vinheta: fecha as bordas e devolve foco ao centro */
+.vinheta{
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:radial-gradient(130% 95% at 50% 12%, transparent 42%, rgba(4,6,11,.72) 100%);
+}
+
+/* a barra de abas ganha base solida — era ali que o roxo lavava a leitura */
+nav.abas{background:linear-gradient(180deg,rgba(9,12,18,.96),rgba(9,12,18,.92));
+  box-shadow:0 1px 0 rgba(74,147,232,.14), 0 14px 34px -22px rgba(0,0,0,.9)}
+
+/* cabecalho com contraste garantido por tras do texto */
+header.topo{position:relative}
+header.topo::before{
+  content:""; position:absolute; inset:-40px -50vw 0; z-index:-1;
+  background:radial-gradient(70% 120% at 22% 30%, rgba(4,7,13,.86), transparent 70%);
+}
+
+/* titulo com brilho proprio, discreto */
+header.topo h1 span{
+  background:linear-gradient(100deg,#7db9ff,#a78bfa 46%,#5eead4);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 22px rgba(124,158,255,.28));
+}
+
+/* linha viva no topo da pagina */
+#fio-topo{position:fixed; top:0; left:0; right:0; height:1px; z-index:59; pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(74,147,232,.55),rgba(167,139,250,.55),transparent);
+  background-size:220% 100%; animation:corre-fio 9s linear infinite}
+@keyframes corre-fio{ to{ background-position:220% 0 } }
+
+/* paineis com borda que reage — vidro escuro, nao cartao chapado */
+.painel{
+  background:
+    linear-gradient(180deg,rgba(22,28,42,.92),rgba(17,22,34,.94));
+  backdrop-filter:blur(2px);
+}
+.painel::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  padding:1px; background:linear-gradient(140deg,rgba(124,158,255,.30),transparent 42%,transparent 62%,rgba(94,234,212,.22));
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  opacity:0; transition:opacity .4s;
+}
+.painel:hover::after{opacity:1}
+
+@media (prefers-reduced-motion: reduce){
+  .malha,.varredura,#fio-topo{animation:none}
+  .particulas{display:none}
+  .varredura{display:none}
+}
+
+</style>
+</head>
+<body>
+<div class="vinheta" aria-hidden="true"></div>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="malha" aria-hidden="true"></div>
+<div class="varredura" aria-hidden="true"></div>
+<div class="particulas" aria-hidden="true" id="particulas"></div>
+<div id="fio-topo" aria-hidden="true"></div>
+
+<header class="topo">
+  <div class="faixa">
+    <span class="marca"><b></b> Nexventa · Documento de acompanhamento</span>
+    <h1>O que existe <span>por trás</span> do sistema que você usa.</h1>
+    <p class="chamada">
+      Você vê o sistema abrindo no navegador e a fatura chegando no fim do mês. Entre as duas
+      coisas há uma infraestrutura inteira que nunca apareceu para você. Esta página existe para
+      mudar isso.
+    </p>
+  </div>
+</header>
+
+<nav class="abas" aria-label="Seções do documento">
+  <div class="faixa" role="tablist">
+    <button role="tab" aria-selected="true"  data-aba="a1"><i>01</i>O que você tem hoje</button>
+    <button role="tab" aria-selected="false" data-aba="a2"><i>02</i>Monitoramento</button>
+    <button role="tab" aria-selected="false" data-aba="a3"><i>03</i>Quem entra no sistema</button>
+    <button role="tab" aria-selected="false" data-aba="a4"><i>04</i>Registros e diagnóstico</button>
+    <button role="tab" aria-selected="false" data-aba="a5"><i>05</i>Se algo cair</button>
+    <button role="tab" aria-selected="false" data-aba="a11"><i>06</i>O banco de dados</button>
+    <button role="tab" aria-selected="false" data-aba="a6"><i>07</i>Cópia de segurança</button>
+    <button role="tab" aria-selected="false" data-aba="a7"><i>08</i>Custo</button>
+    <button role="tab" aria-selected="false" data-aba="a13"><i>09</i>O que foi entregue</button>
+    <button role="tab" aria-selected="false" data-aba="a10"><i>10</i>Como usar o painel</button>
+    <button role="tab" aria-selected="false" data-aba="a12"><i>11</i>Manual de plantão</button>
+  </div>
+</nav>
+
+<main>
+<!-- ====================== ABA 1 — O QUE VOCÊ TEM HOJE ====================== -->
+<section class="aba ativa" id="a1">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 01</div>
+    <h2>O caminho que um formulário percorre.</h2>
+    <p>Do navegador de quem preenche até o lugar onde a resposta fica guardada, são cinco
+       paradas — e todas são nossas. Clique em qualquer uma para saber o que ela faz, o que
+       acontece se ela parar, e quanto tempo leva para voltar.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <svg viewBox="232 0 708 400" class="mapa" role="img"
+         aria-label="Diagrama: internet, servidor, banco de dados, cópia de segurança e monitoramento">
+      <defs>
+        <linearGradient id="gcaixa" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1b2333"/><stop offset="1" stop-color="#141a27"/>
+        </linearGradient>
+      </defs>
+
+      <!-- ligações -->
+      <g class="fios" fill="none" stroke-width="2" stroke-linecap="round">
+        <path class="fio" d="M420 96 H504"  stroke="#4a93e8"/>
+        <path class="fio" d="M652 96 H736"  stroke="#4a93e8"/>
+        <path class="fio" d="M578 138 V236" stroke="#1fa871"/>
+        <path class="fio" d="M504 96 H470 M470 96 V318 H470" stroke="#b8842a"/>
+      </g>
+
+      <!-- caixas -->
+      <g class="caixa" data-p="internet" tabindex="0" role="button" aria-label="Internet">
+        <rect x="272" y="62" width="148" height="68" rx="12" fill="url(#gcaixa)" stroke="#2e3d57"/>
+        <text x="346" y="92"  text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Internet</text>
+        <text x="346" y="112" text-anchor="middle" fill="#5f6f8a" font-size="11.5">endereço fixo</text>
+      </g>
+      <g class="caixa" data-p="servidor" tabindex="0" role="button" aria-label="Servidor">
+        <rect x="504" y="62" width="148" height="68" rx="12" fill="url(#gcaixa)" stroke="#4a93e8"/>
+        <text x="578" y="92"  text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Servidor</text>
+        <text x="578" y="112" text-anchor="middle" fill="#5f6f8a" font-size="11.5">roda o sistema</text>
+      </g>
+      <g class="caixa" data-p="banco" tabindex="0" role="button" aria-label="Banco de dados">
+        <rect x="736" y="62" width="164" height="68" rx="12" fill="url(#gcaixa)" stroke="#2e3d57"/>
+        <text x="818" y="92"  text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Banco de dados</text>
+        <text x="818" y="112" text-anchor="middle" fill="#5f6f8a" font-size="11.5">onde fica a resposta</text>
+      </g>
+      <g class="caixa" data-p="copia" tabindex="0" role="button" aria-label="Cópia de segurança">
+        <rect x="504" y="236" width="148" height="68" rx="12" fill="url(#gcaixa)" stroke="#1fa871"/>
+        <text x="578" y="266" text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Cópia</text>
+        <text x="578" y="286" text-anchor="middle" fill="#5f6f8a" font-size="11.5">todo dia, 3h30</text>
+      </g>
+      <g class="caixa" data-p="vigia" tabindex="0" role="button" aria-label="Monitoramento">
+        <rect x="300" y="284" width="170" height="68" rx="12" fill="url(#gcaixa)" stroke="#b8842a"/>
+        <text x="385" y="314" text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Monitoramento</text>
+        <text x="385" y="334" text-anchor="middle" fill="#5f6f8a" font-size="11.5">olha e avisa</text>
+      </g>
+
+      <text x="458" y="188" fill="#5f6f8a" font-size="11.5" text-anchor="end">vigia</text>
+      <text x="596" y="190" fill="#5f6f8a" font-size="11.5">guarda</text>
+    </svg>
+
+    <div id="detalhe-mapa" class="detalhe" aria-live="polite">
+      <p class="rotulo">Selecione uma parada acima</p>
+      <p style="margin:6px 0 0; color:var(--suave)">Cada uma tem um papel diferente — e uma
+         consequência diferente quando para.</p>
+    </div>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">A mudança principal</div>
+      <h3 style="margin:10px 0 10px; font-size:19px">O servidor virou descartável</h3>
+      <p style="color:var(--suave); margin:0; font-size:15px">
+        Até esta semana existia <em>um</em> servidor, montado à mão ao longo de meses. Se ele
+        se perdesse, alguém teria que remontar de memória. Hoje ele é descrito por uma receita:
+        se sumir, outro nasce igual, sozinho.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">O que não muda</div>
+      <h3 style="margin:10px 0 10px; font-size:19px">O endereço continua o mesmo</h3>
+      <p style="color:var(--suave); margin:0; font-size:15px">
+        O endereço do sistema não está preso à máquina — ele é transferido para a substituta.
+        Por isso ninguém precisa trocar link nem esperar propagação de nada: o mesmo endereço
+        continua respondendo.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Onde ficam as respostas</div>
+      <h3 style="margin:10px 0 10px; font-size:19px">O banco é separado do servidor</h3>
+      <p style="color:var(--suave); margin:0; font-size:15px">
+        As respostas dos formulários não moram na mesma máquina que roda o sistema. Trocar o
+        servidor não encosta nos dados — é a razão de a troca poder ser feita sem medo.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">Em uma frase</div>
+    <h3 style="margin:12px 0 12px; font-size:clamp(19px,2.6vw,26px); max-width:38ch">
+      Antes, perder a máquina era um problema de dias. Hoje é um problema de minutos —
+      e ninguém precisa estar acordado.
+    </h3>
+    <p style="color:var(--suave); max-width:66ch; margin:0">
+      É essa a diferença que a aba <strong>Se algo cair</strong> mostra passo a passo, com o
+      relógio correndo.
+    </p>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 2 — MONITORAMENTO ====================== -->
+<section class="aba" id="a2">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 02</div>
+    <h2>A diferença não é ter gráfico bonito. É a hora em que você fica sabendo.</h2>
+    <p>Todo sistema quebra alguma vez. O que separa um incidente pequeno de um problema grande
+       é quanto tempo ele fica acontecendo sem ninguém perceber.</p>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo nt">Antes</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Descobria-se que o formulário parou quando um cliente ligava reclamando</li>
+        <li>Não havia como saber quantas pessoas tentaram usar e não conseguiram</li>
+        <li>Erro aparecia só se alguém abrisse o servidor e procurasse</li>
+        <li>Tentativa de invasão por senha não deixava rastro nenhum</li>
+        <li>Impossível responder “o que aconteceu às 14h32 de ontem”</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">Depois</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Uma tela responde “está tudo bem?” em cinco segundos, sem rolar</li>
+        <li>Aberturas e envios de formulário são contados <strong>separadamente</strong></li>
+        <li>Todo erro fica registrado, com a hora e o ponto exato do sistema</li>
+        <li>Tentativas de login recusadas viram número acompanhável</li>
+        <li>Cada requisição tem um código próprio, e dá para seguir ela inteira</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">A ideia mais importante</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Dois números que, juntos, dizem se o formulário quebrou.</h2>
+    <p>Contamos separadamente quantas pessoas <strong>abriram</strong> o formulário e quantas
+       conseguiram <strong>enviar</strong>. Sozinho, nenhum dos dois conta a história. Juntos,
+       contam. Escolha um cenário:</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="cenarios" role="group" aria-label="Cenários de exemplo">
+      <button class="cen ativo" data-cen="normal">Dia normal</button>
+      <button class="cen" data-cen="quebrado">Formulário quebrado</button>
+      <button class="cen" data-cen="vazio">Ninguém acessou</button>
+    </div>
+
+    <div class="grade g2" style="margin-top:22px; align-items:end">
+      <div>
+        <div class="rotulo"><span class="ponto" style="background:var(--s1)"></span> Abriram o formulário</div>
+        <div class="numerao" id="n-abriu" style="color:var(--s1)">0</div>
+        <div class="barra"><i id="b-abriu" style="background:var(--s1)"></i></div>
+      </div>
+      <div>
+        <div class="rotulo"><span class="ponto" style="background:var(--s2)"></span> Conseguiram enviar</div>
+        <div class="numerao" id="n-enviou" style="color:var(--s2)">0</div>
+        <div class="barra"><i id="b-enviou" style="background:var(--s2)"></i></div>
+      </div>
+    </div>
+
+    <div class="nota" id="cen-texto" style="margin-top:22px">
+      <strong>Tudo certo.</strong> As duas barras crescem juntas, em proporção estável.
+      Quem abre, consegue enviar.
+    </div>
+
+    <p style="color:var(--fraco); font-size:14px; margin:16px 0 0">
+      Repare no que acontece nos outros dois cenários: se contássemos apenas os envios,
+      <em>quebrado</em> e <em>ninguém acessou</em> apareceriam <strong>exatamente iguais</strong> —
+      os dois em zero. São situações completamente diferentes. Uma exige correr; a outra é só um
+      dia devagar.
+    </p>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <div class="rotulo">Exemplo · Aberturas e envios por hora</div>
+      <h3 style="margin:10px 0 4px; font-size:18px">O formato normal de um dia de evento</h3>
+      <p style="color:var(--fraco); font-size:13.5px; margin:0 0 14px">
+        Números ilustrativos, para mostrar o formato do gráfico — não são os seus dados.
+      </p>
+      <div class="legenda">
+        <span><i style="background:var(--s1)"></i> Abriram</span>
+        <span><i style="background:var(--s2)"></i> Enviaram</span>
+      </div>
+      <svg viewBox="0 0 560 220" class="grafico" role="img" aria-label="Gráfico de barras: aberturas e envios por hora, das 8h às 19h">
+        <g stroke="#233046" stroke-width="1">
+          <line x1="40" y1="180" x2="548" y2="180"/>
+          <line x1="40" y1="120" x2="548" y2="120" opacity=".5"/>
+          <line x1="40" y1="60"  x2="548" y2="60"  opacity=".5"/>
+        </g>
+        <g fill="#5f6f8a" font-size="10.5" text-anchor="end">
+          <text x="34" y="184">0</text><text x="34" y="124">30</text><text x="34" y="64">60</text>
+        </g>
+        <g class="barras"></g>
+        <g class="rotulos" fill="#5f6f8a" font-size="10" text-anchor="middle"></g>
+      </svg>
+    </div>
+
+    <div class="painel revela">
+      <div class="rotulo">Exemplo · Requisições que falharam</div>
+      <h3 style="margin:10px 0 4px; font-size:18px">Taxa de erro</h3>
+      <p style="color:var(--fraco); font-size:13.5px; margin:0 0 6px">
+        O alerta dispara acima de 5% sustentados por cinco minutos.
+      </p>
+      <svg viewBox="0 0 300 190" class="grafico medidor" role="img" aria-label="Medidor de taxa de erro em 0,4 por cento, faixa saudável">
+        <path d="M40 160 A110 110 0 0 1 260 160" fill="none" stroke="#233046" stroke-width="16" stroke-linecap="round"/>
+        <path d="M40 160 A110 110 0 0 1 260 160" fill="none" stroke="#1fa871" stroke-width="16"
+              stroke-linecap="round" class="arco" pathLength="100"/>
+        <text x="150" y="140" text-anchor="middle" fill="#e6ecf5" font-size="38" font-weight="700"
+              class="mono" id="v-erro">0,0%</text>
+        <text x="150" y="168" text-anchor="middle" fill="#5f6f8a" font-size="11.5">nas últimas 24 horas</text>
+        <text x="40"  y="182" text-anchor="middle" fill="#5f6f8a" font-size="10">0%</text>
+        <text x="260" y="182" text-anchor="middle" fill="#5f6f8a" font-size="10">10%</text>
+      </svg>
+      <div class="nota" style="margin-top:4px; font-size:14px">
+        <span class="selo bom">Saudável</span>
+        <span style="margin-left:8px">Bem abaixo do limite que dispara aviso.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="rotulo">Exemplo · Disponibilidade nos últimos 30 dias</div>
+    <h3 style="margin:10px 0 4px; font-size:18px">Cada quadrado é um dia</h3>
+    <p style="color:var(--fraco); font-size:13.5px; margin:0 0 16px">
+      Verde é um dia inteiro no ar. O quadrado em âmbar marca a janela de manutenção da virada —
+      minutos de indisponibilidade, de madrugada, planejados.
+    </p>
+    <div class="tiras" id="tiras" aria-label="Trinta dias, um quadrado por dia"></div>
+    <div class="legenda" style="margin-top:14px">
+      <span><i style="background:var(--s3)"></i> Dia completo no ar</span>
+      <span><i style="background:var(--s2)"></i> Manutenção planejada</span>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Aviso automático</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">O painel serve para quem está olhando. O alerta serve para quem não está.</h2>
+    <p>Oito situações são vigiadas o tempo todo. Quando uma delas acontece, chega um e-mail —
+       sem ninguém precisar abrir nada.</p>
+  </div>
+
+  <div class="painel bl revela" style="padding:0; overflow:hidden">
+    <table>
+      <thead><tr><th>O que é vigiado</th><th>Quando avisa</th><th>Gravidade</th></tr></thead>
+      <tbody>
+        <tr><td>Sistema fora do ar</td><td>Parou de responder por 2 minutos</td><td><span class="selo gr">Crítico</span></td></tr>
+        <tr><td>Erros no sistema</td><td>Mais de 5% das requisições falhando por 5 minutos</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Lentidão</td><td>Respostas acima de 3 segundos por 10 minutos</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Memória perto do limite</td><td>Acima de 85% por 10 minutos</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Banco de dados congestionado</td><td>Requisições na fila por 5 minutos</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Tentativa de invasão</td><td>Mais de 20 logins recusados em 5 minutos</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Erro registrado no log</td><td>Assim que acontece</td><td><span class="selo at">Alto</span></td></tr>
+        <tr><td>Ninguém consegue enviar formulário</td><td>Duas horas sem envio, em horário comercial</td><td><span class="selo nt">Médio</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <h3 style="margin:0 0 10px; font-size:18px">Por que a insistência muda com a gravidade</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Crítico repete a cada hora até resolver. Alto, a cada quatro. Médio, uma vez por dia.
+        Alerta que insiste sem parar vira alerta ignorado — e alerta ignorado é o mesmo que
+        alerta inexistente, só que com a sensação falsa de estar coberto.
+      </p>
+    </div>
+    <div class="painel revela">
+      <h3 style="margin:0 0 10px; font-size:18px">Por que ele fica quieto de madrugada</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        O aviso de “ninguém está enviando formulário” só faz sentido em horário comercial. Fora
+        dele, e nos fins de semana, silêncio é o esperado. Sem essa janela, ele tocaria toda
+        madrugada e seria desligado na primeira semana.
+      </p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">O que o monitoramento garante</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Três garantias que o sistema não tinha antes.</h2>
+    <p>Não é só painel bonito: cada uma destas passou a ser verificada de forma automática, todo
+       dia, sem depender de alguém lembrar.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <span class="selo bom">Garantido</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">A cópia de segurança é aberta e conferida</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Não basta o arquivo existir e ter tamanho maior que zero. A verificação exige que a cópia
+        <strong>abra e tenha conteúdo de verdade</strong> — e o aviso sai no mesmo dia se algum
+        dia isso deixar de acontecer.
+      </p>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">Garantido</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">O sistema se recusa a subir inseguro</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Se faltar a chave de segurança correta, ele <strong>não inicia</strong> — em vez de subir
+        com uma configuração de exemplo e aparentar normalidade. É melhor não subir do que subir
+        inseguro, e essa escolha está no código.
+      </p>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">Garantido</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">O disco não enche sozinho</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        O que o sistema escreve em registro é controlado e tem limite de retenção. Quanto mais o
+        sistema for usado, mais dado ele guarda — sem que isso vire risco de espaço em disco.
+      </p>
+    </div>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 3 — QUEM ENTRA NO SISTEMA ====================== -->
+<section class="aba" id="a3">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 03</div>
+    <h2>Quem consegue entrar, no que consegue mexer, e onde ficam as senhas.</h2>
+    <p>É o assunto mais sensível do sistema e o menos explicado. Aqui está quem entra, o que
+       cada tipo de usuário alcança, e onde as senhas do sistema passaram a ficar guardadas.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">Passo 1</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">A pessoa entra com e-mail e senha</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        A senha nunca é guardada como texto. O que fica salvo é um embaralhamento que não tem
+        volta — nem quem administra o sistema consegue ler a senha de alguém.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Passo 2</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">O sistema devolve um crachá temporário</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        A cada requisição seguinte, é esse crachá que é apresentado — não a senha. Ele vence
+        sozinho, o que limita o estrago se alguém copiar.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Passo 3</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">Cada tentativa recusada vira número</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Mais de vinte recusas em cinco minutos disparam aviso. É assim que uma tentativa de
+        invasão por tentativa e erro deixa de ser invisível.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela" style="padding:0; overflow:hidden">
+    <div style="padding:24px 26px 0">
+      <div class="olho">Papéis</div>
+      <h3 style="margin:10px 0 6px; font-size:19px">O que cada tipo de usuário alcança</h3>
+      <p style="color:var(--fraco); font-size:14px; margin:0 0 6px">
+        Ninguém recebe mais acesso do que precisa para o trabalho dele.
+      </p>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Pode…</th><th>Administrador</th><th>Equipe</th><th>Participante</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Preencher um formulário</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo bom">Sim</span></td><td><span class="selo bom">Sim</span></td></tr>
+        <tr><td>Ver as respostas enviadas</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo bom">Sim</span></td><td><span class="selo nt">Não</span></td></tr>
+        <tr><td>Criar e editar formulários</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo bom">Sim</span></td><td><span class="selo nt">Não</span></td></tr>
+        <tr><td>Cadastrar clientes</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo nt">Não</span></td><td><span class="selo nt">Não</span></td></tr>
+        <tr><td>Criar e desligar usuários</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo nt">Não</span></td><td><span class="selo nt">Não</span></td></tr>
+        <tr><td>Exportar planilha de respostas</td>
+            <td><span class="selo bom">Sim</span></td><td><span class="selo bom">Sim</span></td><td><span class="selo nt">Não</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">As senhas do sistema</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Antes elas moravam dentro do servidor. Hoje moram num cofre.</h2>
+    <p>São as senhas que o <em>sistema</em> usa para falar com o banco de dados e com os serviços —
+       não as senhas das pessoas. A diferença entre os dois lugares é maior do que parece.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="cofre">
+      <div class="lado">
+        <span class="selo nt">Antes</span>
+        <div class="maquina">
+          <div class="rotulo" style="margin-bottom:10px">Servidor</div>
+          <div class="arq" id="arq-antes">arquivo de senhas</div>
+          <p style="color:var(--fraco); font-size:13px; margin:12px 0 0">
+            Existia em <strong>um lugar só no mundo</strong>. Perder a máquina era perder as
+            senhas — e recuperá-las virava exercício de memória.
+          </p>
+        </div>
+      </div>
+      <div class="seta" aria-hidden="true">
+        <svg viewBox="0 0 80 24" width="80" height="24"><path d="M2 12 H70" stroke="#4a93e8" stroke-width="2" fill="none" class="fio"/><path d="M64 6 L74 12 L64 18" fill="none" stroke="#4a93e8" stroke-width="2"/></svg>
+      </div>
+      <div class="lado">
+        <span class="selo bom">Hoje</span>
+        <div class="maquina cofre-cx">
+          <div class="rotulo" style="margin-bottom:10px">Cofre da AWS</div>
+          <div class="arq guardado">senhas guardadas e cifradas</div>
+          <p style="color:var(--fraco); font-size:13px; margin:12px 0 0">
+            O servidor busca a senha no cofre quando precisa. Máquina nova nasce sabendo onde
+            procurar — e nenhuma senha precisa ser digitada por ninguém.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="nota" style="margin-top:20px">
+      <strong>Por que isso muda o risco.</strong> Senha em arquivo dentro do servidor vaza junto
+      com qualquer cópia da máquina, aparece em anexo de e-mail e sobrevive esquecida em backups
+      antigos. No cofre, ela tem dono, tem registro de quem leu, e pode ser trocada sem mexer no
+      sistema.
+    </div>
+  </div>
+
+
+ </div>
+</section>
+
+<!-- ====================== ABA 4 — REGISTROS E DIAGNÓSTICO ====================== -->
+<section class="aba" id="a4">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 04</div>
+    <h2>Cada ação deixa uma linha. É ela que transforma “deu erro” em “sei o que aconteceu”.</h2>
+    <p>Clique em qualquer pedaço da linha abaixo para ver para que ele serve.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="linha-log mono" id="linha-log">
+      <span>{</span>
+      <span class="cmp" data-c="ts"><b>"@timestamp"</b>: <em>"2026-08-03T13:03:12.135Z"</em></span>,
+      <span class="cmp" data-c="nivel"><b>"nivel"</b>: <em>"INFO"</em></span>,
+      <span class="cmp" data-c="origem"><b>"origem"</b>: <em>"acesso"</em></span>,
+      <span class="cmp" data-c="msg"><b>"mensagem"</b>: <em>"POST /agendamentos → 200 em 135 ms"</em></span>,
+      <span class="cmp" data-c="rota"><b>"rota"</b>: <em>"/agendamentos"</em></span>,
+      <span class="cmp" data-c="status"><b>"status"</b>: <em>200</em></span>,
+      <span class="cmp" data-c="dur"><b>"duracaoMs"</b>: <em>135</em></span>,
+      <span class="cmp" data-c="req"><b>"codigo"</b>: <em>"a5f01364"</em></span>
+      <span>}</span>
+    </div>
+    <div id="detalhe-log" class="detalhe" aria-live="polite">
+      <p class="rotulo">Clique em qualquer campo acima</p>
+      <p style="margin:6px 0 0; color:var(--suave)">Os dois mais úteis no dia a dia são o
+        <strong>código</strong> e a <strong>duração</strong>.</p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Na prática</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Um cliente liga dizendo que deu erro.</h2>
+    <p>Esse era o cenário mais frustrante: sem saber a hora exata nem o que a pessoa estava
+       fazendo, procurar a causa era garimpo. Experimente — digite um dos códigos de exemplo:</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="busca">
+      <input id="cod" class="mono" placeholder="digite um código, ex.: a5f01364" aria-label="Código do erro" autocomplete="off">
+      <button id="btn-busca">Procurar</button>
+    </div>
+    <div class="atalhos">
+      <button class="chip" data-cod="a5f01364">a5f01364</button>
+      <button class="chip" data-cod="7c2e91b0">7c2e91b0</button>
+      <button class="chip" data-cod="e14d0a55">e14d0a55</button>
+    </div>
+    <div id="resultado" class="resultado" aria-live="polite">
+      <p style="color:var(--fraco); margin:0">O resultado aparece aqui — é exatamente o que a
+        equipe vê ao investigar.</p>
+    </div>
+    <p style="color:var(--fraco); font-size:13.5px; margin:16px 0 0">
+      Registros de exemplo, para demonstrar o fluxo. Na ferramenta real, uma única busca traz
+      todas as linhas daquela requisição, na ordem em que aconteceram, com sete dias de histórico.
+    </p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="numerao conta" data-num="10" style="color:var(--s1)">0</div>
+      <div class="rotulo" style="margin-top:6px">tipos de registro que o sistema escreve</div>
+      <p style="color:var(--suave); font-size:14.5px; margin:12px 0 0">
+        Três de informação, seis de atenção, um de falha. Saber diferenciar é o que evita tanto
+        o alarme falso quanto o alarme ignorado.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao conta" data-num="7" style="color:var(--s3)">0</div>
+      <div class="rotulo" style="margin-top:6px">dias de histórico pesquisável</div>
+      <p style="color:var(--suave); font-size:14.5px; margin:12px 0 0">
+        Por qualquer palavra: nome de rota, código de requisição, nome de usuário ou trecho da
+        mensagem.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao" style="color:var(--s2)">30s</div>
+      <div class="rotulo" style="margin-top:6px">entre uma atualização e outra</div>
+      <p style="color:var(--suave); font-size:14.5px; margin:12px 0 0">
+        Os painéis se atualizam sozinhos. Não é preciso recarregar nada para ver o estado de agora.
+      </p>
+    </div>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 5 — SE ALGO CAIR ====================== -->
+<section class="aba" id="a5">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 05</div>
+    <h2>O servidor pode morrer às três da manhã. Ninguém precisa acordar.</h2>
+    <p>Esta é a mudança que justifica a fase inteira. Aperte <strong>Simular</strong> e acompanhe
+       o relógio: à esquerda, como era até esta semana; à direita, como é agora.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="controles">
+      <button id="btn-sim" class="acao">▶ Simular a queda</button>
+      <button id="btn-reset" class="acao secundaria">Reiniciar</button>
+      <span id="relogio" class="mono relogio">00:00</span>
+    </div>
+    <div id="avanco" aria-hidden="true"><i></i></div>
+
+    <div class="grade g2" style="margin-top:24px">
+      <div class="coluna" id="col-antes">
+        <div class="col-topo"><span class="selo nt">Antes</span><span class="col-tit">Servidor montado à mão</span></div>
+        <ol class="passos" id="passos-antes">
+          <li data-t="0"><b>0 min</b><span>O sistema para de responder</span></li>
+          <li data-t="1"><b>?</b><span>Ninguém percebe — não havia aviso</span></li>
+          <li data-t="2"><b>?</b><span>Alguém liga reclamando</span></li>
+          <li data-t="3"><b>?</b><span>Alguém precisa estar acordado e disponível</span></li>
+          <li data-t="4"><b>?</b><span>Entrar na máquina e reconstruir na mão</span></li>
+          <li data-t="5" class="ruim"><b>horas</b><span>De volta — se a pessoa souber cada passo de cor</span></li>
+        </ol>
+      </div>
+
+      <div class="coluna" id="col-depois">
+        <div class="col-topo"><span class="selo bom">Hoje</span><span class="col-tit">Servidor descartável</span></div>
+        <ol class="passos" id="passos-depois">
+          <li data-t="0"><b>0 min</b><span>O sistema para de responder</span></li>
+          <li data-t="1"><b>2 min</b><span>A AWS percebe sozinha</span></li>
+          <li data-t="2"><b>3 min</b><span>Máquina descartada, substituta sendo criada</span></li>
+          <li data-t="3"><b>5 min</b><span>A receita roda: programas, senhas, certificado, sistema</span></li>
+          <li data-t="4"><b>6 min</b><span>Ela assume o mesmo endereço de antes</span></li>
+          <li data-t="5" class="bom"><b>7 min</b><span>No ar de novo. Ninguém foi acordado.</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">O que a substituta faz sozinha</div>
+      <ul style="color:var(--suave); font-size:14.5px; margin:12px 0 0; padding-left:18px">
+        <li>Assume o endereço da anterior</li>
+        <li>Instala tudo que precisa</li>
+        <li>Busca as senhas no cofre</li>
+        <li>Emite o certificado de segurança</li>
+        <li>Sobe o sistema e o monitoramento</li>
+        <li>Agenda a cópia de segurança</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">O que ela não precisa</div>
+      <ul style="color:var(--suave); font-size:14.5px; margin:12px 0 0; padding-left:18px">
+        <li>Ninguém digitando comando</li>
+        <li>Ninguém lembrando de um passo</li>
+        <li>Ninguém acordado</li>
+        <li>Nenhuma anotação guardada em outro lugar</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">O que continua igual</div>
+      <ul style="color:var(--suave); font-size:14.5px; margin:12px 0 0; padding-left:18px">
+        <li>O endereço do sistema</li>
+        <li>As respostas já enviadas</li>
+        <li>Os usuários e as senhas deles</li>
+        <li>O link que já foi divulgado</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Como isso foi testado</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">A máquina foi destruída oito vezes de propósito, numa noite.</h2>
+    <p>Prometer que “volta sozinho” é fácil. Nós derrubamos e deixamos nascer de novo, oito
+       vezes seguidas, até nascer certa sem ninguém tocar em nada.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="grade g2" style="align-items:center">
+      <div>
+        <div class="numerao conta" data-num="25" style="color:var(--s3)">0</div>
+        <div class="rotulo" style="margin-top:6px">ajustes incorporados à receita</div>
+        <p style="color:var(--suave); font-size:15px; margin:14px 0 0">
+          Cada nascimento da máquina revelou um detalhe que o servidor antigo só tinha porque
+          alguém fez à mão, um dia, sem anotar. Todos foram <strong>escritos na receita</strong> —
+          e por isso a máquina seguinte já nasce com eles.
+        </p>
+      </div>
+      <div>
+        <div class="lista-defeitos">
+          <div><span class="selo bom">Na receita</span> A cópia de segurança roda às 3h30 com a ferramenta certa instalada</div>
+          <div><span class="selo bom">Na receita</span> Nenhuma senha aparece em texto em registro nenhum</div>
+          <div><span class="selo bom">Na receita</span> O certificado de segurança é emitido já no nascimento da máquina</div>
+          <div><span class="selo bom">Na receita</span> O monitoramento sobe junto com o sistema, sem passo manual</div>
+          <div><span class="selo bom">Na receita</span> A renovação do certificado fica agendada sozinha</div>
+          <div><span class="selo nt">E mais 20</span> cada um provado no ensaio e documentado
+        </div>
+      </div>
+    </div>
+    <div class="nota" style="margin-top:22px">
+      <strong>O padrão por trás dos 25.</strong> Uma máquina montada à mão acumula, ao longo dos
+      meses, coisas que nunca chegaram a ser escritas em lugar nenhum: uma pasta criada num plantão, uma linha de agendamento,
+      um arquivo de senha, um certificado emitido uma vez. A máquina nova não herda nada disso —
+      e cada ausência só aparece <em>quando a função é usada</em>. Por isso a cópia de segurança
+      só falha às 3h30, e o certificado só falha ao renovar.
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">O ganho, em uma linha</div>
+    <h3 style="margin:12px 0 12px; font-size:clamp(19px,2.6vw,26px); max-width:40ch">
+      O tempo para voltar deixou de depender de alguém estar disponível.
+    </h3>
+    <p style="color:var(--suave); max-width:66ch; margin:0">
+      Não é que o sistema quebre menos. É que quebrar deixou de ser um evento que consome uma
+      noite de trabalho e uma manhã de explicações.
+    </p>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA — O BANCO DE DADOS ====================== -->
+<section class="aba" id="a11">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 06</div>
+    <h2>A troca do banco de dados, sem tirar o sistema do ar.</h2>
+    <p>O banco onde as respostas ficam guardadas foi atualizado para uma versão nova, com o
+       sistema funcionando o tempo todo. Foi uma operação <strong>planejada com cuidado</strong>:
+       ensaiada antes, executada em janela combinada e conferida passo a passo. Ela exigiu ajustes
+       ao longo do caminho — e todos foram feitos.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">Por que mexer</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">A versão antiga saiu de suporte</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Quando uma versão de banco sai do suporte padrão, a AWS passa a cobrar <strong>suporte
+        estendido</strong> — uma taxa mensal só para continuar rodando o que já rodava. Além do
+        custo, correções de segurança deixam de chegar no mesmo ritmo.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Para onde foi</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">Versão de suporte longo</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        A escolhida tem ciclo de vida estendido — significa vários anos sem precisar repetir esta
+        operação. Trocar de versão é a manutenção que ninguém vê e todo mundo adia.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">O que mudou para você</div>
+      <h3 style="margin:10px 0 8px; font-size:17px">Nada</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Mesmo endereço, mesmas respostas, mesmos usuários. Uma migração de banco bem feita é
+        invisível — e essa é exatamente a dificuldade dela.
+      </p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Como a troca funciona</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Constrói-se um banco novo ao lado, sincronizado ao vivo.</h2>
+    <p>É a técnica chamada <em>azul e verde</em>: o azul é o que está em produção, o verde é a
+       cópia atualizada. Aperte para ver a sequência.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="controles">
+      <button id="btn-bg" class="acao">▶ Ver a troca</button>
+      <button id="btn-bg-reset" class="acao secundaria">Reiniciar</button>
+      <span id="bg-fase" class="mono relogio" style="font-size:15px; letter-spacing:.04em">pronto</span>
+    </div>
+
+    <svg viewBox="0 0 900 300" class="grafico bg-svg" style="margin-top:22px" role="img"
+         aria-label="Diagrama da troca azul e verde do banco de dados">
+      <!-- aplicacao -->
+      <g id="bg-app">
+        <rect x="366" y="16" width="168" height="56" rx="12" fill="#1b2333" stroke="#2e3d57"/>
+        <text x="450" y="40" text-anchor="middle" fill="#e6ecf5" font-size="13.5" font-weight="600">O sistema</text>
+        <text x="450" y="58" text-anchor="middle" fill="#5f6f8a" font-size="11">e as pessoas usando</text>
+      </g>
+
+      <!-- ligacoes da aplicacao -->
+      <path id="lig-azul"  d="M420 72 V132 H262" stroke="#4a93e8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path id="lig-verde" d="M480 72 V132 H638" stroke="#1fa871" stroke-width="2.5" fill="none"
+            stroke-linecap="round" opacity="0" stroke-dasharray="6 6"/>
+
+      <!-- banco azul -->
+      <g id="bg-azul">
+        <rect x="80" y="132" width="200" height="86" rx="14" fill="#151d2c" stroke="#4a93e8" stroke-width="2"/>
+        <text x="180" y="164" text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Banco atual</text>
+        <text x="180" y="184" text-anchor="middle" fill="#4a93e8" font-size="11.5" id="rot-azul">versão antiga · em uso</text>
+        <text x="180" y="204" text-anchor="middle" fill="#5f6f8a" font-size="11" id="est-azul">recebendo tudo</text>
+      </g>
+
+      <!-- banco verde -->
+      <g id="bg-verde" opacity=".25">
+        <rect x="620" y="132" width="200" height="86" rx="14" fill="#151d2c" stroke="#1fa871" stroke-width="2"/>
+        <text x="720" y="164" text-anchor="middle" fill="#e6ecf5" font-size="14" font-weight="600">Cópia nova</text>
+        <text x="720" y="184" text-anchor="middle" fill="#1fa871" font-size="11.5" id="rot-verde">versão nova</text>
+        <text x="720" y="204" text-anchor="middle" fill="#5f6f8a" font-size="11" id="est-verde">aguardando</text>
+      </g>
+
+      <!-- sincronismo -->
+      <path id="lig-sync" d="M280 175 H620" stroke="#b8842a" stroke-width="2" fill="none"
+            stroke-dasharray="8 8" opacity="0"/>
+      <text x="450" y="166" text-anchor="middle" fill="#b8842a" font-size="11.5" id="rot-sync" opacity="0">
+        copiando tudo, ao vivo
+      </text>
+
+      <!-- legenda de fase -->
+      <text x="450" y="266" text-anchor="middle" fill="#5f6f8a" font-size="13" id="bg-legenda">
+        Antes de começar: um banco só, com o sistema conectado nele.
+      </text>
+    </svg>
+  </div>
+
+  <div class="grade g4 bl">
+    <div class="painel revela">
+      <div class="numerao" style="font-size:30px; color:var(--s1)">0</div>
+      <div class="rotulo" style="margin-top:4px">paradas programadas</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">a operação inteira foi ensaiada antes de encostar em produção</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao conta" data-num="62" style="font-size:30px; color:var(--s3)">0</div>
+      <div class="rotulo" style="margin-top:4px">migrações conferidas depois</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">a contagem bater é o que prova que nada ficou para trás</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao" style="font-size:30px; color:var(--s3)">0</div>
+      <div class="rotulo" style="margin-top:4px">respostas perdidas</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">a cópia acompanha o original até o instante da troca</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao conta" data-num="7" style="font-size:30px; color:var(--s2)">0</div>
+      <div class="rotulo" style="margin-top:4px">dias de cópia automática</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">além das três cópias diárias, o próprio banco guarda uma semana</p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">O que quase passou batido</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">A troca deu certo. E o sistema continuou falando com o banco anterior.</h2>
+    <p>Esta é a parte que merece ser lida com calma. É também a razão de a operação ter sido
+       conduzida em etapas conferidas uma a uma, em vez de num único movimento.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <ol class="cronologia">
+      <li>
+        <div class="hora">Passo 1</div>
+        <div>
+          <h4>A troca acontece</h4>
+          <p>A AWS renomeia os dois bancos: a cópia nova assume o nome do original, e o original
+             vira “antigo” e passa a ficar <strong>somente leitura</strong>.</p>
+        </div>
+      </li>
+      <li>
+        <div class="hora">Passo 2</div>
+        <div>
+          <h4>O sistema não percebe a troca</h4>
+          <p>Ele já tinha o endereço do banco antigo guardado na memória, e conexões já abertas.
+             Continuou conversando com o banco <strong>abandonado</strong>, que respondia
+             perfeitamente — porque é uma cópia idêntica do original.</p>
+        </div>
+      </li>
+      <li>
+        <div class="hora">Passo 3</div>
+        <div>
+          <h4>A validação disse que estava tudo certo</h4>
+          <p>A conferência foi feita perguntando a versão do banco por outra ferramenta — um
+             programa recém-aberto, que consultou o endereço na hora e acertou o banco novo.
+             <strong>Os dois responderam “tudo bem” sobre servidores diferentes.</strong></p>
+        </div>
+      </li>
+      <li>
+        <div class="hora">Passo 4</div>
+        <div>
+          <h4>Vinte minutos depois, alguém tentou cadastrar um cliente</h4>
+          <p>E só então o erro apareceu: o banco recusou a gravação, porque estava em modo somente
+             leitura. Login funcionava. Listas funcionavam. Painéis funcionavam. <strong>Tudo que
+             era leitura funcionava.</strong></p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="nota gr" style="margin-top:20px">
+      <strong>Por que isso é difícil de enxergar.</strong> Um banco abandonado logo após a troca é
+      uma fotografia perfeita da produção. Nenhum teste de leitura consegue distinguir os dois. O
+      sistema fica de pé, verde, respondendo certo — e silenciosamente incapaz de gravar
+      qualquer coisa nova.
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">A regra que nasceu daí</div>
+    <h3 style="margin:12px 0 14px; font-size:clamp(20px,2.8vw,28px); max-width:40ch">
+      Depois de qualquer troca: validar com uma <em>escrita</em>. Nunca com uma leitura.
+    </h3>
+    <p style="color:var(--suave); max-width:68ch; margin:0 0 12px">
+      Leitura pode vir de cache, de uma réplica, ou — como aconteceu aqui — do servidor errado.
+      Só a escrita percorre o caminho inteiro e exige que cada peça esteja no lugar certo.
+    </p>
+    <p style="color:var(--suave); max-width:68ch; margin:0">
+      Foi por causa desta lição que a troca de servidor, dias depois, só foi declarada bem-sucedida
+      <strong>depois de criar um formulário, enviar uma imagem e conferir a página pública</strong> —
+      e não depois de o site responder.
+    </p>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo bom">O que ficou melhor</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Versão com suporte por vários anos</li>
+        <li>Fim da cobrança de suporte estendido — a versão já foi atualizada</li>
+        <li>Correções de segurança voltando ao ritmo normal</li>
+        <li>Uma lição de validação que já evitou um segundo erro do mesmo tipo</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <span class="selo nt">O que aprendemos a fazer diferente</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Ensaiar a troca inteira antes, cronometrando</li>
+        <li>Recriar a aplicação logo após a troca, para forçar conexões novas</li>
+        <li>Validar com uma gravação de verdade</li>
+        <li>Registrar por escrito o que foi aprendido, para quem repetir a operação depois</li>
+      </ul>
+    </div>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 6 — CÓPIA DE SEGURANÇA ====================== -->
+<section class="aba" id="a6">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 07</div>
+    <h2>E se a máquina pegar fogo?</h2>
+    <p>A pergunta parece exagerada, mas é exatamente a que a cópia de segurança existe para
+       responder. Hoje a resposta é: as respostas dos seus formulários continuam existindo em
+       outros dois lugares.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela copia" data-i="1">
+      <div class="badge-num">1</div>
+      <h3 style="margin:14px 0 8px; font-size:18px">No disco da máquina</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0 0 12px">
+        Uma cópia por dia, às 3h30. É a mais rápida de usar — e a que some junto se a máquina
+        se perder.
+      </p>
+      <span class="selo bom">Funcionando</span>
+    </div>
+    <div class="painel revela copia" data-i="2">
+      <div class="badge-num">2</div>
+      <h3 style="margin:14px 0 8px; font-size:18px">No seu e-mail, todo dia</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0 0 12px">
+        A mesma cópia chega anexada, todos os dias. É a única que fica fora da AWS — se a conta
+        inteira sumisse, ela ainda estaria na sua caixa de entrada.
+      </p>
+      <span class="selo bom">Funcionando</span>
+    </div>
+    <div class="painel revela copia" data-i="3">
+      <div class="badge-num">3</div>
+      <h3 style="margin:14px 0 8px; font-size:18px">No cofre de arquivos da AWS</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0 0 12px">
+        Guardada fora da máquina, com histórico. É de lá que sai a restauração quando o problema
+        é grande.
+      </p>
+      <span class="selo bom">Funcionando</span>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="rotulo">Como funciona todo dia, às 3h30</div>
+    <svg viewBox="0 0 900 150" class="grafico" role="img" aria-label="Fluxo: banco de dados gera cópia, que vai para disco, e-mail e cofre">
+      <g class="fios" fill="none" stroke-width="2" stroke-linecap="round">
+        <path class="fio" d="M196 75 H262" stroke="#1fa871"/>
+        <path class="fio" d="M420 75 H500" stroke="#1fa871"/>
+        <path class="fio" d="M420 75 H460 M460 75 V28 H500" stroke="#1fa871"/>
+        <path class="fio" d="M420 75 H460 M460 75 V122 H500" stroke="#1fa871"/>
+      </g>
+      <g>
+        <rect x="40" y="48" width="156" height="54" rx="11" fill="#1b2333" stroke="#2e3d57"/>
+        <text x="118" y="72" text-anchor="middle" fill="#e6ecf5" font-size="13" font-weight="600">Banco de dados</text>
+        <text x="118" y="90" text-anchor="middle" fill="#5f6f8a" font-size="11">as respostas</text>
+
+        <rect x="262" y="48" width="158" height="54" rx="11" fill="#1b2333" stroke="#1fa871"/>
+        <text x="341" y="72" text-anchor="middle" fill="#e6ecf5" font-size="13" font-weight="600">Cópia compactada</text>
+        <text x="341" y="90" text-anchor="middle" fill="#5f6f8a" font-size="11">verificada por dentro</text>
+
+        <rect x="500" y="4"  width="150" height="46" rx="10" fill="#1b2333" stroke="#2e3d57"/>
+        <text x="575" y="32" text-anchor="middle" fill="#e6ecf5" font-size="12.5">Disco da máquina</text>
+        <rect x="500" y="52" width="150" height="46" rx="10" fill="#1b2333" stroke="#2e3d57"/>
+        <text x="575" y="80" text-anchor="middle" fill="#e6ecf5" font-size="12.5">Seu e-mail</text>
+        <rect x="500" y="100" width="150" height="46" rx="10" fill="#1b2333" stroke="#2e3d57"/>
+        <text x="575" y="128" text-anchor="middle" fill="#e6ecf5" font-size="12.5">Cofre de arquivos</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo bom">Provado</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">A cópia é verificada por dentro</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Não basta o arquivo existir e ter tamanho maior que zero — foi assim que uma cópia vazia
+        passou meses parecendo boa. Hoje a verificação exige que o arquivo abra, tenha conteúdo
+        e um número mínimo de tabelas. Se não tiver, a cópia é recusada e o aviso sai.
+      </p>
+    </div>
+    <div class="painel revela">
+      <span class="selo at">Ainda não provado</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">A restauração de ponta a ponta</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Ter cópia não é o mesmo que conseguir voltar a partir dela. O teste de restauração
+        completa — pegar a cópia de ontem e reconstruir o sistema com ela — <strong>ainda não foi
+        feito</strong>. Está registrado e é a primeira coisa a fazer na
+        próxima etapa.
+      </p>
+    </div>
+  </div>
+
+  <div class="nota bl">
+    Por que essa distinção importa: quase todo desastre de dados que vira notícia tem cópia de
+    segurança. O que faltava era alguém ter testado a volta.
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 7 — CUSTO ====================== -->
+<section class="aba" id="a7">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 08</div>
+    <h2>Quanto custa, o que compõe, e por que a conta vai subir.</h2>
+    <p>Transparência de custo compra mais confiança que qualquer gráfico bonito. Então vamos ao
+       número desconfortável primeiro.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="grade g3" style="gap:26px">
+      <div>
+        <div class="rotulo">Você pagou este mês</div>
+        <div class="numerao conta" data-num="7.94" data-casas="2" data-pre="US$ " style="color:var(--bom)">US$ 0,00</div>
+        <p style="color:var(--fraco); font-size:13.5px; margin:8px 0 0">valor efetivamente cobrado</p>
+      </div>
+      <div>
+        <div class="rotulo">O consumo real foi</div>
+        <div class="numerao conta" data-num="62.59" data-casas="2" data-pre="US$ " style="color:var(--s2)">US$ 0,00</div>
+        <p style="color:var(--fraco); font-size:13.5px; margin:8px 0 0">o que a AWS mediu de uso</p>
+      </div>
+      <div>
+        <div class="rotulo">A diferença eram créditos</div>
+        <div class="numerao conta" data-num="55.63" data-casas="2" data-pre="US$ " style="color:var(--s1)">US$ 0,00</div>
+        <p style="color:var(--fraco); font-size:13.5px; margin:8px 0 0">abatidos automaticamente</p>
+      </div>
+    </div>
+    <div class="nota at" style="margin-top:24px">
+      <strong>Os créditos acabaram.</strong> Eram três créditos promocionais de US$ 20 cada. O
+      saldo restante hoje é <strong>zero</strong>. A partir do próximo mês a fatura passa a mostrar
+      o custo que sempre existiu — ele apenas estava sendo pago por outra pessoa.
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="rotulo">Consumo mensal, e o que foi efetivamente cobrado</div>
+    <h3 style="margin:10px 0 4px; font-size:18px">O degrau não é aumento de consumo. É o fim do desconto.</h3>
+    <p style="color:var(--fraco); font-size:13.5px; margin:0 0 16px">
+      A barra clara é o consumo medido. A escura é o que saiu do seu bolso. Os últimos dois meses
+      são previsão.
+    </p>
+    <div class="legenda">
+      <span><i style="background:var(--s1)"></i> Consumo medido</span>
+      <span><i style="background:var(--s2)"></i> Cobrado de fato</span>
+    </div>
+    <svg viewBox="0 0 660 260" class="grafico" role="img"
+         aria-label="Barras de consumo e valor cobrado por mês, mostrando o degrau quando os créditos acabam">
+      <g stroke="#233046" stroke-width="1">
+        <line x1="52" y1="210" x2="648" y2="210"/>
+        <line x1="52" y1="150" x2="648" y2="150" opacity=".5"/>
+        <line x1="52" y1="90"  x2="648" y2="90"  opacity=".5"/>
+        <line x1="52" y1="30"  x2="648" y2="30"  opacity=".5"/>
+      </g>
+      <g fill="#5f6f8a" font-size="10.5" text-anchor="end">
+        <text x="46" y="214">0</text><text x="46" y="154">30</text>
+        <text x="46" y="94">60</text><text x="46" y="34">90</text>
+      </g>
+      <g class="c2-barras"></g>
+      <g class="c2-rot" fill="#5f6f8a" font-size="11" text-anchor="middle"></g>
+    </svg>
+    <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">
+      Valores em dólar, arredondados. A fonte oficial é sempre a fatura da AWS.
+    </p>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Composição</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Onde exatamente o dinheiro vai.</h2>
+    <p>Seis linhas explicam praticamente toda a conta.</p>
+  </div>
+
+  <div class="painel bl revela" style="padding:0; overflow:hidden">
+    <table>
+      <thead><tr><th>Item</th><th>O que é</th><th>Peso na conta</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Servidor de produção</strong></td>
+            <td>A máquina que roda o sistema, ligada 24 horas por dia</td>
+            <td><span class="selo at">O maior</span></td></tr>
+        <tr><td><strong>Banco de dados de produção</strong></td>
+            <td>Onde as respostas ficam. Também ligado o tempo todo, com cópia automática de 7 dias</td>
+            <td><span class="selo at">Alto</span></td></tr>
+        <tr><td><strong>Suporte estendido do banco</strong></td>
+            <td>Cobrança extra por rodar uma versão fora de suporte. <strong>Deixou de ser cobrada</strong>
+                quando o banco foi atualizado — ver a aba <em>O banco de dados</em></td>
+            <td><span class="selo bom">Eliminado</span></td></tr>
+        <tr><td><strong>Ambiente de teste</strong></td>
+            <td>Sobe quando alguém vai testar e se desliga sozinho por inatividade</td>
+            <td><span class="selo nt">Baixo e variável</span></td></tr>
+        <tr><td><strong>Armazenamento</strong></td>
+            <td>Discos das máquinas, imagens enviadas nos formulários e as cópias de segurança</td>
+            <td><span class="selo nt">Baixo</span></td></tr>
+        <tr><td><strong>Endereço fixo e tráfego</strong></td>
+            <td>O endereço na internet e os dados que entram e saem</td>
+            <td><span class="selo nt">Quase nada</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">A pergunta direta</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Por que trocamos a máquina, se a antiga funcionava?</h2>
+    <p>Ela funcionava. O problema não era o desempenho dela — era o que aconteceria no dia em que
+       ela parasse de funcionar.</p>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo nt">O que existia</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">Uma máquina insubstituível</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0 0 12px">
+        Ela foi montada à mão, aos poucos, ao longo de meses. Cada ajuste — um programa instalado,
+        uma pasta criada, uma senha colocada num arquivo, uma tarefa agendada — ficou <strong>só
+        dentro dela</strong>, sem estar escrito em lugar nenhum.
+      </p>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Isso não incomodava, porque nunca foi preciso reconstruí-la. E é exatamente esse o
+        problema: só se descobre no dia em que não dá mais para adiar.
+      </p>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">O que existe agora</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">Uma máquina descrita por uma receita</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0 0 12px">
+        Tudo o que ela precisa está escrito num arquivo versionado: quais programas instalar, onde
+        buscar as senhas, o que agendar, como emitir o certificado, como subir o sistema.
+      </p>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        A máquina deixou de ser um bem a proteger e virou uma peça trocável. É o que permite ela
+        se recriar sozinha em sete minutos.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">O que a troca custou, na prática</div>
+    <div class="grade g4" style="margin-top:18px">
+      <div>
+        <div class="numerao" style="font-size:30px; color:var(--s2)">~4 min</div>
+        <div class="rotulo" style="margin-top:4px">fora do ar, de madrugada</div>
+      </div>
+      <div>
+        <div class="numerao" style="font-size:30px; color:var(--s2)">alguns dias</div>
+        <div class="rotulo" style="margin-top:4px">com duas máquinas ligadas</div>
+      </div>
+      <div>
+        <div class="numerao" style="font-size:30px; color:var(--s3)">0</div>
+        <div class="rotulo" style="margin-top:4px">respostas perdidas</div>
+      </div>
+      <div>
+        <div class="numerao" style="font-size:30px; color:var(--s3)">0</div>
+        <div class="rotulo" style="margin-top:4px">mudanças no seu lado</div>
+      </div>
+    </div>
+    <div class="nota" style="margin-top:22px">
+      <strong>Por que duas máquinas ligadas ao mesmo tempo.</strong> A antiga ficou de pé enquanto
+      a nova era validada. Pagar as duas por alguns dias foi o preço de poder voltar atrás em
+      segundos se algo desse errado. As duas antigas — a de produção e a de teste — já foram
+      desligadas e apagadas, depois de conferirmos que nada exclusivo restava nelas.
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Daqui para frente</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">O que faz a conta subir, e o que faz descer.</h2>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo at">Sobe</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li><strong>O fim dos créditos</strong> — é o principal, e já aconteceu</li>
+        <li>Mais eventos ao mesmo tempo, se exigirem máquina maior</li>
+        <li>Mais imagens enviadas nos formulários, que ocupam armazenamento</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">Desce</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li><strong>Suporte estendido do banco</strong> — <strong>já eliminado</strong> com a
+            atualização da versão; deixa de aparecer na fatura</li>
+        <li>O ambiente de teste desligando sozinho por inatividade</li>
+        <li>Limpeza automática de versões antigas do sistema, que ocupavam disco</li>
+        <li>Poder desligar o que não está em uso <em>sem medo</em> — com a receita escrita, subir
+            de volta deixou de ser arriscado. Esse medo era, até agora, a maior razão de deixar
+            coisa ligada</li>
+      </ul>
+    </div>
+  </div>
+
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">De onde saímos, onde chegamos</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">O mesmo dinheiro comprando outra coisa.</h2>
+    <p>A conta não mudou de patamar por capricho. Mudou o que ela sustenta.</p>
+  </div>
+
+  <div class="painel bl revela depara">
+    <div class="dp-grade">
+      <div class="dp-cab"></div>
+      <div class="dp-cab dp-antes"><span class="selo nt">Antes</span></div>
+      <div class="dp-cab dp-depois"><span class="selo bom">Agora</span></div>
+
+      <div class="dp-item">Se o servidor morrer</div>
+      <div class="dp-antes">Alguém precisa perceber, estar disponível e reconstruir na mão. Horas, e só em horário útil.</div>
+      <div class="dp-depois"><strong>Volta sozinho em ~7 minutos</strong>, a qualquer hora, sem ninguém ser acordado.</div>
+
+      <div class="dp-item">Onde moram as senhas do sistema</div>
+      <div class="dp-antes">Num arquivo dentro do servidor. Perdeu a máquina, perdeu as senhas.</div>
+      <div class="dp-depois"><strong>Num cofre</strong>, com registro de quem leu e troca sem mexer no sistema.</div>
+
+      <div class="dp-item">Versão do banco de dados</div>
+      <div class="dp-antes">Fora do suporte padrão — pagando taxa extra e sem receber correções no mesmo ritmo.</div>
+      <div class="dp-depois"><strong>Versão de suporte longo</strong>, com a taxa extra eliminada.</div>
+
+      <div class="dp-item">Cópia de segurança</div>
+      <div class="dp-antes">Existia, era declarada bem-sucedida — e estava <strong>vazia por dentro</strong> havia meses.</div>
+      <div class="dp-depois">Verificada por dentro, em <strong>três lugares</strong>, com aviso no mesmo dia se falhar.</div>
+
+      <div class="dp-item">Descobrir que algo quebrou</div>
+      <div class="dp-antes">Quando um cliente ligava reclamando.</div>
+      <div class="dp-depois"><strong>Oito regras vigiando</strong> o tempo todo, com e-mail automático.</div>
+
+      <div class="dp-item">Publicar uma versão nova</div>
+      <div class="dp-antes">Passos manuais, sem cópia prévia garantida e sem volta automática.</div>
+      <div class="dp-depois">Cópia antes de tocar no banco e <strong>volta automática</strong> se o novo não subir saudável.</div>
+
+      <div class="dp-item">Reconstruir o ambiente do zero</div>
+      <div class="dp-antes">Só de memória. Nada estava escrito.</div>
+      <div class="dp-depois"><strong>Uma receita versionada</strong> — e ela já foi executada 8 vezes seguidas para provar.</div>
+    </div>
+  </div>
+
+  <div class="painel bl revela" style="text-align:center">
+    <div class="olho">O que isso significa em uma frase</div>
+    <h3 style="margin:14px auto 14px; font-size:clamp(20px,3vw,30px); max-width:22ch">
+      Você parou de pagar por um servidor e passou a pagar por um serviço que se conserta sozinho.
+    </h3>
+    <p style="color:var(--suave); max-width:60ch; margin:0 auto">
+      A diferença de valor na fatura é menor que o custo de uma única noite de indisponibilidade
+      durante um evento.
+    </p>
+  </div>
+
+
+  <div class="nota bl">
+    <strong>Estimativa honesta para os próximos meses:</strong> algo entre US$ 45 e US$ 60 por mês,
+    sem créditos, com os dois ambientes no formato atual. A faixa é larga de propósito — depende de
+    quantos dias o ambiente de teste fica ligado e de quanto armazenamento as imagens ocupam.
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA 8 — O QUE AINDA FALTA ====================== -->
+<!-- ================= ABA — O QUE FOI ENTREGUE E QUANTO VALE ================= -->
+<section class="aba" id="a13">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 09</div>
+    <h2>Tudo o que foi entregue — e quanto isso custa lá fora.</h2>
+    <p>Esta aba junta, numa lista só, cada peça construída nesta etapa. Ao lado de cada uma, a
+       faixa que o mercado cobra para entregar aquilo. Não é orçamento: é <strong>régua</strong>,
+       para dar dimensão ao que está por trás de uma fatura de infraestrutura.</p>
+  </div>
+
+  <div class="grade g4 bl">
+    <div class="painel revela">
+      <div class="numerao conta" data-num="10" style="font-size:32px; color:var(--s1)">0</div>
+      <div class="rotulo" style="margin-top:4px">frentes entregues</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">cada uma vendida separadamente no mercado</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao conta" data-num="25" style="font-size:32px; color:var(--s2)">0</div>
+      <div class="rotulo" style="margin-top:4px">ajustes escritos na receita</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">cada um provado em ensaio antes de valer em produção</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao conta" data-num="35" style="font-size:32px; color:var(--s3)">0</div>
+      <div class="rotulo" style="margin-top:4px">pontos conferidos na auditoria</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">um verificador que roda sozinho e reprova o que está errado</p>
+    </div>
+    <div class="painel revela">
+      <div class="numerao" style="font-size:32px; color:var(--bom)">0</div>
+      <div class="rotulo" style="margin-top:4px">respostas perdidas</div>
+      <p style="color:var(--fraco); font-size:13px; margin:10px 0 0">em toda a operação, nos dois ambientes</p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">O inventário</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">As dez frentes, uma a uma.</h2>
+    <p>A coluna da direita é <strong>referência pública do mercado internacional</strong> para
+       contratar cada frente como projeto. Está em dólar porque é assim que essas faixas são
+       publicadas.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <table>
+      <thead><tr><th>Entrega</th><th>O que ela resolve</th><th>Faixa de mercado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Avaliação e desenho da arquitetura</strong></td>
+            <td>Entender o que existia, decidir para onde ir e escrever o plano antes de mexer</td>
+            <td><span class="mono">US$ 4–12 mil</span></td></tr>
+        <tr><td><strong>Infraestrutura como código</strong></td>
+            <td>O ambiente inteiro descrito num arquivo versionado. Reconstruir deixa de depender da memória de alguém</td>
+            <td><span class="mono">US$ 8–25 mil</span></td></tr>
+        <tr><td><strong>Recuperação automática do servidor</strong></td>
+            <td>A máquina virou peça descartável: se morrer, outra sobe sozinha, com o mesmo endereço, em minutos</td>
+            <td><span class="mono">US$ 8–25 mil</span></td></tr>
+        <tr><td><strong>Esteira de publicação</strong></td>
+            <td>Publicar deixou de ser um ritual manual: cópia antes, verificação depois, volta automática se algo falhar</td>
+            <td><span class="mono">US$ 6–20 mil</span></td></tr>
+        <tr><td><strong>Monitoramento e alertas</strong></td>
+            <td>Painéis, registros de sete dias e oito regras vigiando, com aviso por e-mail antes do cliente perceber</td>
+            <td><span class="mono">US$ 6–18 mil</span></td></tr>
+        <tr><td><strong>Cópia de segurança verificada</strong></td>
+            <td>Cópia diária conferida por dentro, guardada em três lugares, com aviso no mesmo dia se falhar</td>
+            <td><span class="mono">US$ 3–10 mil</span></td></tr>
+        <tr><td><strong>Segredos e acesso</strong></td>
+            <td>Senhas saíram de arquivo no servidor e foram para um cofre; entrada na máquina sem porta aberta e com registro</td>
+            <td><span class="mono">US$ 3–10 mil</span></td></tr>
+        <tr><td><strong>Atualização do banco sem parada</strong></td>
+            <td>Versão nova, com suporte por anos, sem tirar o sistema do ar — e sem a cobrança extra de suporte estendido</td>
+            <td><span class="mono">US$ 5–15 mil</span></td></tr>
+        <tr><td><strong>Ambiente de ensaio espelhado</strong></td>
+            <td>Uma cópia completa para errar sem consequência, com esteira e painel próprios</td>
+            <td><span class="mono">US$ 3–10 mil</span></td></tr>
+        <tr><td><strong>Documentação, manual e auditoria</strong></td>
+            <td>Manual de plantão, este documento, e um verificador de 35 pontos que roda sozinho</td>
+            <td><span class="mono">US$ 2–8 mil</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">A conta da régua</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Somando as dez faixas.</h2>
+    <p>Contratando frente por frente, no mercado internacional, um pacote equivalente é orçado
+       nessa ordem de grandeza.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">Somatório das faixas</div>
+      <div class="numerao" style="font-size:30px; color:var(--s1)">US$ 48–153 mil</div>
+      <div class="rotulo" style="margin-top:6px">referência internacional</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        É o que custaria contratar as dez frentes como projetos, fora do Brasil.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Ajustado ao Brasil</div>
+      <div class="numerao" style="font-size:30px; color:var(--s2)">R$ 65–330 mil</div>
+      <div class="rotulo" style="margin-top:6px">ordem de grandeza local</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        Praticado aqui costuma ficar bem abaixo da referência internacional. Ainda assim, é a
+        casa dos milhares — não das dezenas.
+      </p>
+    </div>
+    <div class="painel revela" style="border-color:var(--bom)">
+      <div class="rotulo">Cobrado nesta etapa</div>
+      <div class="numerao" style="font-size:34px; color:var(--bom)">R$ 1.000</div>
+      <div class="rotulo" style="margin-top:6px">valor único, por tudo acima</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        Uma única cobrança, referente a esta etapa inteira. Sem mensalidade e sem cobrança por
+        chamado dentro do que foi entregue aqui.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="rotulo">Escala visual</div>
+    <h3 style="margin:10px 0 4px; font-size:18px">O mesmo escopo, em três réguas</h3>
+    <p style="color:var(--fraco); font-size:13.5px; margin:0 0 18px">
+      As barras estão em proporção. A última quase não aparece — e é essa a comparação.
+    </p>
+    <div class="barras-mercado">
+      <div class="bm">
+        <span class="bm-t">Pacote equivalente, mercado internacional</span>
+        <div class="bm-tr"><i style="--w:100%; background:var(--s1)"></i></div>
+        <span class="bm-v mono">US$ 48–153 mil</span>
+      </div>
+      <div class="bm">
+        <span class="bm-t">Um profissional dedicado, por um ano</span>
+        <div class="bm-tr"><i style="--w:22%; background:var(--s2)"></i></div>
+        <span class="bm-v mono">R$ 69–112 mil</span>
+      </div>
+      <div class="bm">
+        <span class="bm-t">Manutenção terceirizada, por um ano</span>
+        <div class="bm-tr"><i style="--w:38%; background:var(--roxo)"></i></div>
+        <span class="bm-v mono">US$ 30–60 mil</span>
+      </div>
+      <div class="bm">
+        <span class="bm-t">Fatura mensal de infraestrutura</span>
+        <div class="bm-tr"><i style="--w:1.4%; background:var(--s3)"></i></div>
+        <span class="bm-v mono">US$ 45–60</span>
+      </div>
+      <div class="bm">
+        <span class="bm-t">O que foi cobrado por esta etapa</span>
+        <div class="bm-tr"><i style="--w:.6%; background:var(--bom)"></i></div>
+        <span class="bm-v mono">R$ 1.000</span>
+      </div>
+    </div>
+    <div class="nota" style="margin-top:22px">
+      <strong>Como ler isso com honestidade.</strong> As faixas vêm de referências públicas do
+      mercado internacional, onde os valores são mais altos que no Brasil, e pressupõem equipe,
+      contrato e prazo formais. Elas <strong>não são um orçamento</strong> e não representam o que
+      foi cobrado. Servem para uma coisa só: dar dimensão ao que a fatura de infraestrutura
+      <em>não</em> cobre.
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Referência de mercado</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">De onde vêm esses números.</h2>
+    <p>Três formas de comprar a mesma capacidade, com preço próprio cada uma.</p>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="rotulo">Infraestrutura</div>
+      <div class="numerao" style="font-size:30px; color:var(--s3)">US$ 45–60</div>
+      <div class="rotulo" style="margin-top:6px">por mês · o que você paga hoje</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        Servidor, banco, armazenamento e tráfego. É a conta da AWS, sem créditos. Ela paga as
+        máquinas — não quem as ensinou a se consertar.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Manutenção terceirizada</div>
+      <div class="numerao" style="font-size:30px; color:var(--roxo)">US$ 2.500–5.000</div>
+      <div class="rotulo" style="margin-top:6px">por mês · faixa de mercado para PME</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        Retainer mensal de DevOps gerenciado, com monitoramento, automação, segurança e suporte.
+        Referência internacional.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Equipe própria</div>
+      <div class="numerao" style="font-size:30px; color:var(--s2)">R$ 69–112 mil</div>
+      <div class="rotulo" style="margin-top:6px">por ano · salário de um profissional</div>
+      <p style="color:var(--suave); font-size:14px; margin:14px 0 0">
+        Média nacional para a função, chegando à faixa sênior. Sem contar encargos, férias e quem
+        cobre as férias.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela" style="text-align:center">
+    <div class="olho">O ponto</div>
+    <h3 style="margin:14px auto 14px; font-size:clamp(20px,3vw,30px); max-width:26ch">
+      A parte cara nunca foi o servidor. É o que sabe fazer o servidor voltar sozinho.
+    </h3>
+    <p style="color:var(--suave); max-width:66ch; margin:0 auto">
+      Um servidor pode ser alugado por poucos dólares em qualquer lugar. O que separa isso de uma
+      operação confiável é exatamente o que está listado nesta aba — e é essa parte que o mercado
+      cobra em milhares, não em dezenas.
+    </p>
+  </div>
+
+ </div>
+</section>
+
+<section class="aba" id="a10">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 10</div>
+    <h2>Como usar o painel, na prática.</h2>
+    <p>O painel se chama <strong>Grafana</strong>. Ele abre no navegador, pede usuário e senha, e
+       não precisa de instalação nenhuma. Esta aba é o passo a passo — inclusive as três coisas
+       que resolvem 90% das dúvidas do dia a dia.</p>
+  </div>
+
+
+  <div class="cabeca" style="padding-top:8px">
+    <div class="olho">Antes de qualquer coisa</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Os seis endereços — e qual deles vale de verdade.</h2>
+    <p>Não existe <em>um</em> sistema: existem <strong>dois ambientes completos</strong>, iguais por
+       dentro e separados por fora. Um atende gente de verdade. O outro existe para errar sem
+       consequência. Cada um tem seu próprio site, sua própria API e seu próprio painel.</p>
+  </div>
+
+  <div class="grade g2 bl enderecos">
+    <div class="painel revela amb-prod">
+      <div class="amb-topo">
+        <span class="selo bom">Produção</span>
+        <span class="amb-frase">É o que o cliente usa. Dado aqui é dado real.</span>
+      </div>
+
+      <a class="end" href="https://nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">Sistema · o site</span>
+        <span class="end-url mono">nexventa.com.br</span>
+        <span class="end-desc">Onde o participante abre o formulário e onde a equipe entra para
+          criar e acompanhar. É este o link que se manda para as pessoas.</span>
+      </a>
+
+      <a class="end" href="https://grafana.nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">Painel · Grafana</span>
+        <span class="end-url mono">grafana.nexventa.com.br</span>
+        <span class="end-desc">O painel de monitoramento. <strong>É este que se abre num
+          incidente</strong> — é o único que enxerga o que o cliente está vivendo.</span>
+      </a>
+
+      <a class="end" href="https://api.nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">API · o motor</span>
+        <span class="end-url mono">api.nexventa.com.br</span>
+        <span class="end-desc">Não é uma tela — é o endereço que o site chama por trás. Abrir no
+          navegador não mostra nada de útil, e isso é o esperado.</span>
+      </a>
+    </div>
+
+    <div class="painel revela amb-hml">
+      <div class="amb-topo">
+        <span class="selo at">Homologação</span>
+        <span class="amb-frase">É o ensaio. Pode quebrar à vontade.</span>
+      </div>
+
+      <a class="end" href="https://hml.nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">Sistema · o site</span>
+        <span class="end-url mono">hml.nexventa.com.br</span>
+        <span class="end-desc">Cópia do site, com dados de teste. É aqui que se confere uma
+          novidade antes de ela chegar no cliente. <strong>Nunca mande este link para fora.</strong></span>
+      </a>
+
+      <a class="end" href="https://grafana-hml.nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">Painel · Grafana</span>
+        <span class="end-url mono">grafana-hml.nexventa.com.br</span>
+        <span class="end-desc">O mesmo painel, olhando o ambiente de ensaio. Serve para treinar a
+          leitura sem risco — e para conferir se uma versão nova está saudável.</span>
+      </a>
+
+      <a class="end" href="https://api-hml.nexventa.com.br" target="_blank" rel="noopener">
+        <span class="end-papel">API · o motor</span>
+        <span class="end-url mono">api-hml.nexventa.com.br</span>
+        <span class="end-desc">O motor do ensaio. Vive numa máquina própria, com banco próprio, e
+          não tem como alcançar nada de produção.</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">A regra que evita o susto</div>
+    <h3 style="margin:12px 0 12px; font-size:clamp(18px,2.5vw,24px); max-width:46ch">
+      Se o endereço tem <span class="mono" style="color:var(--atencao)">hml</span>, nada do que você
+      fizer ali chega no cliente. Se não tem, tudo chega.
+    </h3>
+    <div class="par" style="max-width:none">
+      <div><b>Como conferir</b> Olhe a barra de endereço antes de mexer em qualquer coisa. É o
+        único jeito confiável — as duas telas são idênticas de propósito.</div>
+      <div><b>Por que idênticas</b> Se o ensaio fosse diferente do palco, ensaiar não provaria
+        nada. A semelhança é a função, não um descuido.</div>
+      <div><b>O que nunca se mistura</b> Homologação tem banco próprio, senhas próprias e máquina
+        própria. Ela não consegue ler nem gravar nada de produção, mesmo que alguém tente.</div>
+      <div><b>Onde isso já salvou</b> Toda a troca desta semana foi ensaiada em homologação
+        primeiro. Os defeitos apareceram lá, onde custam uma tarde — não às três da manhã.</div>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">Os dois painéis, lado a lado</div>
+    <h3 style="margin:12px 0 4px; font-size:18px">Mesma tela, perguntas diferentes</h3>
+    <p style="color:var(--fraco); font-size:13.5px; margin:0 0 16px">
+      O painel é o mesmo programa nos dois lugares. O que muda é sobre quem ele está falando.
+    </p>
+    <div class="dp-grade">
+      <div class="dp-cab"></div>
+      <div class="dp-cab dp-antes"><span class="selo bom">Painel de produção</span></div>
+      <div class="dp-cab dp-depois"><span class="selo at">Painel de homologação</span></div>
+
+      <div class="dp-item">Responde a pergunta</div>
+      <div class="dp-antes">“O cliente está conseguindo usar agora?”</div>
+      <div class="dp-depois">“A versão que vou publicar está saudável?”</div>
+
+      <div class="dp-item">Quando abrir</div>
+      <div class="dp-antes">Num alerta, durante um evento, ou na conferência da manhã.</div>
+      <div class="dp-depois">Depois de publicar uma novidade no ensaio, antes de liberar.</div>
+
+      <div class="dp-item">Os números significam</div>
+      <div class="dp-antes">Pessoas de verdade, formulários de verdade.</div>
+      <div class="dp-depois">Testes. Volume baixo aqui é normal e não quer dizer nada.</div>
+
+      <div class="dp-item">Vale acionar alguém?</div>
+      <div class="dp-antes"><strong>Sim.</strong> Vermelho aqui é incidente.</div>
+      <div class="dp-depois">Não de madrugada. Vermelho aqui espera o horário comercial.</div>
+    </div>
+    <div class="nota" style="margin-top:20px">
+      <strong>O erro clássico:</strong> receber um alerta, abrir o painel de homologação por
+      engano, ver tudo verde e concluir que passou. Antes de olhar qualquer gráfico, confira se o
+      endereço tem <span class="mono">hml</span> ou não.
+    </div>
+  </div>
+
+  <div class="grade g3 bl">
+    <div class="painel revela">
+      <div class="badge-num">1</div>
+      <h3 style="margin:14px 0 8px; font-size:17px">Abrir</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Digite <span class="mono">grafana.nexventa.com.br</span> em qualquer navegador, no
+        computador ou no celular. Não há programa para instalar. O cadeado precisa aparecer
+        fechado ao lado do endereço — se não aparecer, pare e avise.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="badge-num">2</div>
+      <h3 style="margin:14px 0 8px; font-size:17px">Entrar</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Usuário e senha próprios, diferentes dos do sistema. Quem tem acesso ao painel <strong>não
+        vê resposta de participante</strong> — o painel mostra números e registros técnicos, não
+        conteúdo de formulário.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="badge-num">3</div>
+      <h3 style="margin:14px 0 8px; font-size:17px">Escolher a tela</h3>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        No topo há quatro atalhos. Comece sempre pela <strong>Visão geral</strong> — ela cabe
+        inteira na tela e leva às outras com um clique, mantendo o horário que você estava olhando.
+      </p>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">Os dois controles que mais importam</div>
+    <h3 style="margin:12px 0 16px; font-size:19px">Estão os dois no canto superior direito.</h3>
+
+    <div class="grade g2">
+      <div class="maquina" style="margin-top:0">
+        <div class="rotulo">Seletor de período</div>
+        <div class="falso-ctrl mono">🕐 Last 6 hours ▾</div>
+        <p style="color:var(--suave); font-size:14.5px; margin:14px 0 0">
+          Define <em>a janela de tempo</em> que todos os gráficos mostram. Trocar aqui muda a tela
+          inteira de uma vez. Os mais úteis: <strong>Last 15 minutes</strong> para “está acontecendo
+          agora?”, <strong>Last 24 hours</strong> para “como foi o dia”, e <strong>Absolute range</strong>
+          quando você sabe a hora exata que quer investigar.
+        </p>
+      </div>
+      <div class="maquina" style="margin-top:0">
+        <div class="rotulo">Atualização automática</div>
+        <div class="falso-ctrl mono">⟳ 30s ▾</div>
+        <p style="color:var(--suave); font-size:14.5px; margin:14px 0 0">
+          A tela se atualiza sozinha a cada 30 segundos. Durante um evento, vale deixar assim. Se
+          estiver investigando algo que já passou, desligue (<strong>Off</strong>) — senão a tela
+          se move enquanto você lê.
+        </p>
+      </div>
+    </div>
+
+    <div class="nota" style="margin-top:20px">
+      <strong>A regra de ouro:</strong> se um número parecer estranho, a primeira pergunta não é
+      “o que houve?” — é <em>“qual período está selecionado?”</em>. Quase toda leitura errada de
+      painel vem de estar olhando uma janela de tempo diferente da que se imagina.
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">As quatro telas</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Cada uma responde uma pergunta.</h2>
+    <p>Um painel gigante com tudo junto é um painel em que ninguém acha nada.</p>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <div class="rotulo">Tela 01</div>
+      <h3 style="margin:10px 0 6px; font-size:18px">Visão geral</h3>
+      <p style="color:var(--s1); font-size:14px; margin:0 0 10px"><em>“Está tudo bem agora?”</em></p>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Dezoito números e três gráficos numa tela só, sem rolagem. É a que você abre por hábito.
+        Se estiver tudo verde e os números de erro em zero, acabou a consulta.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Tela 02</div>
+      <h3 style="margin:10px 0 6px; font-size:18px">Produto</h3>
+      <p style="color:var(--s1); font-size:14px; margin:0 0 10px"><em>“O produto está sendo usado?”</em></p>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        O que as pessoas estão fazendo: abrindo formulário, enviando resposta, agendando, marcando
+        presença, respondendo quiz. É a tela de negócio, não de técnica.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Tela 03</div>
+      <h3 style="margin:10px 0 6px; font-size:18px">Técnico</h3>
+      <p style="color:var(--s1); font-size:14px; margin:0 0 10px"><em>“Onde exatamente está doendo?”</em></p>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Cada endereço do sistema com seu volume, seus erros e sua velocidade. Memória, banco de
+        dados, conexões. É onde a equipe vai quando a Visão geral acusa alguma coisa.
+      </p>
+    </div>
+    <div class="painel revela">
+      <div class="rotulo">Tela 04</div>
+      <h3 style="margin:10px 0 6px; font-size:18px">Registros</h3>
+      <p style="color:var(--s1); font-size:14px; margin:0 0 10px"><em>“O que aconteceu naquele momento?”</em></p>
+      <p style="color:var(--suave); font-size:14.5px; margin:0">
+        Tudo que o sistema escreveu, pesquisável por texto, por gravidade e por origem. Sete dias
+        de histórico. É aqui que o código do erro vira resposta.
+      </p>
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Receitas</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Três situações reais, passo a passo.</h2>
+  </div>
+
+  <div class="painel bl revela">
+    <ol class="receitas">
+      <li>
+        <h4>Um cliente diz que deu erro na hora de enviar</h4>
+        <ol>
+          <li>Peça o <strong>código</strong> que apareceu na tela dele — são oito caracteres.</li>
+          <li>Abra a tela <strong>Registros</strong> e cole o código na busca.</li>
+          <li>Vão aparecer <em>todas</em> as linhas daquele envio, na ordem em que aconteceram,
+              inclusive a mensagem de erro completa.</li>
+          <li>Se ele não tiver o código, use a hora aproximada: ajuste o período para essa faixa e
+              filtre por gravidade <strong>FALHA</strong>.</li>
+        </ol>
+      </li>
+      <li>
+        <h4>Quero saber quantos formulários foram enviados hoje</h4>
+        <ol>
+          <li>Abra a tela <strong>Produto</strong>.</li>
+          <li>No seletor de período, escolha <strong>Today</strong>.</li>
+          <li>Olhe o par <em>abertos</em> e <em>enviados</em>. Os dois juntos contam a história —
+              muitos abertos com poucos enviados é sinal de problema, não de desinteresse.</li>
+        </ol>
+      </li>
+      <li>
+        <h4>Está parecendo lento</h4>
+        <ol>
+          <li>Na <strong>Visão geral</strong>, olhe a <em>Latência p95</em>. Ela responde: “95 em
+              cada 100 pessoas esperaram menos que isso”.</li>
+          <li>Se estiver alta, vá para <strong>Técnico</strong> e veja <em>qual endereço</em> está
+              lento — raramente é o sistema inteiro.</li>
+          <li>Confira também <em>Conexões esperando</em>. Se houver fila no banco de dados, o
+              gargalo é ali, não na aplicação.</li>
+        </ol>
+      </li>
+    </ol>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Lendo os números</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">O que cada painel quer dizer.</h2>
+  </div>
+
+  <div class="painel bl revela" style="padding:0; overflow:hidden">
+    <table>
+      <thead><tr><th>Painel</th><th>O que significa</th><th>Quando se preocupar</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Coleta de métricas</strong></td>
+            <td>Se o painel está recebendo dados. É a saúde do próprio monitoramento</td>
+            <td>Se disser <span class="selo gr">Parada</span>, os outros números estão velhos</td></tr>
+        <tr><td><strong>Erro 5xx</strong></td>
+            <td>Quantas vezes o sistema falhou por conta própria</td>
+            <td>Qualquer valor acima de zero por vários minutos</td></tr>
+        <tr><td><strong>Respostas 4xx</strong></td>
+            <td>Pedidos recusados — campo faltando, sessão vencida, endereço errado</td>
+            <td>Só se subir muito de repente. Um pouco é normal</td></tr>
+        <tr><td><strong>Latência p95</strong></td>
+            <td>95 de cada 100 pessoas esperaram menos que esse tempo</td>
+            <td>Acima de 3 segundos de forma sustentada</td></tr>
+        <tr><td><strong>Heap usado</strong></td>
+            <td>Memória que o sistema está consumindo</td>
+            <td>Acima de 85% por mais de 10 minutos</td></tr>
+        <tr><td><strong>Conexões esperando</strong></td>
+            <td>Pedidos na fila do banco de dados</td>
+            <td>Qualquer fila persistente é gargalo</td></tr>
+        <tr><td><strong>Site visto de fora</strong></td>
+            <td>Alguém de fora tentando acessar, como um usuário faria</td>
+            <td>Se sair de <span class="selo bom">No ar</span> — é o mais confiável de todos</td></tr>
+        <tr><td><strong>Certificado — dias restantes</strong></td>
+            <td>Quanto falta para o certificado de segurança vencer</td>
+            <td>Abaixo de 21 dias sem renovação automática ter rodado</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo at">Cuidado comum</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">Zero pode ser ótimo ou péssimo</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Zero erro é ótimo. Zero envio de formulário, em dia de evento, é péssimo. O painel não
+        distingue sozinho — por isso o par <em>abertos × enviados</em> existe, e por isso o alerta
+        de “ninguém consegue enviar” só vale em horário comercial.
+      </p>
+    </div>
+    <div class="painel revela">
+      <span class="selo at">Cuidado comum</span>
+      <h3 style="margin:14px 0 10px; font-size:18px">O histórico recomeça quando a máquina troca</h3>
+      <p style="color:var(--suave); font-size:15px; margin:0">
+        Os dados dos gráficos moram no disco da máquina. Como ela agora é descartável, o histórico
+        vai junto quando ela é substituída. Se você abrir o painel logo depois de uma troca e vir
+        gráficos curtos, é isso — não é falha. Já está registrado para a próxima etapa.
+      </p>
+    </div>
+  </div>
+
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Registros no painel</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Como ver os registros, e o que cada linha quer dizer.</h2>
+    <p>É a parte que mais assusta e a que mais resolve. Em três passos você chega em qualquer
+       coisa que o sistema escreveu nos últimos sete dias.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <ol class="receitas">
+      <li>
+        <h4>Abrir a busca de registros</h4>
+        <ol>
+          <li>No menu lateral do painel, clique em <strong>Explore</strong> — é a lupa.</li>
+          <li>No seletor do topo, escolha a fonte <strong>Loki</strong>. É onde os registros ficam.</li>
+          <li>Ajuste o período no canto superior direito. Comece com <strong>Last 1 hour</strong>.</li>
+        </ol>
+      </li>
+      <li>
+        <h4>Filtrar sem escrever consulta</h4>
+        <ol>
+          <li>Clique em <strong>Label filters</strong> e escolha <span class="mono">application</span>
+              → o nome do sistema. Isso já separa os registros do resto.</li>
+          <li>Para ver só o que importa, some um segundo filtro: <span class="mono">level</span>
+              → <span class="mono">ERROR</span>.</li>
+          <li>Clique em <strong>Run query</strong>. As linhas aparecem da mais recente para a mais antiga.</li>
+        </ol>
+      </li>
+      <li>
+        <h4>Procurar por texto ou por código</h4>
+        <ol>
+          <li>No campo de busca por linha, digite o que procura entre aspas — o código do erro, o
+              nome de um usuário, um trecho da mensagem.</li>
+          <li>Clique numa linha para <strong>expandir</strong>: ela abre em campos separados, e é aí
+              que estão a rota, o tempo de resposta e o código da requisição.</li>
+          <li>Ao lado do código há um botão de <strong>filtrar por este valor</strong> — um clique
+              e você vê só as linhas daquele pedido específico.</li>
+        </ol>
+      </li>
+    </ol>
+    <div class="nota" style="margin-top:6px">
+      <strong>O atalho que resolve 90% dos casos:</strong> período em <em>Last 24 hours</em>,
+      filtro <span class="mono">level = ERROR</span>, e ler de cima para baixo. Se não houver
+      nenhuma linha, não houve erro — e isso já é uma resposta.
+    </div>
+  </div>
+
+  <div class="cabeca" style="padding-top:26px">
+    <div class="olho">Catálogo</div>
+    <h2 style="font-size:clamp(21px,3vw,29px)">Os dez tipos de registro que o sistema escreve.</h2>
+    <p>Nem toda linha significa problema — e saber diferenciar é o que evita tanto o alarme falso
+       quanto o alarme ignorado. Filtre pela gravidade e clique em qualquer item.</p>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="cenarios" id="filtro-log" role="group" aria-label="Filtrar por gravidade">
+      <button class="cen ativo" data-g="todos">Todos <b>10</b></button>
+      <button class="cen" data-g="info">Informação <b>3</b></button>
+      <button class="cen" data-g="aten">Atenção <b>6</b></button>
+      <button class="cen" data-g="falha">Falha <b>1</b></button>
+    </div>
+    <div id="lista-log" class="lista-log"></div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">Se algo estiver vermelho</div>
+    <h3 style="margin:12px 0 12px; font-size:clamp(18px,2.4vw,23px); max-width:44ch">
+      Você não precisa diagnosticar nada. Precisa registrar o que viu.
+    </h3>
+    <p style="color:var(--suave); max-width:66ch; margin:0 0 10px">
+      O mais útil que você pode mandar: <strong>o horário</strong>, <strong>qual painel</strong>
+      estava vermelho e <strong>qual período</strong> estava selecionado. Com esses três dados a
+      equipe reconstrói o resto.
+    </p>
+    <p style="color:var(--fraco); font-size:14px; margin:0">
+      E se o alerta já tiver chegado no seu e-mail, ele traz esses três dados prontos.
+    </p>
+  </div>
+
+ </div>
+</section>
+
+<!-- ====================== ABA — MANUAL DE PLANTÃO ====================== -->
+<section class="aba" id="a12">
+ <div class="faixa">
+
+  <div class="cabeca">
+    <div class="olho">Aba 11</div>
+    <h2>Manual de plantão: o que fazer quando o alerta chega.</h2>
+    <p>Um exemplo real, do começo ao fim. A ideia não é você executar — é você <strong>saber o
+       que está sendo executado</strong>, e conseguir cobrar cada passo.</p>
+  </div>
+
+  <div class="painel bl revela alerta-demo">
+    <div class="rotulo">03h14 · chega este e-mail</div>
+    <div class="email-falso">
+      <div class="ef-topo">
+        <span class="selo gr">Crítico</span>
+        <span class="ef-assunto">Sistema fora do ar — sem resposta há 2 minutos</span>
+      </div>
+      <div class="ef-corpo mono">
+        regra: disponibilidade externa<br>
+        condição: sem resposta por 2 min<br>
+        início: 03h12<br>
+        próxima repetição: em 1 hora, até resolver
+      </div>
+    </div>
+    <p style="color:var(--suave); font-size:15px; margin:18px 0 0">
+      A partir daqui, o manual tem <strong>seis passos</strong>. Cada um responde uma pergunta,
+      e existe uma ordem: nunca mexer antes de saber o que está acontecendo.
+    </p>
+  </div>
+
+  <div class="painel bl revela">
+    <ol class="runbook">
+      <li>
+        <div class="rb-num">1</div>
+        <div class="rb-corpo">
+          <h4>Confirmar de fora, antes de acreditar no alerta</h4>
+          <p class="rb-obj">Pergunta: <em>o sistema está mesmo fora do ar, ou é o vigia que se enganou?</em></p>
+          <div class="rb-passos">
+            <div><b>Faça</b> Abra o endereço do sistema no celular, com dados móveis, fora do wi-fi.</div>
+            <div><b>Se responder</b> O problema é do vigia ou da rede dele. Registre e siga para o passo 6.</div>
+            <div><b>Se não responder</b> Está fora mesmo. Continue.</div>
+          </div>
+          <div class="rb-nota">Por que primeiro: já aconteceu de o alerta disparar por falha do próprio
+            monitoramento. Reiniciar um sistema saudável cria o problema que se queria evitar.</div>
+        </div>
+      </li>
+
+      <li>
+        <div class="rb-num">2</div>
+        <div class="rb-corpo">
+          <h4>Ver se a máquina está viva</h4>
+          <p class="rb-obj">Pergunta: <em>o servidor existe e está ligado?</em></p>
+          <div class="rb-passos">
+            <div><b>Onde</b> Console da AWS → serviço de servidores → lista de instâncias.</div>
+            <div><b>Olhe</b> O estado e as verificações de saúde.</div>
+            <div><b>Se não houver nenhuma</b> O grupo de recuperação já está criando a substituta —
+              é o comportamento esperado. Vá para o passo 5 e cronometre.</div>
+            <div><b>Se houver uma, em execução</b> A máquina está de pé e o sistema é que não responde. Continue.</div>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="rb-num">3</div>
+        <div class="rb-corpo">
+          <h4>Entrar na máquina sem chave e sem porta aberta</h4>
+          <p class="rb-obj">Pergunta: <em>o que está rodando lá dentro?</em></p>
+          <div class="rb-passos">
+            <div><b>Como</b> Pelo gerenciador de sessões da AWS — não precisa de senha, nem de chave,
+              nem de porta 22 aberta. O acesso fica registrado.</div>
+            <div><b>Comando</b> <span class="mono">docker ps</span> — lista o que está no ar.</div>
+            <div><b>Esperado</b> Oito peças, todas <span class="mono">healthy</span>.</div>
+            <div><b>Se faltar o nginx</b> É o porteiro. Sem ele, ninguém entra mesmo com o sistema
+              funcionando por dentro.</div>
+            <div><b>Se faltar o backend</b> É o sistema em si.</div>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="rb-num">4</div>
+        <div class="rb-corpo">
+          <h4>Descobrir o motivo, no registro</h4>
+          <p class="rb-obj">Pergunta: <em>por que a peça caiu?</em></p>
+          <div class="rb-passos">
+            <div><b>Comando</b> <span class="mono">docker logs --tail 60 &lt;nome da peça&gt;</span></div>
+            <div><b>Procure</b> A última linha antes de a peça morrer. É quase sempre ela que explica.</div>
+            <div><b>Três causas comuns</b>
+              certificado ausente (o porteiro não sobe sem ele) ·
+              banco de dados inalcançável ·
+              memória esgotada.</div>
+            <div><b>Ou pelo painel</b> Explore → Loki → <span class="mono">level = ERROR</span>,
+              período das últimas duas horas.</div>
+          </div>
+          <div class="rb-nota">Anote a linha exata em vez de resumir. “Deu erro de banco” e
+            “tempo esgotado ao gravar, fila com 40 pedidos” levam a conclusões diferentes.</div>
+        </div>
+      </li>
+
+      <li>
+        <div class="rb-num">5</div>
+        <div class="rb-corpo">
+          <h4>Deixar a recuperação automática trabalhar — e cronometrar</h4>
+          <p class="rb-obj">Pergunta: <em>preciso agir, ou só esperar?</em></p>
+          <div class="rb-passos">
+            <div><b>Regra</b> Se a máquina foi substituída, <strong>espere 7 minutos</strong> antes de
+              qualquer intervenção manual.</div>
+            <div><b>Acompanhe</b> No registro de inicialização deve aparecer, ao final,
+              <span class="mono">PROVISIONAMENTO CONCLUIDO — falhas: 0</span>.</div>
+            <div><b>Se aparecer FATAL</b> A máquina se recusou a subir de propósito — algum pré-requisito
+              faltou. A mensagem diz qual. Isso é melhor que subir incompleta.</div>
+            <div><b>Só então</b> Se passar de 10 minutos sem concluir, é hora de intervir.</div>
+          </div>
+          <div class="rb-nota">Este é o passo que mais exige disciplina. A tentação de “dar uma
+            mexida” enquanto o sistema se conserta sozinho é o que transforma incidente pequeno em grande.</div>
+        </div>
+      </li>
+
+      <li>
+        <div class="rb-num">6</div>
+        <div class="rb-corpo">
+          <h4>Validar com uma gravação, nunca com uma leitura</h4>
+          <p class="rb-obj">Pergunta: <em>voltou de verdade?</em></p>
+          <div class="rb-passos">
+            <div><b>Não basta</b> A página abrir. Nem o painel ficar verde. Nem o
+              <span class="mono">actuator/health</span> responder.</div>
+            <div><b>Faça</b> Entre no sistema e <strong>crie alguma coisa</strong> — um formulário de
+              teste, um cliente de teste. Depois recarregue e confirme que continua lá.</div>
+            <div><b>Por quê</b> Em 08/08 o sistema respondeu tudo certo por 20 minutos enquanto
+              gravava em lugar nenhum. Só a escrita percorre o caminho inteiro.</div>
+            <div><b>Depois</b> Apague o registro de teste e anote no card do incidente: hora de início,
+              hora de volta, causa, e o que foi feito.</div>
+          </div>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div class="grade g2 bl">
+    <div class="painel revela">
+      <span class="selo gr">Nunca faça</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Reiniciar o servidor “para ver se resolve”, antes de ler o registro — some a prova</li>
+        <li>Publicar uma versão nova durante um incidente</li>
+        <li>Apagar máquina antiga antes de o novo estar validado com escrita</li>
+        <li>Declarar resolvido só porque o painel ficou verde</li>
+        <li>Rodar comando encontrado na internet num servidor de produção</li>
+      </ul>
+    </div>
+    <div class="painel revela">
+      <span class="selo bom">Sempre faça</span>
+      <ul style="color:var(--suave); font-size:15px; margin:16px 0 0; padding-left:18px">
+        <li>Confirmar de fora antes de acreditar no alerta</li>
+        <li>Anotar a hora exata em que percebeu</li>
+        <li>Copiar a linha de erro inteira, sem resumir</li>
+        <li>Esperar a recuperação automática pelo tempo previsto</li>
+        <li>Validar com uma gravação e registrar o que aconteceu</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="painel bl revela">
+    <div class="olho">O que você deve cobrar</div>
+    <h3 style="margin:12px 0 14px; font-size:clamp(19px,2.6vw,26px); max-width:44ch">
+      Todo incidente precisa terminar com quatro linhas escritas.
+    </h3>
+    <div class="grade g4" style="margin-top:6px">
+      <div class="maquina" style="margin:0"><div class="rotulo">1 · Quando começou</div>
+        <p style="color:var(--suave); font-size:14px; margin:8px 0 0">Hora do primeiro sintoma, não do alerta.</p></div>
+      <div class="maquina" style="margin:0"><div class="rotulo">2 · Quando voltou</div>
+        <p style="color:var(--suave); font-size:14px; margin:8px 0 0">Hora da gravação validada.</p></div>
+      <div class="maquina" style="margin:0"><div class="rotulo">3 · Por quê</div>
+        <p style="color:var(--suave); font-size:14px; margin:8px 0 0">A causa, com a linha de registro.</p></div>
+      <div class="maquina" style="margin:0"><div class="rotulo">4 · O que muda</div>
+        <p style="color:var(--suave); font-size:14px; margin:8px 0 0">O que impede a repetição.</p></div>
+    </div>
+    <p style="color:var(--fraco); font-size:14px; margin:20px 0 0">
+      Sem a quarta linha, o mesmo incidente volta. Foi assim que os 25 ajustes da virada viraram
+      25 linhas de receita, em vez de 25 lembranças que alguém teria que ter.
+    </p>
+  </div>
+
+ </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="faixa">
+    <p style="margin:0 0 6px"><strong style="color:var(--suave)">Nexventa</strong> · Documento de transparência técnica · agosto de 2026</p>
+    <p style="margin:0">
+      Arquivo único. Funciona sem internet, sem instalação e sem servidor — dá para salvar,
+      encaminhar e abrir depois. Nenhuma senha, endereço interno ou dado de participante
+      aparece aqui: cada linha foi escrita para poder circular.
+    </p>
+  </div>
+</footer>
+
+<script>
+/* Estado da aba em variável, nunca em armazenamento do navegador. */
+(function(){
+  var atual = 'a1';
+  var botoes = Array.prototype.slice.call(document.querySelectorAll('nav.abas button'));
+  function indice(id){ for(var i=0;i<botoes.length;i++) if(botoes[i].dataset.aba===id) return i; return 0; }
+  function trocar(id){
+    /* O sentido da transicao segue o sentido da navegacao: avancar entra pela
+       direita, voltar entra pela esquerda. Movimento que confirma para onde a
+       pessoa foi custa nada e evita a sensacao de troca aleatoria. */
+    var frente = indice(id) > indice(atual);
+    atual = id;
+    botoes.forEach(function(b){ b.setAttribute('aria-selected', String(b.dataset.aba === id)); });
+    Array.prototype.forEach.call(document.querySelectorAll('section.aba'), function(s){
+      var e = (s.id === id);
+      s.classList.remove('entra-dir','entra-esq');
+      s.classList.toggle('ativa', e);
+      if(e) s.classList.add(frente ? 'entra-dir' : 'entra-esq');
+    });
+    window.scrollTo({top:0, behavior:'smooth'});
+    revelar();
+    if(window.__indicador) window.__indicador();
+    if(window.__contadores) window.__contadores();
+    if(window.__progresso) window.__progresso();
+  }
+  botoes.forEach(function(b){ b.addEventListener('click', function(){ trocar(b.dataset.aba); }); });
+
+  /* Revelação no scroll — preservada do documento original. */
+  /* Antecipa a revelacao em 18% da altura da janela e aceita 1% de area: com a
+     margem negativa anterior, um bloco alto logo abaixo da dobra ficava abaixo
+     do limite e so aparecia depois de rolar — em tela curta ou na impressao,
+     nunca apareceria. */
+  var obs = new IntersectionObserver(function(itens){
+    itens.forEach(function(i){ if(i.isIntersecting){ i.target.classList.add('vis'); obs.unobserve(i.target); } });
+  }, {threshold:.01, rootMargin:'0px 0px 18% 0px'});
+  var rede;
+  function revelar(){
+    var pendentes = document.querySelectorAll('.aba.ativa .revela:not(.vis)');
+    pendentes.forEach(function(el){ obs.observe(el); });
+    /* Rede de seguranca: documento nao pode ter conteudo permanentemente
+       invisivel por causa de um efeito visual. */
+    clearTimeout(rede);
+    rede = setTimeout(function(){
+      document.querySelectorAll('.aba.ativa .revela:not(.vis)').forEach(function(el){
+        el.classList.add('vis');
+      });
+    }, 1400);
+  }
+  window.__revelar = revelar;
+  revelar();
+})();
+
+/* ===================== ABA 1 · mapa da infraestrutura ===================== */
+(function(){
+  var textos = {
+    internet:{t:'Endereço na internet',
+      o:'O endereço fixo pelo qual o sistema é encontrado. Ele pertence à conta, não à máquina.',
+      p:'Ninguém acha o sistema, mesmo com ele funcionando por dentro.',
+      v:'É justamente por ser separado da máquina que a substituta consegue assumir o mesmo endereço.'},
+    servidor:{t:'Servidor',
+      o:'Onde o sistema roda de fato. Recebe o formulário, valida e guarda a resposta no banco.',
+      p:'O sistema sai do ar por completo.',
+      v:'Cerca de sete minutos, sozinho, sem ninguém precisar acordar. É a mudança desta semana.'},
+    banco:{t:'Banco de dados',
+      o:'Onde as respostas ficam guardadas. É uma peça separada do servidor, de propósito.',
+      p:'O sistema abre mas não salva nem lista nada.',
+      v:'Minutos, com recuperação automática da AWS. Trocar o servidor não encosta nele.'},
+    copia:{t:'Cópia de segurança',
+      o:'Uma cópia completa do banco, todo dia às 3h30, verificada por dentro e enviada para três lugares.',
+      p:'Nada para de funcionar hoje — mas você fica sem rede de proteção para amanhã.',
+      v:'O aviso sai no mesmo dia se uma cópia falhar.'},
+    vigia:{t:'Monitoramento',
+      o:'Olha o sistema o tempo todo, guarda o que aconteceu e avisa por e-mail quando algo sai do normal.',
+      p:'O sistema continua funcionando normalmente. O que se perde é o aviso: ninguém fica sabendo se algo quebrar, e o problema só aparece quando um cliente reclamar.',
+      v:'Sobe junto com a máquina nova, automaticamente. Não precisa de ação de ninguém.'}
+  };
+  var alvo = document.getElementById('detalhe-mapa');
+  if(!alvo) return;
+  function mostrar(k, el){
+    var d = textos[k]; if(!d) return;
+    document.querySelectorAll('.caixa').forEach(function(c){ c.classList.remove('sel'); });
+    if(el) el.classList.add('sel');
+    alvo.innerHTML =
+      '<h4>'+d.t+'</h4><div class="par">'+
+      '<div><b>O que é</b>'+d.o+'</div>'+
+      '<div><b>Se parar</b>'+d.p+'</div>'+
+      '<div><b>Para voltar</b>'+d.v+'</div></div>';
+  }
+  document.querySelectorAll('.caixa').forEach(function(c){
+    c.addEventListener('click', function(){ mostrar(c.dataset.p, c); });
+    c.addEventListener('keydown', function(e){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); mostrar(c.dataset.p, c); }
+    });
+  });
+})();
+
+/* ===================== ABA 2 · cenários abriram × enviaram ================ */
+(function(){
+  var dados = {
+    normal:{a:248,e:236,txt:'<strong>Tudo certo.</strong> As duas barras crescem juntas, em proporção estável. Quem abre, consegue enviar.'},
+    quebrado:{a:251,e:3,txt:'<strong>Alerta.</strong> As pessoas continuam abrindo, mas quase ninguém consegue enviar. Sem os dois números, isso passaria por “dia fraco”.'},
+    vazio:{a:4,e:4,txt:'<strong>Dia devagar.</strong> Poucos envios porque pouca gente entrou. O sistema está inteiro — é só volume baixo.'}
+  };
+  var max = 260;
+  var na=document.getElementById('n-abriu'), ne=document.getElementById('n-enviou');
+  var ba=document.getElementById('b-abriu'), be=document.getElementById('b-enviou');
+  var tx=document.getElementById('cen-texto');
+  if(!na) return;
+  function anima(el, ate){
+    var ini=0, t0=null, dur=700;
+    function passo(t){
+      if(!t0) t0=t;
+      var p=Math.min(1,(t-t0)/dur), v=Math.round(ini+(ate-ini)*(1-Math.pow(1-p,3)));
+      el.textContent=v;
+      if(p<1) requestAnimationFrame(passo);
+    }
+    requestAnimationFrame(passo);
+  }
+  function aplicar(k){
+    var d=dados[k]; if(!d) return;
+    anima(na,d.a); anima(ne,d.e);
+    ba.style.width=(d.a/max*100)+'%'; be.style.width=(d.e/max*100)+'%';
+    tx.innerHTML=d.txt;
+    tx.className='nota'+(k==='quebrado'?' gr':'');
+  }
+  document.querySelectorAll('.cen').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.cen').forEach(function(x){ x.classList.remove('ativo'); });
+      b.classList.add('ativo'); aplicar(b.dataset.cen);
+    });
+  });
+  setTimeout(function(){ aplicar('normal'); }, 380);
+})();
+
+/* ===================== ABA 2 · gráfico de barras por hora ================= */
+(function(){
+  var svg=document.querySelector('#a2 .grafico .barras'); if(!svg) return;
+  var rot=document.querySelector('#a2 .grafico .rotulos');
+  var horas=['8','9','10','11','12','13','14','15','16','17','18','19'];
+  var abriu=[6,14,27,41,52,38,44,57,49,33,18,7];
+  var env  =[5,13,25,38,49,35,41,54,46,31,17,6];
+  var x0=48, larg=40, gap=2;
+  horas.forEach(function(h,i){
+    var x=x0+i*(larg+2);
+    var ha=abriu[i]*2, he=env[i]*2;
+    /* duas barras coladas com 2px de respiro entre elas */
+    svg.insertAdjacentHTML('beforeend',
+      '<rect class="b" x="'+x+'" y="'+(180-ha)+'" width="'+((larg-gap)/2)+'" height="'+ha+'" rx="4" fill="#4a93e8" style="transition-delay:'+(i*45)+'ms"/>'+
+      '<rect class="b" x="'+(x+(larg-gap)/2+gap)+'" y="'+(180-he)+'" width="'+((larg-gap)/2)+'" height="'+he+'" rx="4" fill="#b8842a" style="transition-delay:'+(i*45+60)+'ms"/>');
+    rot.insertAdjacentHTML('beforeend','<text x="'+(x+larg/2)+'" y="196">'+h+'h</text>');
+  });
+})();
+
+/* ===================== ABA 2 · medidor e tiras ============================ */
+(function(){
+  var v=document.getElementById('v-erro');
+  if(v){
+    var obs=new IntersectionObserver(function(e){
+      if(e[0].isIntersecting){
+        var t0=null;
+        (function passo(t){
+          if(!t0) t0=t;
+          var p=Math.min(1,(t-t0)/1100);
+          v.textContent=(0.4*p).toFixed(1).replace('.',',')+'%';
+          if(p<1) requestAnimationFrame(passo);
+        })(performance.now());
+        obs.disconnect();
+      }
+    },{threshold:.4});
+    obs.observe(v.closest('.painel'));
+  }
+  var tiras=document.getElementById('tiras');
+  if(tiras){
+    for(var i=0;i<30;i++){
+      tiras.insertAdjacentHTML('beforeend',
+        '<i class="'+(i===27?'man':'')+'" style="transition-delay:'+(i*28)+'ms"></i>');
+    }
+  }
+})();
+
+/* ===================== ABA 4 · anatomia do registro ====================== */
+(function(){
+  var d={
+    ts:{t:'Quando aconteceu', x:'Data e hora com milésimos, no horário universal. É o que permite alinhar o que aconteceu no sistema com o que a pessoa relata ter visto.'},
+    nivel:{t:'Gravidade', x:'INFO é rotina, ATENÇÃO merece olhar, FALHA exige ação. É por aqui que se filtra o que importa.'},
+    origem:{t:'Quem escreveu', x:'Qual parte do sistema gerou a linha — acesso, segurança, banco de dados. Ajuda a saber onde procurar.'},
+    msg:{t:'O que aconteceu, em texto', x:'A frase legível. Aqui: um agendamento foi criado com sucesso em 135 milésimos de segundo.'},
+    rota:{t:'Endereço interno acionado', x:'Qual funcionalidade foi usada. Permite responder “quantas vezes agendaram hoje?”.'},
+    status:{t:'Resultado', x:'200 significa sucesso. Começando com 4, o pedido veio errado; com 5, o sistema falhou. É o número que vira a taxa de erro.'},
+    dur:{t:'Quanto demorou', x:'Em milésimos de segundo. É o que revela lentidão antes de o cliente reclamar — e alimenta o alerta de resposta acima de 3 segundos.'},
+    req:{t:'Código da requisição', x:'O mais útil de todos. Único para cada pedido feito ao sistema. Com ele, uma busca traz tudo o que aconteceu naquele pedido específico — inclusive o erro completo.'}
+  };
+  var alvo=document.getElementById('detalhe-log'); if(!alvo) return;
+  document.querySelectorAll('#linha-log .cmp').forEach(function(c){
+    c.addEventListener('click', function(){
+      document.querySelectorAll('#linha-log .cmp').forEach(function(x){x.classList.remove('sel');});
+      c.classList.add('sel');
+      var i=d[c.dataset.c]; if(!i) return;
+      alvo.innerHTML='<h4>'+i.t+'</h4><p style="margin:0;color:var(--suave)">'+i.x+'</p>';
+    });
+  });
+})();
+
+/* ===================== ABA 4 · busca por código ========================== */
+(function(){
+  var base={
+    a5f01364:[
+      {h:'13:03:12.135', n:'INFO', m:'POST /agendamentos → 200 em 135 ms'},
+      {h:'13:03:12.139', n:'INFO', m:'agendamento criado · sala 2 · 14h30'},
+      {h:'13:03:12.204', n:'INFO', m:'e-mail de confirmação enfileirado'}
+    ],
+    '7c2e91b0':[
+      {h:'09:41:07.882', n:'INFO', m:'POST /formularios/enviar → 400 em 41 ms'},
+      {h:'09:41:07.884', n:'ATENCAO', m:'campo obrigatório ausente: telefone', e:1},
+      {h:'09:41:07.885', n:'INFO', m:'resposta devolvida ao navegador com a mensagem de campo faltando'}
+    ],
+    e14d0a55:[
+      {h:'21:12:44.610', n:'INFO', m:'POST /formularios/enviar → 500 em 3.114 ms'},
+      {h:'21:12:44.612', n:'FALHA', m:'tempo esgotado ao gravar no banco de dados', e:1},
+      {h:'21:12:44.613', n:'FALHA', m:'origem: fila de conexões cheia · 40 pedidos aguardando', e:1},
+      {h:'21:12:47.900', n:'INFO', m:'aviso automático enviado · gravidade ALTO'}
+    ]
+  };
+  var campo=document.getElementById('cod'), res=document.getElementById('resultado');
+  if(!campo) return;
+  function buscar(c){
+    c=(c||'').trim().toLowerCase();
+    var linhas=base[c];
+    if(!linhas){
+      res.innerHTML='<p style="margin:0;color:var(--suave)">Nenhum registro com esse código nos '+
+        'sete dias guardados. Use um dos exemplos acima — <span class="mono">a5f01364</span>, '+
+        '<span class="mono">7c2e91b0</span> ou <span class="mono">e14d0a55</span>.</p>';
+      return;
+    }
+    res.innerHTML='<p class="rotulo" style="margin:0 0 12px">'+linhas.length+
+      ' linhas encontradas para <span class="mono">'+c+'</span>, na ordem em que aconteceram</p>'+
+      linhas.map(function(l,i){
+        return '<div class="res-linha'+(l.e?' err':'')+'" style="animation-delay:'+(i*70)+'ms">'+
+          '<span class="h">'+l.h+'</span> · <strong>'+l.n+'</strong> · '+l.m+'</div>';
+      }).join('');
+  }
+  document.getElementById('btn-busca').addEventListener('click', function(){ buscar(campo.value); });
+  campo.addEventListener('keydown', function(e){ if(e.key==='Enter') buscar(campo.value); });
+  document.querySelectorAll('.chip').forEach(function(b){
+    b.addEventListener('click', function(){ campo.value=b.dataset.cod; buscar(b.dataset.cod); });
+  });
+})();
+
+/* ===================== ABA 5 · simulação da queda ======================== */
+(function(){
+  var btn=document.getElementById('btn-sim'), reset=document.getElementById('btn-reset');
+  var rel=document.getElementById('relogio'); if(!btn) return;
+  var timers=[], rodando=false;
+  var marcos=[0,2,3,5,6,7];        /* minutos do lado "hoje" */
+  var ritmo=520;                    /* ms por passo */
+  function limpar(){
+    timers.forEach(clearTimeout); timers=[]; rodando=false;
+    document.querySelectorAll('#a5 .passos li').forEach(function(l){ l.classList.remove('on'); });
+    rel.textContent='00:00'; btn.textContent='▶ Simular a queda'; btn.disabled=false;
+  }
+  function tocar(){
+    if(rodando) return; limpar(); rodando=true;
+    btn.disabled=true; btn.textContent='simulando…';
+    for(var i=0;i<6;i++){
+      (function(i){
+        timers.push(setTimeout(function(){
+          document.querySelectorAll('#a5 .passos li[data-t="'+i+'"]').forEach(function(l){ l.classList.add('on'); });
+          var m=marcos[i];
+          rel.textContent=(m<10?'0':'')+m+':00';
+          if(i===5){ rodando=false; btn.disabled=false; btn.textContent='▶ Simular de novo'; }
+        }, i*ritmo));
+      })(i);
+    }
+  }
+  btn.addEventListener('click', tocar);
+  reset.addEventListener('click', limpar);
+})();
+
+/* ===================== ABA 7 · custo por mês ============================= */
+(function(){
+  var g=document.querySelector('#a7 .custo-barras'); if(!g) return;
+  var r=document.querySelector('#a7 .custo-rot');
+  var meses=['abr','mai','jun','jul','ago','set*','out*'];
+  var val  =[52,55,54,58,96,60,58];
+  var mig  =[0,0,0,0,1,0,0];
+  var x0=64, larg=64, esp=16;
+  meses.forEach(function(m,i){
+    var x=x0+i*(larg+esp), h=val[i]*1.5;
+    g.insertAdjacentHTML('beforeend',
+      '<rect class="b" x="'+x+'" y="'+(200-h)+'" width="'+larg+'" height="'+h+'" rx="4" fill="'+
+      (mig[i]?'#b8842a':'#4a93e8')+'" style="transition-delay:'+(i*70)+'ms"/>');
+    r.insertAdjacentHTML('beforeend','<text x="'+(x+larg/2)+'" y="220">'+m+'</text>');
+  });
+  r.insertAdjacentHTML('beforeend','<text x="336" y="238" fill="#5f6f8a" font-size="10">* previsão</text>');
+})();
+
+
+/* ===================== ABA 7 · consumo x cobrado ========================= */
+(function(){
+  var g=document.querySelector('#a7 .c2-barras'); if(!g) return;
+  var r=document.querySelector('#a7 .c2-rot');
+  var meses=['mai','jun','jul','ago','set*','out*'];
+  var consumo=[54,56,58,63,58,56];
+  var pago   =[6,7,7,8,58,56];
+  var x0=70, larg=76, esp=22, esc=2;
+  meses.forEach(function(m,i){
+    var x=x0+i*(larg+esp);
+    var hc=consumo[i]*esc, hp=pago[i]*esc;
+    g.insertAdjacentHTML('beforeend',
+      '<rect class="b" x="'+x+'" y="'+(210-hc)+'" width="'+((larg-2)/2)+'" height="'+hc+'" rx="4" fill="#4a93e8" style="transition-delay:'+(i*80)+'ms"/>'+
+      '<rect class="b" x="'+(x+(larg-2)/2+2)+'" y="'+(210-hp)+'" width="'+((larg-2)/2)+'" height="'+hp+'" rx="4" fill="#b8842a" style="transition-delay:'+(i*80+60)+'ms"/>');
+    r.insertAdjacentHTML('beforeend','<text x="'+(x+larg/2)+'" y="228">'+m+'</text>');
+  });
+  r.insertAdjacentHTML('beforeend','<text x="350" y="248" fill="#5f6f8a" font-size="10">* previsão, sem créditos</text>');
+})();
+
+
+/* ===================== barra de progresso de leitura ===================== */
+(function(){
+  var b=document.createElement('div'); b.id='progresso'; document.body.appendChild(b);
+  function att(){
+    var h=document.documentElement.scrollHeight-window.innerHeight;
+    b.style.width = (h>0 ? (window.scrollY/h*100) : 0)+'%';
+  }
+  addEventListener('scroll', att, {passive:true}); addEventListener('resize', att); att();
+  window.__progresso = att;
+})();
+
+/* ===================== indicador deslizante das abas ===================== */
+(function(){
+  var faixa=document.querySelector('nav.abas .faixa'); if(!faixa) return;
+  var ind=document.createElement('div'); ind.id='indicador'; faixa.appendChild(ind);
+  function posicionar(){
+    var b=faixa.querySelector('button[aria-selected="true"]'); if(!b) return;
+    ind.style.width=b.offsetWidth+'px';
+    ind.style.transform='translateX('+b.offsetLeft+'px)';
+    ind.style.top=(b.offsetTop+b.offsetHeight-2)+'px';
+  }
+  window.__indicador=posicionar;
+  posicionar(); addEventListener('resize', posicionar);
+  faixa.addEventListener('click', function(){ setTimeout(posicionar,10); });
+})();
+
+/* ===================== brilho que segue o cursor nos paineis ============= */
+(function(){
+  document.addEventListener('pointermove', function(e){
+    var p=e.target.closest && e.target.closest('.painel'); if(!p) return;
+    var r=p.getBoundingClientRect();
+    p.style.setProperty('--mx', ((e.clientX-r.left)/r.width*100)+'%');
+    p.style.setProperty('--my', ((e.clientY-r.top)/r.height*100)+'%');
+  }, {passive:true});
+})();
+
+/* ===================== contadores ao aparecer ============================ */
+(function(){
+  function formata(v, casas, prefixo, sufixo){
+    var s = casas ? v.toFixed(casas).replace('.', ',') : String(Math.round(v));
+    if(!casas) s = s.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return (prefixo||'')+s+(sufixo||'');
+  }
+  var obs=new IntersectionObserver(function(itens){
+    itens.forEach(function(i){
+      if(!i.isIntersecting) return;
+      var el=i.target, ate=parseFloat(el.dataset.num), casas=parseInt(el.dataset.casas||'0',10);
+      var pre=el.dataset.pre||'', suf=el.dataset.suf||'', t0=null;
+      (function passo(t){
+        if(!t0) t0=t;
+        var p=Math.min(1,(t-t0)/1100), e=1-Math.pow(1-p,3);
+        el.textContent=formata(ate*e, casas, pre, suf);
+        if(p<1) requestAnimationFrame(passo);
+      })(performance.now());
+      obs.unobserve(el);
+    });
+  },{threshold:.5});
+  window.__contadores=function(){
+    document.querySelectorAll('.aba.ativa .conta:not([data-feito])').forEach(function(el){
+      el.dataset.feito='1'; obs.observe(el);
+    });
+  };
+  window.__contadores();
+})();
+
+/* ===================== pacote percorrendo o mapa ========================= */
+(function(){
+  var svg=document.querySelector('#a1 .mapa'); if(!svg) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var trilha='M114 96 H346 M346 96 H578 M578 96 H818';
+  var p=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  p.setAttribute('r','4.5'); p.setAttribute('class','pacote');
+  var m=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+  m.setAttribute('dur','3.2s'); m.setAttribute('repeatCount','indefinite');
+  m.setAttribute('path', trilha); m.setAttribute('keyPoints','0;1');
+  m.setAttribute('keyTimes','0;1'); m.setAttribute('calcMode','linear');
+  p.appendChild(m); svg.appendChild(p);
+})();
+
+/* ===================== dica flutuante nos graficos ======================= */
+(function(){
+  var dica=document.createElement('div'); dica.id='dica'; document.body.appendChild(dica);
+  function mostrar(e, html){
+    dica.innerHTML=html; dica.classList.add('on');
+    dica.style.left=e.clientX+'px'; dica.style.top=e.clientY+'px';
+  }
+  function esconder(){ dica.classList.remove('on'); }
+
+  /* barras por hora */
+  var horas=['8h','9h','10h','11h','12h','13h','14h','15h','16h','17h','18h','19h'];
+  var abriu=[6,14,27,41,52,38,44,57,49,33,18,7];
+  var env  =[5,13,25,38,49,35,41,54,46,31,17,6];
+  document.querySelectorAll('#a2 .barras rect').forEach(function(r,i){
+    var h=horas[Math.floor(i/2)], serie=i%2===0;
+    r.addEventListener('pointermove', function(e){
+      mostrar(e,'<b>'+h+'</b>'+
+        '<i style="background:#4a93e8"></i>Abriram: '+abriu[Math.floor(i/2)]+'<br>'+
+        '<i style="background:#b8842a"></i>Enviaram: '+env[Math.floor(i/2)]);
+    });
+    r.addEventListener('pointerleave', esconder);
+  });
+
+  /* custo por mes */
+  var meses=['maio','junho','julho','agosto','setembro (previsto)','outubro (previsto)'];
+  var cons=[54,56,58,63,58,56], pago=[6,7,7,8,58,56];
+  document.querySelectorAll('#a7 .c2-barras rect').forEach(function(r,i){
+    var m=meses[Math.floor(i/2)];
+    r.addEventListener('pointermove', function(e){
+      mostrar(e,'<b>'+m+'</b>'+
+        '<i style="background:#4a93e8"></i>Consumo: US$ '+cons[Math.floor(i/2)]+'<br>'+
+        '<i style="background:#b8842a"></i>Cobrado: US$ '+pago[Math.floor(i/2)]);
+    });
+    r.addEventListener('pointerleave', esconder);
+  });
+
+  /* dias de disponibilidade */
+  document.querySelectorAll('#tiras i').forEach(function(q,i){
+    q.addEventListener('pointermove', function(e){
+      mostrar(e, q.classList.contains('man')
+        ? '<b>dia '+(i+1)+'</b>Manutenção planejada · ~4 min de madrugada'
+        : '<b>dia '+(i+1)+'</b>No ar o dia inteiro');
+    });
+    q.addEventListener('pointerleave', esconder);
+  });
+})();
+
+
+/* ===================== ABA · troca azul e verde do banco ================= */
+(function(){
+  var btn=document.getElementById('btn-bg'); if(!btn) return;
+  var reset=document.getElementById('btn-bg-reset');
+  var fase=document.getElementById('bg-fase'), leg=document.getElementById('bg-legenda');
+  var azul=document.getElementById('bg-azul'), verde=document.getElementById('bg-verde');
+  var ligA=document.getElementById('lig-azul'), ligV=document.getElementById('lig-verde');
+  var sync=document.getElementById('lig-sync'), rotSync=document.getElementById('rot-sync');
+  var rotA=document.getElementById('rot-azul'), rotV=document.getElementById('rot-verde');
+  var estA=document.getElementById('est-azul'), estV=document.getElementById('est-verde');
+  var timers=[];
+
+  var passos=[
+    {f:'1 de 5 · preparando', l:'Uma cópia do banco é criada com a versão nova, ao lado do original.',
+     ap:function(){ verde.setAttribute('opacity','1'); sync.setAttribute('opacity','.9');
+       rotSync.setAttribute('opacity','1'); estV.textContent='sendo construída'; }},
+    {f:'2 de 5 · sincronizada', l:'Tudo que chega no banco atual é copiado para a nova, ao vivo. As duas ficam idênticas.',
+     ap:function(){ sync.setAttribute('stroke-dasharray','0'); rotSync.textContent='sincronizadas, segundo a segundo';
+       estV.textContent='idêntica ao original'; }},
+    {f:'3 de 5 · a troca', l:'A AWS inverte os nomes. Segundos. A cópia nova assume o lugar do original.',
+     ap:function(){ rotA.textContent='versão antiga · somente leitura'; rotA.setAttribute('fill','#5f6f8a');
+       estA.textContent='abandonado'; azul.setAttribute('opacity','.5');
+       rotV.textContent='versão nova · em uso'; estV.textContent='recebendo tudo';
+       sync.setAttribute('opacity','0'); rotSync.setAttribute('opacity','0'); }},
+    {f:'4 de 5 · a armadilha', l:'O sistema tinha o endereço antigo guardado. Continua falando com o banco abandonado — e a leitura funciona perfeitamente.',
+     ap:function(){ ligA.setAttribute('stroke','#ff5c6c'); ligA.setAttribute('stroke-width','3');
+       estA.textContent='o sistema ainda está aqui'; azul.setAttribute('opacity','1'); }},
+    {f:'5 de 5 · corrigido', l:'A aplicação é recriada para abrir conexões novas — e só então validada com uma GRAVAÇÃO, não com uma leitura.',
+     ap:function(){ ligA.setAttribute('opacity','0'); ligV.setAttribute('opacity','1');
+       ligV.setAttribute('stroke-dasharray','0'); estA.textContent='desligado depois';
+       azul.setAttribute('opacity','.35'); estV.textContent='gravação confirmada'; }}
+  ];
+
+  function limpar(){
+    timers.forEach(clearTimeout); timers=[];
+    verde.setAttribute('opacity','.25'); azul.setAttribute('opacity','1');
+    ligA.setAttribute('stroke','#4a93e8'); ligA.setAttribute('stroke-width','2.5'); ligA.setAttribute('opacity','1');
+    ligV.setAttribute('opacity','0'); ligV.setAttribute('stroke-dasharray','6 6');
+    sync.setAttribute('opacity','0'); sync.setAttribute('stroke-dasharray','8 8');
+    rotSync.setAttribute('opacity','0'); rotSync.textContent='copiando tudo, ao vivo';
+    rotA.textContent='versão antiga · em uso'; rotA.setAttribute('fill','#4a93e8');
+    rotV.textContent='versão nova'; estA.textContent='recebendo tudo'; estV.textContent='aguardando';
+    leg.textContent='Antes de começar: um banco só, com o sistema conectado nele.';
+    fase.textContent='pronto'; btn.disabled=false; btn.textContent='▶ Ver a troca';
+  }
+  function tocar(){
+    limpar(); btn.disabled=true; btn.textContent='mostrando…';
+    passos.forEach(function(p,i){
+      timers.push(setTimeout(function(){
+        p.ap(); fase.textContent=p.f; leg.textContent=p.l;
+        fase.style.color = (i===3) ? 'var(--grave)' : (i===4 ? 'var(--bom)' : 'var(--s1)');
+        if(i===passos.length-1){ btn.disabled=false; btn.textContent='▶ Ver de novo'; }
+      }, 300 + i*2100));
+    });
+  }
+  btn.addEventListener('click', tocar);
+  reset.addEventListener('click', limpar);
+})();
+
+
+/* ===================== particulas de dado ================================ */
+(function(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var c=document.getElementById('particulas'); if(!c) return;
+  for(var i=0;i<22;i++){
+    var b=document.createElement('b');
+    b.style.left=(Math.random()*100).toFixed(2)+'%';
+    b.style.animationDuration=(16+Math.random()*22).toFixed(1)+'s';
+    b.style.animationDelay=(-Math.random()*30).toFixed(1)+'s';
+    if(i%5===0){ b.style.background='var(--roxo)'; b.style.boxShadow='0 0 8px rgba(167,139,250,.8)'; }
+    if(i%7===0){ b.style.background='var(--bom)'; b.style.boxShadow='0 0 8px rgba(61,220,151,.7)'; }
+    c.appendChild(b);
+  }
+})();
+
+
+/* ===================== catalogo dos dez registros ======================== */
+(function(){
+  var lista=document.getElementById('lista-log'); if(!lista) return;
+  var dados=[
+    {g:'info',tag:'Normal',t:'Acesso — toda requisição atendida',freq:'uma por requisição',
+     ex:'POST /agendamentos -> 200 em 135 ms',
+     quando:'Sempre que alguém usa o sistema, com sucesso ou não.',
+     diz:'O que foi pedido, se deu certo, e quanto tempo levou. É o registro que permite reconstruir passo a passo o que uma pessoa fez.',
+     faz:'Nada. É o pulso normal do sistema. Serve de base de comparação: quando o volume dessas linhas cai bruscamente, alguma coisa parou.'},
+    {g:'info',tag:'Normal',t:'Inicialização do sistema',freq:'uma por reinício',
+     ex:'Sistema iniciado em 6.9 segundos\n61 alterações do banco validadas',
+     quando:'Quando o sistema sobe, por uma atualização ou por um reinício.',
+     diz:'Que o sistema subiu inteiro e que a estrutura do banco foi conferida — as alterações históricas estão todas aplicadas.',
+     faz:'Se aparecer sem ninguém ter publicado versão nova, o sistema reiniciou sozinho. Vale investigar: normalmente é falta de memória.'},
+    {g:'info',tag:'Normal',t:'Regra de negócio recusou uma ação',freq:'conforme o uso',
+     ex:'Este horário está lotado (2 vagas preenchidas). Escolha outro horário.',
+     quando:'Quando alguém tenta agendar num horário cheio, ou se inscrever duas vezes na mesma lista.',
+     diz:'Que o sistema funcionou corretamente. Não é defeito — é a regra fazendo o trabalho dela.',
+     faz:'Individualmente, nada. Mas recusa por horário lotado repetida no mesmo horário é informação comercial: falta capacidade ali, não é problema técnico.'},
+    {g:'aten',tag:'Atenção',t:'Resposta lenta',freq:'deve ser raro',
+     ex:'GET /modelos/39 -> 200 em 2450 ms (lenta)',
+     quando:'Quando uma resposta passa de dois segundos, mesmo tendo dado certo.',
+     diz:'Que a pessoa esperou. Lentidão não gera erro e não aparece em nenhum contador de falha — por isso é marcada explicitamente.',
+     faz:'Repetido na mesma tela, é consulta pesada e vale otimizar. Em várias telas ao mesmo tempo, o problema é o servidor ou o banco.'},
+    {g:'aten',tag:'Atenção',t:'Pedido recusado por dado inválido ou falta de permissão',freq:'conforme o uso',
+     ex:'GET /modelos -> 401 em 3 ms',
+     quando:'Quando alguém pede algo sem estar autenticado, ou envia um dado que o sistema não aceita.',
+     diz:'Que o pedido não era válido. Volume alto costuma ser sessão expirada no navegador, não ataque.',
+     faz:'Se concentrar numa única tela, provavelmente há problema de usabilidade ali. Se vier de muitos usuários ao mesmo tempo, o tempo de sessão pode estar curto demais.'},
+    {g:'aten',tag:'Atenção',t:'Login recusado por senha inválida',freq:'esperado ocasionalmente',
+     ex:'Login recusado: senha inválida. usuario=fulano',
+     quando:'Quando alguém erra a senha.',
+     diz:'Qual usuário tentou e falhou. Uma vez é distração. Várias seguidas, do mesmo usuário e em poucos segundos, não é.',
+     faz:'O painel mostra a proporção de falhas sobre o total. Acima de 60% sustentado, é hora de olhar de onde vêm as tentativas.'},
+    {g:'aten',tag:'Atenção',t:'Login recusado por usuário inexistente',freq:'deve ser raro',
+     ex:'Login recusado: usuário inexistente. usuario=admin',
+     quando:'Quando tentam entrar com um nome que não existe no sistema.',
+     diz:'Que alguém está chutando nomes. Um usuário legítimo sabe o próprio login.',
+     faz:'Em volume, é varredura automatizada procurando contas comuns. É o sinal mais direto de que alguém de fora está sondando.'},
+    {g:'aten',tag:'Atenção',t:'Login recusado por usuário desligado',freq:'deve ser raro',
+     ex:'Login recusado: usuário inativo. usuario=desligado',
+     quando:'Quando alguém com a conta desligada tenta entrar — mesmo com a senha certa.',
+     diz:'Que o botão de desligar a conta está funcionando.',
+     faz:'Quem está do lado de fora recebe a mesma resposta de senha inválida, de propósito: assim ninguém descobre, testando, que aquele usuário existe. A distinção fica só no registro.'},
+    {g:'aten',tag:'Atenção',t:'Aviso de configuração na inicialização',freq:'uma por reinício',
+     ex:'Ferramenta de migração mais antiga que a versão do banco',
+     quando:'Toda vez que o sistema sobe.',
+     diz:'Que uma ferramenta interna não foi testada oficialmente com a versão nova do banco. Não é falha: todas as alterações foram aplicadas sem erro.',
+     faz:'Nada de imediato. Está registrado como pendência e mantido visível de propósito.'},
+    {g:'falha',tag:'Falha',t:'Erro não previsto',freq:'deve ser zero',
+     ex:'POST /respostas -> 500 em 88 ms\n(com o rastro completo do erro em campo próprio)',
+     quando:'Quando o sistema encontra uma situação que não sabe tratar.',
+     diz:'Exatamente onde parou, com o caminho completo até o ponto responsável, num campo único e não picotado.',
+     faz:'Sempre olhar. É o único tipo que deve ficar permanentemente em zero. O painel principal mostra a contagem da última hora no alto da tela.'}
+  ];
+  var cls={info:'nt',aten:'at',falha:'gr'};
+  function pintar(filtro){
+    lista.innerHTML='';
+    dados.filter(function(d){ return filtro==='todos'||d.g===filtro; }).forEach(function(d,i){
+      var el=document.createElement('div'); el.className='item-log';
+      el.innerHTML='<button aria-expanded="false"><span class="selo '+cls[d.g]+'">'+d.tag+'</span>'+
+        '<h4>'+d.t+'</h4><span class="freq">'+d.freq+'</span><span class="seta">›</span></button>'+
+        '<div class="corpo"><div class="ex">'+d.ex.replace(/\n/g,'<br>')+'</div>'+
+        '<div class="par"><div><b>Quando aparece</b>'+d.quando+'</div>'+
+        '<div><b>O que diz</b>'+d.diz+'</div>'+
+        '<div><b>O que fazer</b>'+d.faz+'</div></div></div>';
+      var bt=el.querySelector('button');
+      bt.addEventListener('click', function(){
+        var ab=el.classList.toggle('aberto');
+        bt.setAttribute('aria-expanded', String(ab));
+      });
+      lista.appendChild(el);
+    });
+  }
+  document.querySelectorAll('#filtro-log .cen').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('#filtro-log .cen').forEach(function(x){x.classList.remove('ativo');});
+      b.classList.add('ativo'); pintar(b.dataset.g);
+    });
+  });
+  pintar('todos');
+})();
+
+
+/* ==========================================================================
+   INTERACOES — cada uma responde a uma pergunta de quem esta lendo.
+   ========================================================================== */
+(function(){
+  var reduz = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* --- inclinacao do painel sob o cursor: profundidade que segue a mao ----- */
+  if(!reduz && window.matchMedia('(min-width:901px)').matches){
+    var quadro = null;
+    document.addEventListener('pointermove', function(e){
+      if(quadro) return;
+      quadro = requestAnimationFrame(function(){
+        quadro = null;
+        var alvo = e.target.closest ? e.target.closest('.painel') : null;
+        document.querySelectorAll('.painel.inclina').forEach(function(el){
+          if(el !== alvo){ el.classList.remove('inclina'); el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); }
+        });
+        if(!alvo) return;
+        var r = alvo.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+        /* limite baixo de proposito: inclinacao perceptivel, nunca distorcendo texto */
+        alvo.style.setProperty('--ry', ((px - .5) * 3).toFixed(2) + 'deg');
+        alvo.style.setProperty('--rx', ((.5 - py) * 2.2).toFixed(2) + 'deg');
+        alvo.style.setProperty('--mx', (px*100).toFixed(1) + '%');
+        alvo.style.setProperty('--my', (py*100).toFixed(1) + '%');
+        alvo.classList.add('inclina');
+      });
+    }, {passive:true});
+    document.addEventListener('pointerleave', function(){
+      document.querySelectorAll('.painel.inclina').forEach(function(el){ el.classList.remove('inclina'); });
+    });
+  }
+
+  /* --- onda no clique: confirma que o botao registrou o toque ------------- */
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.acao, .cen') : null;
+    if(!b || reduz) return;
+    var r = b.getBoundingClientRect(), d = Math.max(r.width, r.height);
+    var o = document.createElement('span');
+    o.className = 'onda';
+    o.style.width = o.style.height = d + 'px';
+    o.style.left = (e.clientX - r.left - d/2) + 'px';
+    o.style.top  = (e.clientY - r.top  - d/2) + 'px';
+    b.appendChild(o);
+    setTimeout(function(){ o.remove(); }, 620);
+  });
+
+  /* --- atracao magnetica nos botoes de aba -------------------------------- */
+  if(!reduz){
+    document.querySelectorAll('nav.abas button').forEach(function(b){
+      b.addEventListener('pointermove', function(e){
+        var r = b.getBoundingClientRect();
+        b.style.transform = 'translate(' + ((e.clientX - r.left - r.width/2) * .08).toFixed(2) + 'px,' +
+                            ((e.clientY - r.top - r.height/2) * .12).toFixed(2) + 'px)';
+      });
+      b.addEventListener('pointerleave', function(){ b.style.transform = ''; });
+    });
+  }
+})();
+
+/* --- navegacao continua: a proxima aba sempre a um clique ----------------- */
+(function(){
+  var botoes = Array.prototype.slice.call(document.querySelectorAll('nav.abas button'));
+  if(!botoes.length) return;
+
+  var barra = document.createElement('div');
+  barra.id = 'proxima';
+  barra.innerHTML = '<button type="button" class="so-seta" id="p-ant" aria-label="Aba anterior">←</button>' +
+                    '<button type="button" id="p-prox"><span>Próxima</span><b id="p-nome"></b> →</button>';
+  document.body.appendChild(barra);
+
+  function atual(){
+    for(var i=0;i<botoes.length;i++) if(botoes[i].getAttribute('aria-selected')==='true') return i;
+    return 0;
+  }
+  function ir(i){
+    if(i<0 || i>=botoes.length) return;
+    botoes[i].click();
+  }
+  function nome(b){ return b ? b.textContent.replace(/^\d+/,'').trim() : ''; }
+  function atualizar(){
+    var i = atual();
+    document.getElementById('p-ant').style.display = i===0 ? 'none' : '';
+    var prox = botoes[i+1];
+    var bt = document.getElementById('p-prox');
+    if(!prox){ bt.style.display='none'; }
+    else { bt.style.display=''; document.getElementById('p-nome').textContent = nome(prox); }
+    /* na ultima aba, so a seta de voltar faz sentido */
+    barra.classList.toggle('vis', window.scrollY > 380 || !!prox === false);
+  }
+  document.getElementById('p-prox').addEventListener('click', function(){ ir(atual()+1); });
+  document.getElementById('p-ant').addEventListener('click', function(){ ir(atual()-1); });
+  botoes.forEach(function(b){ b.addEventListener('click', function(){ setTimeout(atualizar, 60); }); });
+
+  var t=null;
+  window.addEventListener('scroll', function(){
+    if(t) return;
+    t = requestAnimationFrame(function(){ t=null; barra.classList.toggle('vis', window.scrollY > 380); });
+  }, {passive:true});
+
+  /* --- setas do teclado trocam de aba ------------------------------------ */
+  document.addEventListener('keydown', function(e){
+    if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if(e.key==='ArrowRight'){ ir(atual()+1); }
+    else if(e.key==='ArrowLeft'){ ir(atual()-1); }
+    else return;
+    e.preventDefault();
+  });
+
+  /* dica mostrada uma vez, some sozinha — atalho que ninguem descobre sozinho */
+  var dica = document.createElement('div');
+  dica.id = 'dica-teclas';
+  dica.innerHTML = 'Use <kbd>←</kbd> <kbd>→</kbd> para navegar entre as abas';
+  document.body.appendChild(dica);
+  setTimeout(function(){ dica.classList.add('vis'); }, 2200);
+  setTimeout(function(){ dica.classList.remove('vis'); }, 9000);
+
+  atualizar();
+})();
+
+/* --- copiar endereco: resposta visivel no proprio botao ------------------- */
+(function(){
+  document.querySelectorAll('.end').forEach(function(a){
+    var url = a.getAttribute('href'); if(!url) return;
+    var b = document.createElement('button');
+    b.type='button'; b.className='end-copiar'; b.textContent='copiar';
+    b.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      /* clipboard moderno falha em arquivo local em alguns navegadores;
+         o campo temporario e o caminho que sempre funciona */
+      function feito(){ b.textContent='copiado'; b.classList.add('ok');
+        setTimeout(function(){ b.textContent='copiar'; b.classList.remove('ok'); }, 1600); }
+      try{
+        navigator.clipboard.writeText(url).then(feito, manual);
+      }catch(x){ manual(); }
+      function manual(){
+        var c=document.createElement('textarea'); c.value=url;
+        c.style.position='fixed'; c.style.opacity='0'; document.body.appendChild(c);
+        c.select();
+        try{ document.execCommand('copy'); feito(); }catch(y){}
+        c.remove();
+      }
+    });
+    a.appendChild(b);
+  });
+})();
+
+/* --- numero grande pulsa quando termina de contar ------------------------- */
+(function(){
+  var obs = new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      var el = m.target.nodeType===1 ? m.target : m.target.parentNode;
+      if(!el || !el.classList || !el.classList.contains('numerao')) return;
+      clearTimeout(el.__t);
+      el.__t = setTimeout(function(){
+        el.classList.add('pronto');
+        setTimeout(function(){ el.classList.remove('pronto'); }, 520);
+      }, 140);
+    });
+  });
+  document.querySelectorAll('.numerao.conta').forEach(function(el){
+    obs.observe(el, {childList:true, characterData:true, subtree:true});
+  });
+})();
+
+</script>
+</body>
+</html>

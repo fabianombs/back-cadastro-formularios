@@ -30,6 +30,11 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: teste_fabiano_cadastro2
+      # Sem isso o root SO conecta via localhost (dentro do container). Ferramenta
+      # externa (Workbench, DBeaver) chega pela rede do Docker e o mysqld enxerga
+      # o IP do gateway da bridge (ex.: 172.18.0.1), nao "localhost" -> "Access
+      # denied for user 'root'@'172.18.0.1'" mesmo com a senha certa.
+      MYSQL_ROOT_HOST: '%'
     command:
       # utf8mb4 explicito para bater com o charset de producao
       - --character-set-server=utf8mb4
@@ -55,6 +60,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: fabiano_migracao_check
+      MYSQL_ROOT_HOST: '%'
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci

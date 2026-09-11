@@ -64,6 +64,14 @@ public class SurveyConfig {
     @Column(name = "background_image_url", columnDefinition = "TEXT")
     private String backgroundImageUrl;
 
+    /** Imagem de fundo específica para celular (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_mobile_url", columnDefinition = "TEXT")
+    private String backgroundImageMobileUrl;
+
+    /** Imagem de fundo específica para tablet (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_tablet_url", columnDefinition = "TEXT")
+    private String backgroundImageTabletUrl;
+
     @Column(name = "primary_color")
     private String primaryColor;
 
@@ -160,6 +168,9 @@ public class SurveyConfig {
 
     @Column(name = "thankyou_subtitle")
     @Builder.Default private String thankyouSubtitle = "Avaliação registrada com sucesso.";
+
+    @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
+    private String thankYouParagraph;
 
     // Textos dos botões
     @Column(name = "welcome_btn_text")

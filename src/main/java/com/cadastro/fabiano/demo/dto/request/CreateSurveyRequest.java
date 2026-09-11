@@ -13,6 +13,8 @@ public record CreateSurveyRequest(
         String backgroundColor,
         String backgroundGradient,
         String backgroundImageUrl,
+        String backgroundImageMobileUrl,
+        String backgroundImageTabletUrl,
         String primaryColor,
         String textColor,
         String cardColor,
@@ -44,6 +46,7 @@ public record CreateSurveyRequest(
         // Subtítulos e botões editáveis
         String welcomeSubtitle,
         String thankyouSubtitle,
+        String thankYouParagraph,
         String welcomeBtnText,
         String ratingBtnText
 ) {}

@@ -55,6 +55,14 @@ public class QuizConfig {
     @Column(name = "background_image_url")
     private String backgroundImageUrl;
 
+    /** Imagem de fundo específica para celular (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_mobile_url")
+    private String backgroundImageMobileUrl;
+
+    /** Imagem de fundo específica para tablet (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_tablet_url")
+    private String backgroundImageTabletUrl;
+
     @Column(name = "primary_color")
     private String primaryColor;
 
@@ -91,6 +99,21 @@ public class QuizConfig {
 
     @Column(name = "ready_message", length = 255)
     private String readyMessage;
+
+    // Tela de agradecimento final (opcional) — mostrada acima do resultado/pontuação
+    // quando habilitada; sem ela, comportamento de sempre (só a tela de resultado).
+    @Column(name = "thank_you_enabled", nullable = false)
+    @Builder.Default
+    private boolean thankYouEnabled = false;
+
+    @Column(name = "thank_you_title", length = 255)
+    private String thankYouTitle;
+
+    @Column(name = "thank_you_subtitle", length = 255)
+    private String thankYouSubtitle;
+
+    @Column(name = "thank_you_paragraph", columnDefinition = "TEXT")
+    private String thankYouParagraph;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
