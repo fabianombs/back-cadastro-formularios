@@ -57,7 +57,7 @@ class SurveyServiceTest {
     private CreateSurveyRequest buildRequest(String name, String slug) {
         return new CreateSurveyRequest(name, slug, "Empresa X", null,
                 "Como foi?", "Qual sua satisfação?", false, "Obrigado!",
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,
@@ -168,7 +168,7 @@ class SurveyServiceTest {
         SurveyConfig other = buildSurvey(2L, "Outro", "novo-slug");
         CreateSurveyRequest req = new CreateSurveyRequest("NPS", "novo-slug",
                 null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null,

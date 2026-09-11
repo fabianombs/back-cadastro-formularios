@@ -3,6 +3,8 @@ package com.cadastro.fabiano.demo.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.CreationTimestamp;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +27,13 @@ public class FormTemplate {
 
     @Column(nullable = false, unique = true)
     private String slug;
+
+    // Sem @CreationTimestamp o Hibernate grava NULL explicito no INSERT, o que
+    // sobrescreveria o DEFAULT CURRENT_TIMESTAMP da coluna (mesma armadilha
+    // documentada em Client.createdAt) — por isso a anotacao aqui tambem.
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     @ManyToOne
     @JoinColumn(name = "client_id")
@@ -109,6 +118,14 @@ public class FormTemplate {
     /** URL da imagem de fundo do formulário */
     @Column(name = "background_image_url", length = 1000)
     private String backgroundImageUrl;
+
+    /** URL da imagem de fundo específica para celular (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_mobile_url", length = 1000)
+    private String backgroundImageMobileUrl;
+
+    /** URL da imagem de fundo específica para tablet (opcional; sem ela, usa a de cima) */
+    @Column(name = "background_image_tablet_url", length = 1000)
+    private String backgroundImageTabletUrl;
 
     /** URL da imagem no topo do formulário */
     @Column(name = "header_image_url", length = 1000)

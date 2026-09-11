@@ -115,7 +115,7 @@ public class DashboardService {
             String rankingLink = hasQuiz ? frontendUrl + "/quiz/" + quiz.getSlug() + "/ranking" : null;
 
             return new TemplateStatResponse(
-                    t.getId(), t.getName(), t.getSlug(), clientName,
+                    t.getId(), t.getName(), t.getSlug(), clientName, t.getCreatedAt(),
                     t.isHasSchedule(), t.getFields().size(), submissions,
                     apptTotal, apptConfirmed, apptCancelled,
                     attTotal, attPresent,

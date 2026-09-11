@@ -199,6 +199,7 @@ public class SurveyService {
                 s.getCreatedAt(), s.getUpdatedAt(),
                 // Aparência
                 s.getBackgroundColor(), s.getBackgroundGradient(), s.getBackgroundImageUrl(),
+                s.getBackgroundImageMobileUrl(), s.getBackgroundImageTabletUrl(),
                 s.getPrimaryColor(), s.getTextColor(), s.getCardColor(),
                 s.getButtonColor(), s.getButtonTextColor(), s.getLogoBorderRadius(),
                 // Posições livres
@@ -222,6 +223,8 @@ public class SurveyService {
         s.setBackgroundColor(req.backgroundColor());
         s.setBackgroundGradient(req.backgroundGradient());
         s.setBackgroundImageUrl(req.backgroundImageUrl());
+        s.setBackgroundImageMobileUrl(req.backgroundImageMobileUrl());
+        s.setBackgroundImageTabletUrl(req.backgroundImageTabletUrl());
         s.setPrimaryColor(req.primaryColor());
         s.setTextColor(req.textColor());
         s.setCardColor(req.cardColor());

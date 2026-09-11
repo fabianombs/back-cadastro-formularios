@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura AWS · Documentação técnica</title>
+<meta name="description" content="Documentação técnica da arquitetura AWS: rede, computação, dados, identidade, observabilidade e recuperação. Arquivo único, sem dependência externa.">
+<style>
+/* ==========================================================================
+   BLUEPRINT — a estetica e a de uma planta tecnica: papel quadriculado,
+   numeracao visivel, monoespacado no titulo. O oposto do portal do cliente,
+   de proposito: publico diferente, leitura diferente.
+   ========================================================================== */
+:root{
+  --tinta:#0a0d13; --tinta2:#0e131c; --papel:#131a26; --papel2:#182130;
+  --linha:#212c3f; --linha2:#2c3a52;
+  --texto:#dfe7f2; --suave:#8fa1bd; --fraco:#5c6d8a;
+  --acc:#5ad1c4;      /* teal — estrutura */
+  --acc2:#e0a14a;     /* ambar — atencao, custo, decisao */
+  --acc3:#7aa2f7;     /* azul — fluxo, rede */
+  --acc4:#c39ef5;     /* violeta — identidade */
+  --alerta:#f7768e;
+  --ok:#4ade9b;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --corpo:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --lateral:268px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; overflow-x:clip; scroll-padding-top:24px}
+body{
+  margin:0; background:var(--tinta); color:var(--texto);
+  font-family:var(--corpo); font-size:16px; line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+}
+/* papel quadriculado: duas malhas sobrepostas, a maior mais visivel */
+body::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(90,209,196,.030) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90,209,196,.030) 1px, transparent 1px),
+    linear-gradient(rgba(122,162,247,.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(122,162,247,.016) 1px, transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;
+  -webkit-mask-image:radial-gradient(140% 100% at 50% 0%,#000 0%,transparent 78%);
+          mask-image:radial-gradient(140% 100% at 50% 0%,#000 0%,transparent 78%);
+}
+body::after{
+  content:""; position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.045;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+a{color:var(--acc3); text-underline-offset:3px}
+
+/* ---------- estrutura ---------- */
+.tudo{position:relative; z-index:2; display:grid; grid-template-columns:var(--lateral) 1fr;
+  max-width:1440px; margin:0 auto; gap:0}
+aside{position:sticky; top:0; height:100vh; overflow-y:auto; padding:34px 20px 40px 26px;
+  border-right:1px solid var(--linha); scrollbar-width:thin}
+main{padding:34px 42px 120px; min-width:0; max-width:980px}
+
+/* ---------- barra lateral ---------- */
+.selo-doc{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--acc); border:1px solid var(--linha2); border-radius:5px; padding:5px 9px; display:inline-block}
+aside h1{font-family:var(--mono); font-size:15px; line-height:1.45; margin:16px 0 4px; letter-spacing:-.01em}
+aside .sub{color:var(--fraco); font-size:12.5px; margin:0 0 22px}
+nav.sumario{border-top:1px solid var(--linha); padding-top:16px}
+nav.sumario a{display:flex; gap:10px; align-items:baseline; text-decoration:none; color:var(--suave);
+  font-size:13.2px; padding:5.5px 9px; border-radius:6px; border-left:2px solid transparent;
+  transition:color .2s, background .2s, border-color .2s}
+nav.sumario a i{font-style:normal; font-family:var(--mono); font-size:10.5px; color:var(--fraco);
+  min-width:18px; letter-spacing:.06em}
+nav.sumario a:hover{color:var(--texto); background:rgba(90,209,196,.06)}
+nav.sumario a.aqui{color:var(--acc); border-left-color:var(--acc); background:rgba(90,209,196,.07)}
+nav.sumario a.aqui i{color:var(--acc)}
+.rodape-lateral{margin-top:26px; padding-top:16px; border-top:1px solid var(--linha);
+  color:var(--fraco); font-size:11.5px; line-height:1.6}
+
+/* ---------- topo ---------- */
+.capa{border-bottom:1px solid var(--linha); padding-bottom:34px; margin-bottom:14px}
+.olho{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--acc)}
+.capa h2{font-family:var(--mono); font-size:clamp(25px,3.6vw,38px); line-height:1.2; margin:14px 0 16px;
+  letter-spacing:-.02em; font-weight:600}
+.capa h2 b{color:var(--acc); font-weight:600}
+.capa p{color:var(--suave); max-width:70ch; margin:0 0 18px; font-size:16.5px}
+.ficha{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:1px;
+  background:var(--linha); border:1px solid var(--linha); border-radius:9px; overflow:hidden; margin-top:24px}
+.ficha div{background:var(--tinta2); padding:13px 15px}
+.ficha .r{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--fraco)}
+.ficha .v{font-family:var(--mono); font-size:13.5px; color:var(--texto); margin-top:5px}
+
+/* ---------- secoes ---------- */
+section{padding:46px 0 8px; scroll-margin-top:20px}
+section > h3{font-family:var(--mono); font-size:clamp(19px,2.4vw,25px); margin:0 0 8px; letter-spacing:-.015em;
+  display:flex; gap:14px; align-items:baseline}
+section > h3 .num{color:var(--acc); font-size:13px; letter-spacing:.1em}
+section > .intro{color:var(--suave); max-width:74ch; margin:0 0 26px; font-size:15.6px}
+h4{font-family:var(--mono); font-size:14.5px; margin:30px 0 10px; color:var(--texto); letter-spacing:-.01em}
+h4::before{content:"› "; color:var(--acc)}
+p{margin:0 0 14px}
+.corpo{color:var(--suave); max-width:76ch}
+
+/* ---------- blocos ---------- */
+.cartao{background:linear-gradient(180deg,var(--papel),var(--tinta2)); border:1px solid var(--linha);
+  border-radius:11px; padding:20px 22px; position:relative; overflow:hidden}
+.grade{display:grid; gap:14px; margin:20px 0}
+.g2{grid-template-columns:repeat(auto-fit,minmax(268px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.rot{font-family:var(--mono); font-size:9.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--fraco)}
+.cartao h5{margin:9px 0 8px; font-size:15.5px; font-family:var(--corpo); font-weight:600}
+.cartao p{color:var(--suave); font-size:14.3px; margin:0}
+
+table{width:100%; border-collapse:collapse; margin:18px 0; font-size:14.2px}
+th{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--fraco); text-align:left; padding:0 14px 9px; border-bottom:1px solid var(--linha2); font-weight:400}
+td{padding:11px 14px; border-bottom:1px solid var(--linha); color:var(--suave); vertical-align:top}
+tbody tr{transition:background .16s}
+tbody tr:hover{background:rgba(90,209,196,.045)}
+td strong{color:var(--texto); font-weight:600}
+code,.mono{font-family:var(--mono); font-size:.885em}
+code{background:rgba(122,162,247,.10); border:1px solid rgba(122,162,247,.17);
+  border-radius:4px; padding:1px 5px; color:#a8c5ff}
+
+.nota{border-left:3px solid var(--acc2); background:rgba(224,161,74,.055); padding:14px 17px;
+  border-radius:0 9px 9px 0; color:var(--suave); font-size:14.5px; margin:20px 0}
+.nota.az{border-left-color:var(--acc3); background:rgba(122,162,247,.06)}
+.nota.vm{border-left-color:var(--alerta); background:rgba(247,118,142,.06)}
+.nota.vd{border-left-color:var(--ok); background:rgba(74,222,155,.055)}
+.nota strong{color:var(--texto)}
+
+.tag{display:inline-block; font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  text-transform:uppercase; padding:3px 9px; border-radius:999px; border:1px solid; white-space:nowrap}
+.t-ok{color:var(--ok); border-color:rgba(74,222,155,.4); background:rgba(74,222,155,.09)}
+.t-at{color:var(--acc2); border-color:rgba(224,161,74,.4); background:rgba(224,161,74,.09)}
+.t-nt{color:var(--fraco); border-color:var(--linha2); background:rgba(140,160,190,.07)}
+.t-az{color:var(--acc3); border-color:rgba(122,162,247,.4); background:rgba(122,162,247,.09)}
+.t-vm{color:var(--alerta); border-color:rgba(247,118,142,.4); background:rgba(247,118,142,.09)}
+
+pre{background:#070a0f; border:1px solid var(--linha); border-left:3px solid var(--acc3);
+  border-radius:0 9px 9px 0; padding:15px 17px; overflow-x:auto; font-family:var(--mono);
+  font-size:12.8px; line-height:1.72; color:#c6d4ea; margin:16px 0}
+pre .c{color:var(--fraco)}
+pre .k{color:var(--acc)}
+pre .s{color:var(--acc2)}
+
+svg.diagrama{width:100%; height:auto; display:block; margin:8px 0}
+
+/* ---------- linha do tempo do boot ---------- */
+.fases{list-style:none; margin:20px 0 0; padding:0; counter-reset:f}
+.fases > li{display:grid; grid-template-columns:38px 1fr; gap:16px; padding:15px 0;
+  border-bottom:1px solid var(--linha)}
+.fases > li:last-child{border-bottom:0}
+.fases .n{width:30px; height:30px; border-radius:8px; display:grid; place-items:center;
+  font-family:var(--mono); font-size:12.5px; color:var(--acc); border:1px solid var(--linha2);
+  background:rgba(90,209,196,.07)}
+.fases h5{margin:4px 0 6px; font-size:15px}
+.fases p{margin:0; color:var(--suave); font-size:14.2px}
+
+/* ---------- decisoes ---------- */
+.adr{border:1px solid var(--linha); border-radius:11px; overflow:hidden; margin:16px 0;
+  background:var(--tinta2)}
+.adr > button{width:100%; display:flex; gap:14px; align-items:center; text-align:left; cursor:pointer;
+  background:none; border:0; color:inherit; font:inherit; padding:15px 18px}
+.adr > button:hover{background:rgba(90,209,196,.05)}
+.adr .cod{font-family:var(--mono); font-size:11px; color:var(--acc); letter-spacing:.08em; min-width:52px}
+.adr .tit{font-weight:600; font-size:15px; flex:1}
+.adr .seta{color:var(--fraco); transition:transform .28s}
+.adr.aberta .seta{transform:rotate(90deg)}
+.adr .miolo{display:none; padding:0 18px 20px; border-top:1px solid var(--linha)}
+.adr.aberta .miolo{display:block; animation:abre .3s ease both}
+@keyframes abre{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none}}
+.adr .miolo .par{display:grid; gap:9px; margin-top:16px}
+.adr .miolo .par > div{background:rgba(7,10,15,.6); border-left:2px solid var(--linha2);
+  border-radius:7px; padding:11px 14px; font-size:14.2px; color:var(--suave)}
+.adr .miolo b{display:inline-block; font-family:var(--mono); font-size:9.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--acc); background:rgba(90,209,196,.09);
+  border:1px solid rgba(90,209,196,.2); border-radius:5px; padding:2px 8px 3px; margin-right:9px}
+
+/* ---------- revelacao ---------- */
+.rev{opacity:0; transform:translateY(14px); transition:opacity .6s cubic-bezier(.22,1,.36,1), transform .6s cubic-bezier(.22,1,.36,1)}
+.rev.vis{opacity:1; transform:none}
+
+/* ---------- progresso ---------- */
+#barra{position:fixed; top:0; left:0; height:2px; width:0; z-index:60;
+  background:linear-gradient(90deg,var(--acc),var(--acc3),var(--acc4)); transition:width .1s linear}
+
+/* ---------- responsivo ---------- */
+.abrir-menu{display:none}
+@media (max-width:1000px){
+  .tudo{grid-template-columns:1fr}
+  aside{position:static; height:auto; border-right:0; border-bottom:1px solid var(--linha); padding:24px 20px}
+  main{padding:26px 20px 90px}
+  nav.sumario{max-height:none}
+}
+@media print{
+  .rev{opacity:1 !important; transform:none !important}
+  aside,#barra{display:none}
+  .adr .miolo{display:block !important}
+  body::before,body::after{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .rev{opacity:1; transform:none; transition:none}
+}
+</style>
+</head>
+<body>
+<div id="barra"></div>
+<div class="tudo">
+
+<aside>
+  <span class="selo-doc">Doc técnica · v1</span>
+  <h1>Arquitetura AWS<br>da plataforma de formulários</h1>
+  <p class="sub">Infraestrutura descrita em código, máquina descartável e recuperação automática.</p>
+  <nav class="sumario" id="sumario">
+    <a href="#s1"><i>01</i>Visão geral</a>
+    <a href="#s2"><i>02</i>Princípios</a>
+    <a href="#s3"><i>03</i>Inventário</a>
+    <a href="#s4"><i>04</i>Rede e exposição</a>
+    <a href="#s5"><i>05</i>Computação</a>
+    <a href="#s6"><i>06</i>Sequência de boot</a>
+    <a href="#s7"><i>07</i>Dados e cópia</a>
+    <a href="#s8"><i>08</i>Identidade e segredos</a>
+    <a href="#s9"><i>09</i>Observabilidade</a>
+    <a href="#s10"><i>10</i>Esteira e ambientes</a>
+    <a href="#s11"><i>11</i>Modos de falha</a>
+    <a href="#s12"><i>12</i>Decisões registradas</a>
+    <a href="#s13"><i>13</i>Limites conhecidos</a>
+  </nav>
+  <div class="rodape-lateral">
+    Arquivo único, sem dependência externa.<br>
+    Nenhum identificador de recurso, segredo ou endpoint aparece neste documento.
+  </div>
+</aside>
+
+<main>
+  <div class="capa">
+    <div class="olho">Documentação técnica de arquitetura</div>
+    <h2>Uma máquina <b>descartável</b>, um endereço fixo,<br>e todo o resto descrito em código.</h2>
+    <p>Este documento descreve a infraestrutura AWS que sustenta a plataforma de formulários: como
+       cada peça é criada, o que ela pode e não pode fazer, o que acontece quando morre, e por que
+       cada decisão foi tomada do jeito que foi. É a referência para operar, auditar e para quem
+       entrar no projeto depois.</p>
+    <p class="corpo" style="font-size:15px">Escrito para circular: nenhum identificador de recurso,
+       endpoint, ARN completo, nome de bucket ou segredo aparece aqui. Onde o identificador seria
+       necessário, o papel do recurso é descrito no lugar dele.</p>
+    <div class="ficha">
+      <div><div class="r">Região</div><div class="v">us-east-1</div></div>
+      <div><div class="r">IaC</div><div class="v">Terraform ≥ 1.10</div></div>
+      <div><div class="r">Estado</div><div class="v">S3 + lockfile</div></div>
+      <div><div class="r">Computação</div><div class="v">EC2 em ASG</div></div>
+      <div><div class="r">Banco</div><div class="v">RDS MySQL 8.4</div></div>
+      <div><div class="r">Ambientes</div><div class="v">produção · homolog</div></div>
+    </div>
+  </div>
+
+<!-- ===================== 01 ===================== -->
+<section id="s1">
+  <h3><span class="num">01</span>Visão geral</h3>
+  <p class="intro">Uma única instância EC2 concentra a aplicação, o proxy reverso e a pilha de
+     observabilidade. O que muda tudo é que ela não é <em>a</em> máquina: é uma máquina, criada por
+     um grupo de Auto Scaling a partir de uma receita, e substituível a qualquer momento sem
+     intervenção humana.</p>
+
+  <div class="cartao rev">
+  <svg class="diagrama" viewBox="0 0 960 540" role="img"
+       aria-label="Diagrama da arquitetura: internet chega pelo endereço fixo até a instância EC2 dentro do grupo de Auto Scaling, que fala com o banco RDS, os buckets S3, o Parameter Store e o CloudWatch.">
+    <defs>
+      <marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#7aa2f7"/>
+      </marker>
+      <marker id="seta2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#5ad1c4"/>
+      </marker>
+      <linearGradient id="cx" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#182130"/><stop offset="1" stop-color="#121a26"/>
+      </linearGradient>
+    </defs>
+
+    <!-- limite da conta AWS -->
+    <rect x="150" y="26" width="796" height="492" rx="14" fill="none" stroke="#2c3a52" stroke-dasharray="5 5"/>
+    <text x="166" y="46" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="10.5" letter-spacing="1.6">CONTA AWS · US-EAST-1</text>
+
+    <!-- VPC -->
+    <rect x="168" y="60" width="470" height="424" rx="12" fill="none" stroke="#33415c"/>
+    <text x="182" y="80" fill="#7aa2f7" font-family="ui-monospace,monospace" font-size="10.5" letter-spacing="1.6">VPC</text>
+
+    <!-- zonas -->
+    <rect x="182" y="94" width="220" height="330" rx="10" fill="rgba(122,162,247,.045)" stroke="#2c3a52" stroke-dasharray="4 4"/>
+    <text x="194" y="112" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="10">ZONA A</text>
+    <rect x="412" y="94" width="212" height="330" rx="10" fill="rgba(122,162,247,.02)" stroke="#2c3a52" stroke-dasharray="4 4"/>
+    <text x="424" y="112" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="10">ZONA B</text>
+
+    <!-- grupo de auto scaling -->
+    <rect x="192" y="126" width="422" height="126" rx="10" fill="none" stroke="#5ad1c4" stroke-dasharray="6 4"/>
+    <text x="204" y="145" fill="#5ad1c4" font-family="ui-monospace,monospace" font-size="10" letter-spacing="1.2">AUTO SCALING GROUP · MIN 1 / MAX 1</text>
+
+    <!-- instancia -->
+    <rect x="206" y="156" width="182" height="82" rx="9" fill="url(#cx)" stroke="#5ad1c4" stroke-width="1.6"/>
+    <text x="297" y="180" text-anchor="middle" fill="#dfe7f2" font-size="13.5" font-weight="600">EC2 · t3.medium</text>
+    <text x="297" y="199" text-anchor="middle" fill="#8fa1bd" font-size="10.6">proxy · aplicação · painéis</text>
+    <text x="297" y="216" text-anchor="middle" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.2">gp3 · IMDSv2 · AL2023</text>
+
+    <!-- substituta -->
+    <rect x="428" y="156" width="176" height="82" rx="9" fill="none" stroke="#33415c" stroke-dasharray="5 4"/>
+    <text x="516" y="184" text-anchor="middle" fill="#5c6d8a" font-size="12">capacidade reserva</text>
+    <text x="516" y="202" text-anchor="middle" fill="#4a5876" font-size="10.2">a substituta nasce aqui se a</text>
+    <text x="516" y="218" text-anchor="middle" fill="#4a5876" font-size="10.2">zona A ficar sem capacidade</text>
+
+    <!-- banco -->
+    <rect x="206" y="330" width="182" height="76" rx="9" fill="url(#cx)" stroke="#e0a14a" stroke-width="1.4"/>
+    <text x="297" y="354" text-anchor="middle" fill="#dfe7f2" font-size="13" font-weight="600">RDS MySQL 8.4</text>
+    <text x="297" y="372" text-anchor="middle" fill="#8fa1bd" font-size="10.8">db.t3.micro · privado</text>
+    <text x="297" y="389" text-anchor="middle" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.2">retenção automática de 7 dias</text>
+
+    <path d="M297 238 V330" stroke="#e0a14a" stroke-width="1.6" fill="none" marker-end="url(#seta)" opacity=".75"/>
+    <text x="200" y="302" fill="#8fa1bd" font-size="10.4">3306, só a partir do grupo da EC2</text>
+
+    <!-- internet -->
+    <rect x="14" y="150" width="112" height="92" rx="9" fill="url(#cx)" stroke="#33415c"/>
+    <text x="70" y="180" text-anchor="middle" fill="#dfe7f2" font-size="12.5" font-weight="600">Internet</text>
+    <text x="70" y="199" text-anchor="middle" fill="#8fa1bd" font-size="10.5">participantes</text>
+    <text x="70" y="215" text-anchor="middle" fill="#8fa1bd" font-size="10.5">e equipe</text>
+    <text x="70" y="232" text-anchor="middle" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.5">443/tcp</text>
+
+    <!-- eip -->
+    <rect x="130" y="182" width="66" height="28" rx="14" fill="#0e131c" stroke="#c39ef5"/>
+    <text x="163" y="200" text-anchor="middle" fill="#c39ef5" font-family="ui-monospace,monospace" font-size="9.6">EIP fixo</text>
+    <path d="M126 196 H130" stroke="#7aa2f7" stroke-width="1.6"/>
+    <path d="M196 196 H206" stroke="#7aa2f7" stroke-width="1.6" marker-end="url(#seta)"/>
+
+    <!-- servicos regionais -->
+    <text x="668" y="80" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="10.5" letter-spacing="1.6">SERVIÇOS REGIONAIS</text>
+
+    <rect x="662" y="96" width="266" height="96" rx="10" fill="url(#cx)" stroke="#33415c"/>
+    <text x="678" y="119" fill="#dfe7f2" font-size="12.6" font-weight="600">S3</text>
+    <text x="678" y="139" fill="#8fa1bd" font-size="10.8">· pacotes de deploy — lidos no boot</text>
+    <text x="678" y="156" fill="#8fa1bd" font-size="10.8">· cópias do banco — escrita sem apagar</text>
+    <text x="678" y="173" fill="#8fa1bd" font-size="10.8">· imagens enviadas nos formulários</text>
+
+    <rect x="662" y="206" width="266" height="70" rx="10" fill="url(#cx)" stroke="#c39ef5" stroke-width="1.3"/>
+    <text x="678" y="229" fill="#dfe7f2" font-size="12.6" font-weight="600">Parameter Store</text>
+    <text x="678" y="248" fill="#8fa1bd" font-size="10.8">segredos cifrados, por ambiente</text>
+    <text x="678" y="265" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.6">lidos no nascimento da máquina</text>
+
+    <rect x="662" y="290" width="266" height="86" rx="10" fill="url(#cx)" stroke="#33415c"/>
+    <text x="678" y="313" fill="#dfe7f2" font-size="12.6" font-weight="600">CloudWatch + SNS</text>
+    <text x="678" y="332" fill="#8fa1bd" font-size="10.8">três alarmes, fora da instância</text>
+    <text x="678" y="349" fill="#8fa1bd" font-size="10.8">disparam mesmo com a máquina morta</text>
+    <text x="678" y="367" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.6">→ e-mail</text>
+
+    <rect x="662" y="392" width="266" height="74" rx="10" fill="url(#cx)" stroke="#33415c"/>
+    <text x="678" y="415" fill="#dfe7f2" font-size="12.6" font-weight="600">GitHub Actions</text>
+    <text x="678" y="434" fill="#8fa1bd" font-size="10.8">assume papel por OIDC, sem chave fixa</text>
+    <text x="678" y="452" fill="#5c6d8a" font-family="ui-monospace,monospace" font-size="9.6">publica o pacote de deploy no S3</text>
+
+    <!-- ligacoes com os servicos regionais -->
+    <path d="M388 226 H396 V292 H646" stroke="#5ad1c4" stroke-width="1.5" fill="none" opacity=".85"/>
+    <path d="M646 144 V333" stroke="#5ad1c4" stroke-width="1.5" fill="none" opacity=".85"/>
+    <path d="M646 144 H660" stroke="#5ad1c4" stroke-width="1.4" fill="none" marker-end="url(#seta2)" opacity=".85"/>
+    <path d="M646 241 H660" stroke="#c39ef5" stroke-width="1.4" fill="none" marker-end="url(#seta2)" opacity=".85"/>
+    <path d="M646 333 H660" stroke="#5ad1c4" stroke-width="1.4" fill="none" marker-end="url(#seta2)" opacity=".85"/>
+    <circle cx="646" cy="292" r="3" fill="#5ad1c4"/>
+    <text x="500" y="286" fill="#5c6d8a" font-size="10">o papel da instância</text>
+
+    <text x="182" y="500" fill="#5c6d8a" font-size="10.4">A instância nunca guarda estado que não possa perder:</text>
+    <text x="182" y="516" fill="#5c6d8a" font-size="10.4">dado vai para o banco · arquivo vai para o S3 · segredo vem do cofre</text>
+  </svg>
+  </div>
+
+  <div class="grade g3">
+    <div class="cartao rev">
+      <div class="rot">O que é descartável</div>
+      <h5>A instância</h5>
+      <p>Disco cifrado, criado e destruído junto com a máquina. Nada que exista só ali precisa
+         sobreviver — e é isso que torna a substituição segura.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">O que é permanente</div>
+      <h5>O endereço e o dado</h5>
+      <p>O endereço fixo pertence à conta, não à máquina. O banco é um serviço separado. Os arquivos
+         ficam em armazenamento de objetos. Trocar a máquina não encosta em nenhum dos três.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">O que é reproduzível</div>
+      <h5>A receita</h5>
+      <p>Modelo de máquina, script de nascimento, pacote de deploy e segredos — tudo versionado ou
+         guardado em serviço gerenciado. A máquina nova é montada, não copiada.</p>
+    </div>
+  </div>
+
+  <div class="nota az">
+    <strong>O que este desenho não é.</strong> Não é escala horizontal. O grupo tem
+    <code>min = max = desired = 1</code>: existe para garantir que <em>uma</em> máquina esteja
+    sempre de pé, não para ter várias. Escalar horizontalmente exigiria balanceador e sessão sem
+    estado local — decisão registrada em <a href="#s12">ADR-07</a>.
+  </div>
+</section>
+
+<!-- ===================== 02 ===================== -->
+<section id="s2">
+  <h3><span class="num">02</span>Princípios de projeto</h3>
+  <p class="intro">Seis regras que explicam a maioria das escolhas deste documento. Quando uma
+     decisão parecer estranha, quase sempre ela está protegendo um destes princípios.</p>
+
+  <div class="grade g2">
+    <div class="cartao rev">
+      <div class="rot">01</div>
+      <h5>Nenhuma identidade fixa de recurso</h5>
+      <p>Automação que <em>guarda</em> o identificador de um recurso quebra no dia em que o recurso
+         passa a ser descartável. Onde for possível, o recurso é <strong>descoberto</strong> — pelo
+         endereço fixo, por tag, por consulta — em vez de anotado.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">02</div>
+      <h5>O código descreve a realidade</h5>
+      <p>A infraestrutura foi adotada por importação, não recriada. O plano do Terraform funciona
+         como detector de divergência: se ele propõe mudança, ou alguém mexeu pelo console, ou o
+         código está errado — e a correção é no código.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">03</div>
+      <h5>Permissão com escopo e condição</h5>
+      <p>Nenhum papel recebe <code>*</code> sem condição quando existe alternativa. As permissões
+         mais perigosas são amarradas por tag de recurso, por serviço chamador ou por nome literal.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">04</div>
+      <h5>Quem escreve não apaga</h5>
+      <p>A máquina grava cópias de segurança e nunca as remove; a esteira publica pacote e nunca
+         apaga o anterior. A expiração é feita por regra do lado do armazenamento, que não depende
+         de nada que esteja rodando no servidor.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">05</div>
+      <h5>O vigia mora fora do vigiado</h5>
+      <p>A pilha de observabilidade roda dentro da instância e morre com ela. Por isso os alarmes
+         que importam vivem no serviço de métricas da nuvem — eles disparam justamente quando a
+         máquina não está mais lá para disparar nada.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">06</div>
+      <h5>Falhar alto, no nascimento</h5>
+      <p>O script de boot interrompe a subida quando um pré-requisito falta, em vez de continuar e
+         entregar uma máquina que responde mas não funciona. Máquina que não sobe é visível;
+         máquina incompleta não é.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 03 ===================== -->
+<section id="s3">
+  <h3><span class="num">03</span>Inventário de recursos</h3>
+  <p class="intro">O que existe na conta, por serviço, e qual o papel de cada peça. Todos os
+     recursos marcados como protegidos têm bloqueio de destruição declarado no código.</p>
+
+  <table>
+    <thead><tr><th>Serviço</th><th>Recurso</th><th>Papel</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td><strong>EC2</strong></td><td>Launch template</td>
+          <td>A receita da máquina: tipo, disco, imagem base, metadados e script de nascimento</td>
+          <td>Imagem resolvida dinamicamente para a mais recente da família</td></tr>
+      <tr><td><strong>EC2</strong></td><td>Auto Scaling Group</td>
+          <td>Garante uma instância viva; substitui a que morrer</td>
+          <td><span class="tag t-nt">min 1 · max 1</span></td></tr>
+      <tr><td><strong>EC2</strong></td><td>Elastic IP</td>
+          <td>Endereço fixo que a substituta assume no primeiro passo do boot</td>
+          <td><span class="tag t-at">protegido</span></td></tr>
+      <tr><td><strong>EC2</strong></td><td>Security group da aplicação</td>
+          <td>Entrada 443, 80 e 22; saída liberada</td>
+          <td><span class="tag t-at">protegido</span></td></tr>
+      <tr><td><strong>EC2</strong></td><td>Security group do banco</td>
+          <td>Entrada 3306 apenas com origem no grupo da aplicação</td>
+          <td><span class="tag t-at">protegido</span></td></tr>
+      <tr><td><strong>RDS</strong></td><td>Instância MySQL 8.4</td>
+          <td>Onde as respostas ficam guardadas</td>
+          <td><span class="tag t-at">protegido</span> · sem acesso público</td></tr>
+      <tr><td><strong>S3</strong></td><td>Bucket de estado do Terraform</td>
+          <td>Guarda o estado da infraestrutura</td>
+          <td>Criado fora do Terraform, de propósito</td></tr>
+      <tr><td><strong>S3</strong></td><td>Bucket de cópias do banco</td>
+          <td>A terceira cópia, fora da máquina e fora do e-mail</td>
+          <td><span class="tag t-at">protegido</span> · versionado</td></tr>
+      <tr><td><strong>S3</strong></td><td>Bucket de pacotes de deploy</td>
+          <td>De onde a máquina nova busca os arquivos no boot</td>
+          <td><span class="tag t-at">protegido</span> · versionado</td></tr>
+      <tr><td><strong>S3</strong></td><td>Bucket de imagens</td>
+          <td>Arquivos enviados nos formulários</td>
+          <td>Fora do Terraform; entra apenas na permissão</td></tr>
+      <tr><td><strong>IAM</strong></td><td>Papel da instância</td>
+          <td>Identidade da máquina: cofre, cópias, pacote, métrica, endereço</td>
+          <td>Sem chave estática em disco</td></tr>
+      <tr><td><strong>IAM</strong></td><td>Papel da esteira (OIDC)</td>
+          <td>Publicar pacote e operar o ambiente de ensaio</td>
+          <td>Amarrado a repositório e branch</td></tr>
+      <tr><td><strong>SSM</strong></td><td>Parameter Store</td>
+          <td>Segredos e configuração, cifrados e separados por ambiente</td>
+          <td>Materializados em disco só no boot</td></tr>
+      <tr><td><strong>SSM</strong></td><td>Session Manager</td>
+          <td>Acesso à máquina sem porta 22 e sem chave privada circulando</td>
+          <td>Acesso registrado</td></tr>
+      <tr><td><strong>CloudWatch</strong></td><td>Três alarmes</td>
+          <td>Grupo sem instância, falha de verificação, saldo de crédito de CPU</td>
+          <td>Fora da instância</td></tr>
+      <tr><td><strong>SNS</strong></td><td>Tópico de alertas</td>
+          <td>Entrega dos alarmes por e-mail</td>
+          <td><span class="tag t-vm">exige confirmação da assinatura</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota">
+    <strong>Estado do Terraform.</strong> Fica em armazenamento de objetos com versionamento,
+    cifragem em repouso, bloqueio total de acesso público e política que recusa qualquer requisição
+    sem TLS. O travamento usa arquivo de lock no próprio bucket — não há tabela de bloqueio
+    separada. O bucket foi criado por um script de execução única, propositalmente fora do
+    Terraform: <em>o bucket que guarda o estado não pode ser gerenciado pelo estado que ele mesmo
+    guarda.</em>
+  </div>
+  <div class="nota vm">
+    <strong>Por que o estado é tratado como segredo.</strong> Ele contém a senha do banco em texto
+    claro. Daí o bucket privado, a cifragem, e o arquivo de estado fora do controle de versão.
+  </div>
+</section>
+
+<!-- ===================== 04 ===================== -->
+<section id="s4">
+  <h3><span class="num">04</span>Rede e exposição</h3>
+  <p class="intro">A rede é a VPC padrão da conta, declarada explicitamente no código — o que impede
+     que uma execução em outra conta crie recursos no lugar errado sem ninguém perceber. Toda a
+     proteção de borda está nos grupos de segurança.</p>
+
+  <h4>Superfície exposta</h4>
+  <table>
+    <thead><tr><th>Porta</th><th>Origem</th><th>Para que existe</th><th>Situação</th></tr></thead>
+    <tbody>
+      <tr><td><code>443/tcp</code></td><td>Internet</td>
+          <td>Todo o tráfego real: site, API e painel, atrás do proxy reverso</td>
+          <td><span class="tag t-ok">necessária</span></td></tr>
+      <tr><td><code>80/tcp</code></td><td>Internet</td>
+          <td>Desafio HTTP da autoridade certificadora, na emissão e na renovação do certificado</td>
+          <td><span class="tag t-ok">necessária</span></td></tr>
+      <tr><td><code>22/tcp</code></td><td>Internet</td>
+          <td>Acesso administrativo herdado</td>
+          <td><span class="tag t-at">a restringir</span></td></tr>
+      <tr><td><code>3306/tcp</code></td><td>Grupo da aplicação</td>
+          <td>Banco de dados — alcançável apenas de dentro, por referência de grupo, nunca por faixa de IP</td>
+          <td><span class="tag t-ok">fechada para fora</span></td></tr>
+      <tr><td><code>8080/tcp</code></td><td>—</td>
+          <td>Porta da aplicação, exposta durante uma depuração antiga</td>
+          <td><span class="tag t-nt">removida</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota vd">
+    <strong>Por que remover a 8080 não quebrou nada.</strong> Ela permitia alcançar a aplicação em
+    HTTP puro pelo endereço IP, contornando o proxy e o certificado — com login trafegando em texto
+    claro. O proxy alcança a aplicação por <code>localhost</code>, dentro da própria instância, e
+    grupo de segurança não filtra tráfego de loopback.
+  </div>
+  <div class="nota">
+    <strong>A porta 22 continua aberta, e isso está registrado como dívida.</strong> A autenticação
+    por senha está desligada na máquina, então a força bruta não passa — mas a superfície existe e
+    há centenas de tentativas no registro do sistema. Fechá-la depende de mapear quem precisa
+    entrar; o acesso por <em>Session Manager</em> já funciona e é o caminho para dispensá-la.
+  </div>
+
+  <h4>Duas zonas, uma instância</h4>
+  <p class="corpo">O grupo de Auto Scaling está habilitado em <strong>duas zonas de
+     disponibilidade</strong>, embora só exista uma instância por vez. A razão é o modo de falha que
+     estar em uma zona só não cobre: se a zona onde a máquina vive ficar sem capacidade do tipo
+     pedido, o grupo tenta subir a substituta indefinidamente e não consegue — o que anularia a
+     razão de existir do grupo. Com duas zonas declaradas, ele tem para onde ir.</p>
+  <p class="corpo">Uma descrição de grupo de segurança neste projeto está desatualizada de
+     propósito e não deve ser "arrumada": a AWS não permite alterar a descrição de um grupo depois
+     de criado, e a ferramenta trata esse campo como recriação. Corrigir o texto proporia destruir
+     e recriar o grupo de segurança de produção.</p>
+</section>
+
+<!-- ===================== 05 ===================== -->
+<section id="s5">
+  <h3><span class="num">05</span>Computação</h3>
+  <p class="intro">Três peças: o modelo que descreve a máquina, o grupo que garante que ela exista,
+     e o endereço que ela assume ao nascer.</p>
+
+  <h4>Modelo da máquina</h4>
+  <table>
+    <thead><tr><th>Item</th><th>Configuração</th><th>Por quê</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Tipo</strong></td><td>t3.medium, créditos ilimitados</td>
+          <td>Comporta aplicação e observabilidade com folga. Crédito ilimitado evita estrangulamento de CPU justamente no cenário de evento cheio — modo "padrão" é mais barato no pior caso e mais lento no pior caso</td></tr>
+      <tr><td><strong>Disco</strong></td><td>20 GB gp3, cifrado, apagado com a instância</td>
+          <td>Mesma faixa de preço do tipo anterior, mas com linha de base de desempenho independente do tamanho: num disco de 20 GB, a diferença é de 100 para 3000 operações por segundo</td></tr>
+      <tr><td><strong>Imagem base</strong></td><td>Última versão da família Amazon Linux 2023</td>
+          <td>Num grupo de Auto Scaling, nascer com imagem mais nova é o comportamento desejado — a troca acontece quando a instância morre, não durante uma aplicação de infraestrutura</td></tr>
+      <tr><td><strong>Metadados</strong></td><td>IMDSv2 obrigatório, salto extra habilitado</td>
+          <td>Com a versão 1, uma falha de requisição forjada na aplicação permitiria ler as credenciais do papel pela URL de metadados. Exigir token elimina a classe inteira de ataque e não custa nada. O salto extra é o que faz o metadado alcançar de dentro de um contêiner</td></tr>
+      <tr><td><strong>Monitoramento</strong></td><td>Detalhado (1 minuto)</td>
+          <td>Custa centavos e é a diferença entre enxergar um pico e vê-lo diluído na média de cinco minutos</td></tr>
+      <tr><td><strong>Script de nascimento</strong></td><td>Comprimido antes de ser embutido</td>
+          <td>O campo tem limite de tamanho e o script cresceu além dele. A compressão é reconhecida automaticamente pelo inicializador da máquina</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Grupo de Auto Scaling</h4>
+  <div class="grade g2">
+    <div class="cartao rev">
+      <div class="rot">Capacidade</div>
+      <h5>min 1 · max 1 · desejada 1</h5>
+      <p>Capacidade fixa, sem política de escala. O grupo existe para recuperação, não para
+         elasticidade. O valor da capacidade desejada <strong>não</strong> é ignorado pelo código: se
+         alguém ajustar pelo console para depurar, a próxima aplicação devolve ao declarado.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Saúde</div>
+      <h5>Verificação de instância</h5>
+      <p>O grupo enxerga saúde de <em>máquina</em> — hardware, rede, sistema travado. Máquina de pé
+         com a aplicação morta passa por saudável. Cobrir isso exige balanceador ou um alarme
+         externo marcando a instância como insalubre. É o limite conhecido mais importante deste
+         desenho.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Carência</div>
+      <h5>5 minutos após o nascimento</h5>
+      <p>O boot completo — pacotes, imagem da aplicação, certificado — leva cerca de cinco minutos.
+         Sem essa carência, o grupo mataria a máquina no meio da própria montagem.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Renovação da frota</div>
+      <h5>Rolante, disparada por mudança no modelo</h5>
+      <p>Qualquer alteração no modelo da máquina dispara a substituição, com aquecimento de cinco
+         minutos. A antiga só morre depois da nova estar saudável — e o endereço fixo fica com quem
+         o associar por último, que é a nova.</p>
+    </div>
+  </div>
+
+  <div class="nota vm">
+    <strong>Armadilha registrada.</strong> A renovação disparada por "mudança no modelo" só funciona
+    porque o grupo aponta para a <em>última versão</em> do modelo. Se o grupo fixasse um número de
+    versão, o atributo nunca mudaria, a ferramenta não veria diferença nenhuma e <strong>nenhuma
+    máquina receberia a correção — em silêncio, com a aplicação relatando sucesso.</strong>
+  </div>
+
+  <h4>O endereço fixo</h4>
+  <p class="corpo">O endereço público pertence à conta e é associado pela própria máquina, no
+     primeiro passo do boot, usando a permissão do papel dela. Isso tem uma consequência boa e uma
+     ruim, e as duas precisam estar claras:</p>
+  <div class="grade g2">
+    <div class="cartao rev">
+      <div class="rot">A consequência boa</div>
+      <h5>Nenhum registro de DNS é tocado</h5>
+      <p>Como o endereço não muda, não há propagação para esperar nem alteração de zona a fazer. A
+         substituta assume o nome do serviço no instante em que assume o endereço.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">A consequência ruim</div>
+      <h5>De 4 a 6 minutos de indisponibilidade</h5>
+      <p>A máquina nova pega o endereço <em>antes</em> de ter a aplicação no ar — precisa dele para
+         o desafio do certificado. Entre a troca de dono e o proxy responder, o serviço fica fora.
+         A volta atrás é barata: uma chamada devolve o endereço para a máquina anterior.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 06 ===================== -->
+<section id="s6">
+  <h3><span class="num">06</span>Sequência de boot</h3>
+  <p class="intro">O que a máquina faz sozinha, do zero até estar servindo. Cada etapa interrompe a
+     subida se o pré-requisito faltar — a máquina prefere não existir a existir pela metade.</p>
+
+  <ol class="fases">
+    <li class="rev"><div class="n">1</div><div>
+      <h5>Assumir o endereço fixo</h5>
+      <p>Primeiro passo, e a ordem importa: o certificado é emitido por desafio HTTP, então o nome
+         precisa resolver para <em>esta</em> máquina no momento da emissão. Associar o endereço
+         depois de pedir o certificado inverte a ordem e a emissão falha.</p>
+    </div></li>
+    <li class="rev"><div class="n">2</div><div>
+      <h5>Instalar os pacotes, em versão fixa</h5>
+      <p>Motor de contêineres, orquestrador local em versão fixada e o cliente de banco correto. A
+         versão é fixada de propósito: sem isso, uma máquina recriada daqui a seis meses nasce com
+         componentes diferentes dos que foram testados.</p>
+    </div></li>
+    <li class="rev"><div class="n">3</div><div>
+      <h5>Buscar os segredos no cofre</h5>
+      <p>Os parâmetros do próprio ambiente são lidos e materializados em dois arquivos de
+         configuração com permissão restrita. É aqui que a máquina deixa de depender de um arquivo
+         de segredo copiado à mão — e é por isso que perder a máquina não perde mais as
+         credenciais.</p>
+    </div></li>
+    <li class="rev"><div class="n">4</div><div>
+      <h5>Baixar o pacote de deploy</h5>
+      <p>Uma máquina criada às três da manhã não tem endereço conhecido nem chave autorizada — a
+         esteira não tem como empurrar arquivo para ela. Então ela <strong>busca</strong>: o pacote
+         com composição, proxy e scripts vem do armazenamento de objetos, do prefixo do próprio
+         ambiente.</p>
+    </div></li>
+    <li class="rev"><div class="n">5</div><div>
+      <h5>Instalar cópia de segurança e renovação de certificado</h5>
+      <p>Scripts instalados a partir do pacote, com agendamento e arquivo de registro criados. As
+         duas tarefas que só falham no dia em que são exercidas — a cópia às 3h30 e a renovação
+         perto do vencimento — passam a existir por construção, não por lembrança.</p>
+    </div></li>
+    <li class="rev"><div class="n">6</div><div>
+      <h5>Subir a aplicação, em três etapas</h5>
+      <p>A ordem é obrigatória: a aplicação cria a rede interna de contêineres, a observabilidade se
+         conecta a ela como rede externa, e só então tudo sobe junto. Inverter a ordem faz a rede
+         nascer com marcação incompatível e a subida falha de um jeito difícil de ler.</p>
+    </div></li>
+    <li class="rev"><div class="n">7</div><div>
+      <h5>Auto-verificação</h5>
+      <p>A máquina confere o próprio resultado e escreve no registro de inicialização a linha que a
+         operação procura: provisionamento concluído e a contagem de falhas. Zero falhas é o que
+         autoriza considerar o nascimento bem-sucedido.</p>
+    </div></li>
+  </ol>
+
+  <div class="nota vd">
+    <strong>Provado, não prometido.</strong> A sequência inteira foi exercida oito vezes seguidas
+    numa única noite, destruindo a máquina de propósito e deixando nascer de novo, até nascer certa
+    sem intervenção. Os ajustes que cada nascimento revelou foram escritos na receita — é por isso
+    que a máquina seguinte já nasce com eles.
+  </div>
+</section>
+
+<!-- ===================== 07 ===================== -->
+<section id="s7">
+  <h3><span class="num">07</span>Dados e cópia de segurança</h3>
+  <p class="intro">O banco é um serviço separado da máquina — de propósito. Trocar o servidor não
+     encosta nos dados, e é isso que torna a substituição uma operação sem medo.</p>
+
+  <h4>Banco de dados</h4>
+  <table>
+    <thead><tr><th>Item</th><th>Valor</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Motor</strong></td><td>MySQL 8.4</td>
+          <td>Versão de suporte longo. A anterior estava fora do suporte padrão e gerava cobrança extra</td></tr>
+      <tr><td><strong>Porte</strong></td><td>db.t3.micro · 20 GB</td><td>—</td></tr>
+      <tr><td><strong>Acesso público</strong></td><td>desabilitado</td>
+          <td>Alcançável apenas a partir do grupo de segurança da aplicação</td></tr>
+      <tr><td><strong>Retenção automática</strong></td><td>7 dias</td>
+          <td>O código anterior declarava zero: aplicar aquilo teria <strong>desligado o backup automático de produção</strong></td></tr>
+      <tr><td><strong>Janela de cópia</strong></td><td>04:00–04:30</td>
+          <td>Depois da cópia lógica das 3h30, para não competirem</td></tr>
+      <tr><td><strong>Janela de manutenção</strong></td><td>segunda, madrugada</td><td>—</td></tr>
+      <tr><td><strong>Proteção de exclusão</strong></td><td>ligada</td><td>—</td></tr>
+      <tr><td><strong>Snapshot final</strong></td><td>obrigatório</td>
+          <td>O código anterior permitia pular: um destroy apagaria o banco sem deixar cópia</td></tr>
+      <tr><td><strong>Alta disponibilidade</strong></td><td>desligada</td>
+          <td>Dobraria o custo do banco; é a única proteção contra queda de zona inteira</td></tr>
+      <tr><td><strong>Atualização menor</strong></td><td>automática</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota vm">
+    <strong>A armadilha do upgrade sem parada, que não está na documentação do fornecedor.</strong>
+    Na técnica de troca por ambiente paralelo, depois da inversão o banco antigo continua de pé em
+    modo somente leitura, com o endereço antigo. A aplicação, que tinha esse endereço em memória e
+    conexões já abertas, <strong>continua conversando com o banco abandonado</strong> — e a leitura
+    funciona perfeitamente, porque ele é uma cópia idêntica. Só a primeira gravação revela o
+    problema. Consequência operacional registrada: <em>validar sempre com uma escrita, nunca com
+    uma leitura</em>, e recriar a aplicação logo após a troca para forçar conexões novas.
+  </div>
+
+  <h4>Cópia de segurança: três destinos</h4>
+  <div class="grade g3">
+    <div class="cartao rev">
+      <div class="rot">Destino 1</div>
+      <h5>Disco da própria máquina</h5>
+      <p>Cópia diária às 3h30, com rotação por gerações (diárias, semanais, mensais). É a mais
+         rápida de usar — e a que morre junto com o servidor.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Destino 2</div>
+      <h5>E-mail diário</h5>
+      <p>Enviado para dois destinatários, com o resultado da verificação. Serve tanto de cópia
+         quanto de <em>prova de vida</em>: e-mail que não chega é sinal por si só.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Destino 3</div>
+      <h5>Armazenamento de objetos</h5>
+      <p>A cópia que sobrevive à perda do servidor <em>e</em> da nossa caixa de e-mail ao mesmo
+         tempo. Versionada, cifrada, sem acesso público e sem permissão de exclusão pela máquina.</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Regra do lado do armazenamento</th><th>Prazo</th><th>Por quê</th></tr></thead>
+    <tbody>
+      <tr><td>Transição para classe de acesso infrequente</td><td>30 dias</td>
+          <td>Cópia de um mês atrás quase nunca é lida; custa cerca de metade. A cobrança extra por leitura só aparece no dia da restauração — que é justamente o dia em que o custo não importa</td></tr>
+      <tr><td>Expiração da versão corrente</td><td>365 dias</td><td>—</td></tr>
+      <tr><td>Expiração de versões antigas</td><td>90 dias</td>
+          <td>Sem versionamento, uma cópia com nome errado sobrescreveria a cópia boa sem volta</td></tr>
+      <tr><td>Aborto de envio incompleto</td><td>7 dias</td><td>Evita pagar por pedaço de arquivo que nunca virou objeto</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota vd">
+    <strong>A máquina escreve e nunca apaga.</strong> A permissão de exclusão foi deixada de fora do
+    papel da instância de propósito: se a máquina for comprometida, o histórico continua intacto —
+    destruir cópia de segurança é a primeira coisa que um sequestro de dados faz. Quem expira objeto
+    é a regra do lado do armazenamento, que roda na nuvem e não depende de nada que esteja rodando
+    no servidor. A retenção do lado do bucket é maior que a do disco, pelo mesmo motivo.
+  </div>
+  <div class="nota">
+    <strong>O que ainda não foi provado.</strong> Ter cópia não é o mesmo que conseguir voltar a
+    partir dela. A restauração completa — pegar a cópia de ontem e reconstruir o sistema com ela —
+    ainda não foi executada de ponta a ponta. É a primeira lacuna a fechar.
+  </div>
+</section>
+
+<!-- ===================== 08 ===================== -->
+<section id="s8">
+  <h3><span class="num">08</span>Identidade e segredos</h3>
+  <p class="intro">Nenhuma credencial estática vive em disco. A máquina tem identidade própria, a
+     esteira tem identidade própria, e as duas são limitadas ao que precisam — com condições, não
+     só com escopo.</p>
+
+  <h4>Onde os segredos moram</h4>
+  <p class="corpo">Configuração e senhas ficam no cofre de parâmetros, cifrados, organizados por
+     ambiente. A máquina os lê no nascimento e materializa em arquivos com permissão restrita. Duas
+     consequências práticas: perder a máquina não perde mais as credenciais, e trocar uma senha não
+     exige entrar em servidor nenhum — basta atualizar o parâmetro e substituir a máquina.</p>
+
+  <h4>O que a instância pode fazer</h4>
+  <table>
+    <thead><tr><th>Permissão</th><th>Escopo</th><th>Condição</th></tr></thead>
+    <tbody>
+      <tr><td>Gravar cópia de segurança</td><td>Objetos do bucket de cópias</td>
+          <td><span class="tag t-ok">sem exclusão</span></td></tr>
+      <tr><td>Ler o pacote de deploy</td><td>Apenas o prefixo do próprio ambiente</td><td>—</td></tr>
+      <tr><td>Ler segredos</td><td>Apenas os parâmetros do próprio ambiente</td>
+          <td>Homolog não alcança produção, nem o contrário</td></tr>
+      <tr><td>Decifrar</td><td>Chave de criptografia</td>
+          <td><span class="tag t-az">só quando o chamador é o cofre de parâmetros</span></td></tr>
+      <tr><td>Publicar métrica</td><td>Métricas do serviço</td>
+          <td><span class="tag t-az">só no espaço de nomes do próprio ambiente</span></td></tr>
+      <tr><td>Ler e gravar imagens</td><td>Objetos do bucket de uploads</td>
+          <td>Sem administrar o bucket</td></tr>
+      <tr><td>Assumir o endereço fixo</td><td>Endereços da conta</td>
+          <td>É o que permite trocar de máquina sem trocar de endereço</td></tr>
+      <tr><td>Sessão administrativa</td><td>Serviço de sessão gerenciada</td>
+          <td>Sem porta 22 e sem chave privada circulando; acesso registrado</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota az">
+    <strong>A condição que faz diferença.</strong> A permissão de decifrar é concedida amarrada ao
+    <em>serviço chamador</em>. Sem essa condição, quem tivesse a permissão poderia usar a chave de
+    criptografia para qualquer coisa na conta — e não apenas para abrir um parâmetro do cofre.
+  </div>
+
+  <h4>Identidade da esteira</h4>
+  <p class="corpo">A automação de publicação não usa chave de acesso guardada como segredo do
+     repositório. Ela assume um papel por identidade federada, recebendo um token de vida curta. A
+     confiança é amarrada por duas condições: o público do token, e o <strong>sujeito</strong> —
+     que fixa o repositório e as duas branches autorizadas.</p>
+  <div class="nota vm">
+    <strong>Por que o sujeito é a condição mais importante do arquivo.</strong> Sem ela, qualquer
+    repositório do GitHub — de qualquer pessoa no mundo — poderia assumir o papel. Como a condição
+    fixa repositório <em>e</em> branch, um pull request vindo de fora, que roda com referência de
+    PR e não de branch, não passa.
+  </div>
+</section>
+
+<!-- ===================== 09 ===================== -->
+<section id="s9">
+  <h3><span class="num">09</span>Observabilidade: dentro e fora</h3>
+  <p class="intro">A pilha de painéis, métricas e registros roda dentro da instância. Isso resolve
+     quase tudo — e deixa exatamente um furo: se a máquina morrer, o vigia morre junto. Os alarmes
+     que cobrem esse furo moram na nuvem.</p>
+
+  <div class="grade g2">
+    <div class="cartao rev">
+      <div class="rot">Dentro da instância</div>
+      <h5>Painéis, métricas, registros e sonda externa</h5>
+      <p>Coleta de métricas da aplicação, agregação de registros com sete dias de retenção, painéis
+         e regras de alerta por e-mail, mais uma sonda que consulta o serviço de fora, pela internet.
+         Cobre saúde de aplicação, taxa de erro, latência, disco, certificado e cópia de segurança.</p>
+    </div>
+    <div class="cartao rev">
+      <div class="rot">Fora da instância</div>
+      <h5>Três alarmes no serviço de métricas da nuvem</h5>
+      <p>Rodam na infraestrutura da AWS, não na máquina. Disparam mesmo com a instância desligada —
+         que é exatamente quando importa. Entregam por tópico de notificação, com destino de e-mail.</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Alarme</th><th>Vigia</th><th>Regra</th><th>Sem dado</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Grupo sem instância</strong></td>
+          <td>O grupo não consegue manter nenhuma máquina de pé — falta de capacidade na zona, script de boot quebrado, imagem indisponível</td>
+          <td>menos de 1 instância em serviço, por 3 minutos</td>
+          <td><span class="tag t-vm">tratado como alarme</span></td></tr>
+      <tr><td><strong>Falha de verificação</strong></td>
+          <td>A instância falhou na verificação de saúde da AWS</td>
+          <td>qualquer falha, por 2 minutos</td>
+          <td><span class="tag t-nt">tratado como normal</span></td></tr>
+      <tr><td><strong>Saldo de crédito de CPU</strong></td>
+          <td>A máquina está consumindo além da linha de base de forma sustentada</td>
+          <td>saldo excedente acima de zero por 1 hora</td>
+          <td><span class="tag t-nt">tratado como normal</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota">
+    <strong>Por que "sem dado" é tratado como alarme no primeiro.</strong> Métrica ausente é
+    indistinguível de grupo vazio — e nas duas hipóteses alguém precisa olhar. É o único dos três em
+    que o silêncio é mais suspeito que o ruído.
+  </div>
+  <div class="nota az">
+    <strong>Por que o alarme de verificação de saúde é redundante de propósito.</strong> O grupo já
+    substitui a instância e resolve o problema sozinho. Mas se ninguém for avisado, uma troca
+    silenciosa transforma uma falha visível em duas invisíveis — a segunda sendo descoberta quando a
+    substituta também cair.
+  </div>
+  <div class="nota vm">
+    <strong>Modo de falha do próprio alerta.</strong> A assinatura de e-mail do tópico de
+    notificação <strong>exige confirmação por clique</strong>. Enquanto ninguém confirmar, o alarme
+    dispara e não avisa — o mesmo modo de falha do canal de contato do painel. Conferir o estado da
+    assinatura faz parte da verificação periódica.
+  </div>
+</section>
+
+<!-- ===================== 10 ===================== -->
+<section id="s10">
+  <h3><span class="num">10</span>Esteira e ambientes</h3>
+  <p class="intro">Dois ambientes completos e isolados, e um caminho único do commit até a máquina.
+     A esteira nunca empurra arquivo para a instância — ela publica, e a instância busca.</p>
+
+  <h4>O caminho de uma versão</h4>
+  <pre><span class="c"># commit na branch autorizada</span>
+      │
+      ├─ <span class="k">testes</span> e construção da imagem da aplicação
+      │
+      ├─ <span class="k">publicação</span> da imagem no registro de contêineres
+      │
+      ├─ <span class="k">montagem do pacote</span> de deploy (composição, proxy, scripts)
+      │     <span class="c">└─ aborta se encontrar arquivo de segredo dentro do pacote</span>
+      │
+      ├─ <span class="k">envio</span> para o armazenamento de objetos, no prefixo do ambiente
+      │     <span class="c">└─ identidade federada, token de minutos, sem chave fixa</span>
+      │
+      ├─ <span class="k">deploy seguro</span> na máquina
+      │     ├─ cópia do banco <span class="s">antes</span> de qualquer alteração
+      │     ├─ sobe a versão nova e espera ficar saudável
+      │     └─ <span class="s">volta automática</span> para a anterior se não ficar
+      │
+      └─ <span class="k">verificação</span> pós-deploy</pre>
+
+  <div class="nota vd">
+    <strong>Por que a máquina busca em vez de receber.</strong> Uma instância criada pelo grupo de
+    Auto Scaling às três da manhã não tem endereço conhecido nem chave autorizada — não existe para
+    onde a esteira empurrar. Publicar num lugar fixo e deixar a máquina buscar é o que torna o
+    nascimento independente de qualquer coisa estar acordada.
+  </div>
+
+  <h4>Ambiente de ensaio sob demanda</h4>
+  <p class="corpo">Homologação não fica ligada o tempo todo. Ela sobe quando há o que testar e se
+     desliga sozinha por inatividade — o desligamento termina a máquina, o que dispensa qualquer
+     permissão de exclusão de instância na esteira. O banco de ensaio nasce de um snapshot do banco
+     de produção, restaurado com identificador próprio.</p>
+
+  <table>
+    <thead><tr><th>Permissão da esteira</th><th>Como está amarrada</th></tr></thead>
+    <tbody>
+      <tr><td>Criar imagem da máquina de produção</td>
+          <td><span class="tag t-az">por tag de projeto</span> — antes era um identificador fixo, que passou a apontar para uma máquina terminada assim que o grupo de Auto Scaling entrou</td></tr>
+      <tr><td>Subir instância de ensaio</td>
+          <td><span class="tag t-az">exige a tag do ambiente</span> e <span class="tag t-az">limita o tipo</span> — sem a tag, o auto-desligamento nunca acharia a máquina; sem o limite de tipo, um erro de digitação subiria uma máquina de centenas por dia</td></tr>
+      <tr><td>Etiquetar recursos</td>
+          <td><span class="tag t-az">apenas no ato da criação</span> — sem isso, seria possível reetiquetar qualquer recurso da conta, inclusive marcar produção como ensaio e apontar o auto-desligamento para o lado errado</td></tr>
+      <tr><td>Apagar o banco de ensaio</td>
+          <td><span class="tag t-vm">nome literal, sem curinga</span> — a única ação destrutiva concedida. Presa a um único nome, não consegue nomear produção nem por erro de digitação</td></tr>
+      <tr><td>Apagar imagem e disco de ensaio</td>
+          <td><span class="tag t-az">por tag de ambiente</span> — o identificador da imagem muda a cada ciclo, então amarrar por identificador não funcionaria</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota">
+    <strong>Uma lição de permissão que custou um ciclo inteiro.</strong> Uma única chamada de
+    criação de instância cria vários recursos ao mesmo tempo, e a AWS avalia a permissão de cada um
+    contra as chaves de contexto <em>que existem para aquele recurso</em>. A chave que descreve o
+    tipo da instância existe para a instância, mas não para o disco — e uma comparação sobre chave
+    ausente nunca casa. A condição que protegia a instância, aplicada ao disco, tornava a chamada
+    impossível de autorizar. Por isso instância e disco são blocos separados.
+  </div>
+  <div class="nota vd">
+    <strong>Isolamento entre ambientes.</strong> Homologação tem banco próprio, parâmetros próprios,
+    máquina própria e servidor de e-mail falso — ela aceita mensagens e não entrega nenhuma. A
+    permissão de leitura de segredos é limitada ao próprio ambiente nos dois sentidos, e o
+    provisionamento do ensaio sobrescreve qualquer configuração herdada, abortando se um valor de
+    produção reaparecer.
+  </div>
+</section>
+
+<!-- ===================== 11 ===================== -->
+<section id="s11">
+  <h3><span class="num">11</span>Modos de falha e recuperação</h3>
+  <p class="intro">O que acontece quando cada peça morre. A coluna que mais importa é a última: o
+     que continua de pé, porque é ela que define se o problema é um susto ou um desastre.</p>
+
+  <table>
+    <thead><tr><th>O que falha</th><th>Quem percebe</th><th>Recuperação</th><th>O que continua de pé</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A instância morre</strong></td>
+          <td>Alarme de verificação de saúde e sonda externa</td>
+          <td><span class="tag t-ok">automática · ~7 min</span> — outra nasce e assume o endereço</td>
+          <td>Banco, arquivos enviados, cópias de segurança, endereço</td></tr>
+      <tr><td><strong>A aplicação morre, a máquina não</strong></td>
+          <td>Sonda externa e regras de alerta <span class="tag t-at">enquanto o painel estiver vivo</span></td>
+          <td><span class="tag t-at">manual</span> — a verificação de saúde do grupo não enxerga isso</td>
+          <td>Tudo, exceto o serviço</td></tr>
+      <tr><td><strong>A zona de disponibilidade cai</strong></td>
+          <td>Alarme de grupo sem instância</td>
+          <td><span class="tag t-ok">automática</span> para a máquina, que sobe na outra zona</td>
+          <td>Arquivos e cópias. <span class="tag t-vm">O banco não</span> — está numa zona só</td></tr>
+      <tr><td><strong>O banco fica indisponível</strong></td>
+          <td>Regras de alerta e erro na aplicação</td>
+          <td><span class="tag t-at">depende do caso</span> — recuperação do serviço gerenciado, ou restauração a partir de cópia</td>
+          <td>Máquina, endereço e cópias</td></tr>
+      <tr><td><strong>O certificado vence</strong></td>
+          <td>Regra de alerta com antecedência</td>
+          <td><span class="tag t-ok">renovação agendada</span> — instalada no nascimento da máquina</td>
+          <td>Tudo; o acesso é que fica bloqueado pelo navegador</td></tr>
+      <tr><td><strong>A cópia de segurança falha</strong></td>
+          <td>Ausência do e-mail diário e regra de alerta</td>
+          <td><span class="tag t-at">manual</span> — investigar no mesmo dia</td>
+          <td>Tudo. O que se perde é a rede de proteção para o dia seguinte</td></tr>
+      <tr><td><strong>Um deploy sobe quebrado</strong></td>
+          <td>A própria esteira, na verificação de saúde</td>
+          <td><span class="tag t-ok">volta automática</span> para a versão anterior</td>
+          <td>Tudo, com a cópia do banco feita antes da alteração</td></tr>
+      <tr><td><strong>A conta perde a região inteira</strong></td>
+          <td>Sonda externa</td>
+          <td><span class="tag t-vm">sem plano automático</span></td>
+          <td>A cópia de segurança em armazenamento de objetos</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota az">
+    <strong>Como validar que voltou.</strong> Página abrindo não prova nada; verificação de saúde
+    respondendo, também não. A única prova é uma <strong>gravação</strong>: criar um registro de
+    teste, recarregar e confirmar que continua lá. Foi assim que se descobriu, num upgrade de banco,
+    que o sistema estava respondendo perfeitamente enquanto gravava num servidor abandonado.
+  </div>
+</section>
+
+<!-- ===================== 12 ===================== -->
+<section id="s12">
+  <h3><span class="num">12</span>Decisões registradas</h3>
+  <p class="intro">As escolhas que explicam a forma da arquitetura, com o contexto e o preço de cada
+     uma. Clique para abrir.</p>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-01</span><span class="tit">Máquina descartável em vez de servidor de estimação</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Existia um servidor montado à mão ao longo de meses. Se ele se perdesse, alguém teria que remontá-lo de memória — não havia receita escrita.</div>
+      <div><b>Decisão</b> Descrever a máquina inteira num modelo versionado e colocá-la sob um grupo de Auto Scaling de capacidade fixa, com o endereço assumido no nascimento.</div>
+      <div><b>Consequência</b> A recuperação passou a ser automática e medida em minutos. Em troca, tudo que a máquina precisa passou a ter que estar declarado — foi isso que revelou 25 detalhes que existiam só porque alguém os fez à mão um dia.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-02</span><span class="tit">Estado da infraestrutura em armazenamento de objetos, com o bucket criado fora do código</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> O estado guarda a senha do banco em texto claro e precisa de travamento para não corromper em execuções concorrentes.</div>
+      <div><b>Decisão</b> Bucket dedicado, versionado, cifrado, sem acesso público, recusando requisição sem TLS, com travamento por arquivo no próprio bucket — dispensando tabela de bloqueio separada.</div>
+      <div><b>Consequência</b> O bucket é criado por um script de execução única, propositalmente fora do código de infraestrutura: o bucket que guarda o estado não pode ser gerenciado pelo estado que ele mesmo guarda.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-03</span><span class="tit">Adotar por importação, não recriar</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> A infraestrutura já existia e atendia clientes. Recriá-la para "ficar certa" significaria derrubar produção.</div>
+      <div><b>Decisão</b> Importar os recursos existentes por blocos declarativos, que aparecem no plano e passam por revisão — em vez do comando de linha, que importa em silêncio.</div>
+      <div><b>Consequência</b> O plano virou detector de divergência: se propõe mudança, ou alguém mexeu pelo console, ou o código está errado. Vários recursos ganharam bloqueio de destruição e regras para ignorar campos que a nuvem não devolve.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-04</span><span class="tit">O endereço fixo é assumido pela máquina, aceitando a janela de indisponibilidade</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Manter o mesmo endereço dispensa mexer em DNS e esperar propagação. Mas o certificado é emitido por desafio HTTP, então o nome precisa apontar para a máquina nova antes de ela ter aplicação no ar.</div>
+      <div><b>Decisão</b> Associar o endereço no primeiro passo do boot, aceitando de 4 a 6 minutos de indisponibilidade na troca planejada.</div>
+      <div><b>Consequência</b> Não há como evitar a janela mantendo o mesmo endereço: ou ele aponta para a máquina velha, ou para a nova. O que existe é uma volta atrás de uma chamada só — por isso a máquina anterior não é terminada logo após a troca.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-05</span><span class="tit">Papel de instância no lugar de chave de acesso em disco</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> A máquina rodava com chave de acesso e segredo escritos num arquivo de configuração no disco. Credencial permanente, que não expira e vaza inteira em qualquer cópia da máquina.</div>
+      <div><b>Decisão</b> Dar identidade própria à instância, com permissões escopadas e condicionadas, e ler os segredos de um cofre em vez de guardá-los em arquivo.</div>
+      <div><b>Consequência</b> Três problemas resolvidos de uma vez: a cópia externa passou a ser possível, os segredos saíram do disco, e a máquina passou a conseguir se recriar sozinha. Anexar o papel é alteração no lugar — não recria nem reinicia a instância.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-06</span><span class="tit">Versão 2 do serviço de metadados, obrigatória</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Com a versão 1, uma falha de requisição forjada na aplicação permitiria ler as credenciais do papel simplesmente acessando uma URL interna.</div>
+      <div><b>Decisão</b> Exigir token para qualquer leitura de metadados, com salto extra habilitado para alcançar de dentro de contêiner.</div>
+      <div><b>Consequência</b> Elimina uma classe inteira de ataque e não custa nada. Scripts que leem metadados precisam pedir o token antes — está no boot.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-07</span><span class="tit">Sem balanceador de carga, por enquanto</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Um balanceador daria verificação de saúde de <em>aplicação</em> — o furo conhecido do desenho atual — e permitiria mais de uma instância.</div>
+      <div><b>Decisão</b> Manter desligado, com uma condição no código que impede ligá-lo por engano antes de o balanceador existir.</div>
+      <div><b>Consequência</b> A razão não é o custo mensal: com balanceador faz sentido ter mais de uma instância, e mais de uma instância ainda não funciona porque parte dos arquivos antigos vive no disco de uma máquina só. Sem a condição de guarda, ligar a opção faria o grupo consultar um balanceador inexistente, marcar a instância como insalubre e destruir e recriar máquina em laço — com a aplicação de infraestrutura dando tudo verde.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-08</span><span class="tit">Banco sem alta disponibilidade entre zonas</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> A opção dobra o custo do banco e é a única proteção contra a queda de uma zona inteira.</div>
+      <div><b>Decisão</b> Manter desligada, com o risco registrado e visível.</div>
+      <div><b>Consequência</b> A máquina sobrevive à queda de zona; o banco, não. É uma assimetria consciente e o principal candidato a mudar quando o volume justificar.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-09</span><span class="tit">Cliente de banco do fornecedor original, com guarda que falha no boot</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> O repositório padrão da distribuição oferece um cliente compatível, mas ele não implementa a opção que a cópia de segurança usa para gerar um arquivo restaurável.</div>
+      <div><b>Decisão</b> Instalar o cliente do fornecedor original e abortar o boot se ele não estiver disponível.</div>
+      <div><b>Consequência</b> Uma máquina nascida com o cliente errado subiria saudável, responderia normalmente, passaria em qualquer verificação — e falharia às 3h30, no único momento em que a cópia roda. Falhar alto no nascimento é preferível.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-10</span><span class="tit">Permissão por tag no lugar de identificador fixo</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> A esteira precisa criar uma imagem da máquina de produção. A permissão apontava para um identificador fixo de instância.</div>
+      <div><b>Decisão</b> Trocar o identificador por uma condição de tag, aplicada pelo modelo da máquina.</div>
+      <div><b>Consequência</b> Com máquina descartável, o identificador fixo passou a apontar para uma instância terminada, e o trabalho morria com erro de autorização sem nenhuma pista de que a causa era a troca de máquina. A tag sobrevive a qualquer recriação. Exceção registrada: a condição não pode ser aplicada a recursos que ainda não existem no momento da chamada — para eles, o bloco de permissão vai sem condição, de propósito.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-11</span><span class="tit">Quem escreve não apaga; a expiração é do lado do armazenamento</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Se a máquina puder apagar as próprias cópias, um comprometimento apaga o histórico junto.</div>
+      <div><b>Decisão</b> Deixar a permissão de exclusão fora do papel da instância e da esteira, e fazer a expiração por regra de ciclo de vida no armazenamento.</div>
+      <div><b>Consequência</b> A limpeza continua acontecendo, mas do lado da nuvem, sem depender de nada que rode no servidor. A retenção do lado do bucket é maior que a do disco de propósito.</div>
+    </div></div>
+  </div>
+
+  <div class="adr rev"><button type="button"><span class="cod">ADR-12</span><span class="tit">Ambiente de ensaio sob demanda, que se desliga sozinho</span><span class="seta">›</span></button>
+    <div class="miolo"><div class="par">
+      <div><b>Contexto</b> Um ambiente de homologação ligado o tempo todo custa como produção e quase nunca é usado.</div>
+      <div><b>Decisão</b> Subir sob demanda pela esteira e configurar o desligamento por inatividade para <em>terminar</em> a máquina.</div>
+      <div><b>Consequência</b> Não é preciso conceder permissão de exclusão de instância à esteira — a máquina se encerra sozinha. O banco de ensaio, porém, sobrevive à morte da máquina e cobra todo mês; foi preciso conceder uma única permissão destrutiva, presa a um nome literal, sem curinga.</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ===================== 13 ===================== -->
+<section id="s13">
+  <h3><span class="num">13</span>Limites conhecidos e próximos passos</h3>
+  <p class="intro">O que esta arquitetura ainda não cobre. Está aqui porque documentação que só
+     mostra o que está pronto não serve para operar.</p>
+
+  <table>
+    <thead><tr><th>Limite</th><th>Consequência prática</th><th>Prioridade</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Restauração nunca exercida de ponta a ponta</strong></td>
+          <td>Há cópia em três lugares, mas voltar a partir dela ainda não foi cronometrado nem provado</td>
+          <td><span class="tag t-vm">alta</span></td></tr>
+      <tr><td><strong>Verificação de saúde não enxerga a aplicação</strong></td>
+          <td>Máquina de pé com o serviço morto não é substituída automaticamente</td>
+          <td><span class="tag t-vm">alta</span></td></tr>
+      <tr><td><strong>Certificados vivem no disco da máquina</strong></td>
+          <td>Cada nascimento emite certificado novo, e a autoridade limita emissões por semana para o mesmo conjunto de nomes — recuperações repetidas podem esbarrar no limite</td>
+          <td><span class="tag t-at">média</span></td></tr>
+      <tr><td><strong>Histórico de métricas e registros mora na instância</strong></td>
+          <td>Trocar a máquina recomeça o histórico dos painéis. Não é falha, mas confunde quem olha logo depois de uma troca</td>
+          <td><span class="tag t-at">média</span></td></tr>
+      <tr><td><strong>Porta 22 aberta para a internet</strong></td>
+          <td>Autenticação por senha está desligada, mas a superfície existe e há tentativas constantes registradas</td>
+          <td><span class="tag t-at">média</span></td></tr>
+      <tr><td><strong>Banco em uma zona só</strong></td>
+          <td>Queda de zona derruba o banco, mesmo com a máquina subindo na outra</td>
+          <td><span class="tag t-at">média</span></td></tr>
+      <tr><td><strong>Senha do banco no estado da infraestrutura</strong></td>
+          <td>Obriga a tratar o arquivo de estado como segredo. O caminho é delegar a senha ao gerenciador de segredos do próprio serviço de banco</td>
+          <td><span class="tag t-at">média</span></td></tr>
+      <tr><td><strong>Dois papéis de instância coexistem</strong></td>
+          <td>Herança da migração: o módulo cria um papel próprio em vez de consumir o da raiz. Funciona, mas duplica a identidade que faz a mesma coisa</td>
+          <td><span class="tag t-nt">baixa</span></td></tr>
+      <tr><td><strong>Verificação operacional roda sob demanda</strong></td>
+          <td>Existe um verificador de 35 pontos, mas ele é executado manualmente. Agendá-lo e publicar o resultado como métrica fecharia o ciclo</td>
+          <td><span class="tag t-nt">baixa</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="nota vd">
+    <strong>O padrão por trás de quase toda esta lista.</strong> Uma máquina montada à mão acumula,
+    ao longo dos meses, coisas que nunca chegaram a ser escritas em lugar nenhum — uma pasta criada
+    num plantão, um agendamento, um certificado emitido uma vez. A máquina nova não herda nada
+    disso, e cada ausência só aparece <em>quando a função é exercida</em>: a cópia falha às 3h30, o
+    certificado falha na renovação, o deploy falha no deploy. Foi por isso que a validação passou a
+    ser feita exercendo cada função de propósito, e não observando a máquina parecer saudável.
+  </div>
+</section>
+
+<footer style="margin-top:60px; padding-top:26px; border-top:1px solid var(--linha); color:var(--fraco); font-size:13px">
+  <p style="margin:0 0 8px"><strong style="color:var(--suave)">Documentação técnica de arquitetura</strong> · agosto de 2026 · versão 1</p>
+  <p style="margin:0; max-width:78ch">Arquivo único, sem internet, sem instalação e sem servidor. Nenhum identificador de
+     recurso, endpoint, ARN, nome de bucket, chave ou senha aparece neste documento — cada linha foi
+     escrita para poder circular. Onde o identificador seria necessário para operar, ele está no
+     código de infraestrutura, sob controle de acesso.</p>
+</footer>
+
+</main>
+</div>
+<script>
+/* ---- barra de progresso de leitura ---- */
+(function(){
+  var b=document.getElementById('barra'); if(!b) return;
+  var t=null;
+  function calc(){
+    var h=document.documentElement.scrollHeight-window.innerHeight;
+    b.style.width=(h>0? Math.min(100,(window.scrollY/h)*100):0)+'%';
+  }
+  window.addEventListener('scroll',function(){ if(t) return;
+    t=requestAnimationFrame(function(){t=null; calc();}); },{passive:true});
+  window.addEventListener('resize',calc); calc();
+})();
+
+/* ---- sumario que acompanha a leitura ---- */
+(function(){
+  var links=Array.prototype.slice.call(document.querySelectorAll('#sumario a'));
+  var secoes=links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if(!secoes.length) return;
+  /* rootMargin corta a faixa util para o terco superior: a secao "atual" e a
+     que esta sendo lida, nao a que acabou de entrar pelo rodape */
+  var obs=new IntersectionObserver(function(itens){
+    itens.forEach(function(i){
+      if(!i.isIntersecting) return;
+      links.forEach(function(a){ a.classList.toggle('aqui', a.getAttribute('href')==='#'+i.target.id); });
+    });
+  },{rootMargin:'-10% 0px -70% 0px', threshold:0});
+  secoes.forEach(function(s){ obs.observe(s); });
+})();
+
+/* ---- revelacao no scroll, com rede de seguranca ---- */
+(function(){
+  var alvos=document.querySelectorAll('.rev');
+  if(!alvos.length) return;
+  var obs=new IntersectionObserver(function(itens){
+    itens.forEach(function(i){ if(i.isIntersecting){ i.target.classList.add('vis'); obs.unobserve(i.target); } });
+  },{threshold:.01, rootMargin:'0px 0px 14% 0px'});
+  alvos.forEach(function(el){ obs.observe(el); });
+  /* documento tecnico nao pode ter conteudo permanentemente invisivel por
+     causa de um efeito visual — em tela curta ou na impressao, revela tudo */
+  setTimeout(function(){ document.querySelectorAll('.rev:not(.vis)').forEach(function(el){ el.classList.add('vis'); }); },1600);
+})();
+
+/* ---- decisoes: acordeao ---- */
+(function(){
+  document.querySelectorAll('.adr > button').forEach(function(b){
+    b.setAttribute('aria-expanded','false');
+    b.addEventListener('click',function(){
+      var c=b.parentElement, ab=c.classList.toggle('aberta');
+      b.setAttribute('aria-expanded',String(ab));
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

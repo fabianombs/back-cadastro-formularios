@@ -8,6 +8,10 @@ public record TemplateAppearanceRequest(
         String backgroundColor,
         String backgroundGradient,
         String backgroundImageUrl,
+        /** Imagem de fundo específica para celular (opcional; sem ela, usa backgroundImageUrl) */
+        String backgroundImageMobileUrl,
+        /** Imagem de fundo específica para tablet (opcional; sem ela, usa backgroundImageUrl) */
+        String backgroundImageTabletUrl,
         String headerImageUrl,
         String footerImageUrl,
         String primaryColor,

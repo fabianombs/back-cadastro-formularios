@@ -12,6 +12,8 @@ public record QuizConfigRequest(
     String backgroundColor,
     String backgroundGradient,
     String backgroundImageUrl,
+    String backgroundImageMobileUrl,
+    String backgroundImageTabletUrl,
     String primaryColor,
     String textColor,
     // Cor dos cards de resposta — null usa o padrão glassmorphism

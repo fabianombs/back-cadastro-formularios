@@ -4,6 +4,8 @@ public record TemplateAppearanceResponse(
         String backgroundColor,
         String backgroundGradient,
         String backgroundImageUrl,
+        String backgroundImageMobileUrl,
+        String backgroundImageTabletUrl,
         String headerImageUrl,
         String footerImageUrl,
         String primaryColor,
