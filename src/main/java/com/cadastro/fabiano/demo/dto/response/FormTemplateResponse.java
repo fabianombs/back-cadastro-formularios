@@ -38,6 +38,7 @@ public record FormTemplateResponse(
         boolean attendanceShowPresence,
         boolean attendanceShowNotes,
         boolean attendanceShowMarkedAt,
+        boolean attendanceShowNumber,
         // Pesquisa de satisfação vinculada
         boolean hasSurvey,
         Long surveyId,
