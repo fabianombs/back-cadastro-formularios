@@ -378,6 +378,7 @@ public class FormTemplateService {
         if (request.attendanceShowPresence() != null)   template.setAttendanceShowPresence(request.attendanceShowPresence());
         if (request.attendanceShowNotes() != null)      template.setAttendanceShowNotes(request.attendanceShowNotes());
         if (request.attendanceShowMarkedAt() != null)   template.setAttendanceShowMarkedAt(request.attendanceShowMarkedAt());
+        if (request.attendanceShowNumber() != null)     template.setAttendanceShowNumber(request.attendanceShowNumber());
         if (request.viewAllowAttendanceCheck() != null) template.setViewAllowAttendanceCheck(request.viewAllowAttendanceCheck());
         if (request.viewAllowAddGuest() != null)        template.setViewAllowAddGuest(request.viewAllowAddGuest());
         if (request.attendanceFontScale() != null)      template.setAttendanceFontScale(request.attendanceFontScale());
@@ -649,6 +650,7 @@ public class FormTemplateService {
                 template.isAttendanceShowPresence(),
                 template.isAttendanceShowNotes(),
                 template.isAttendanceShowMarkedAt(),
+                template.isAttendanceShowNumber(),
                 // Pesquisa de satisfação
                 hasSurvey,
                 surveyId,
