@@ -235,6 +235,10 @@ public class FormTemplate {
     @Builder.Default
     private boolean attendanceShowMarkedAt = true;
 
+    @Column(name = "attendance_show_number", nullable = false)
+    @Builder.Default
+    private boolean attendanceShowNumber = true;
+
     // =====================
     // LGPD
     // =====================
