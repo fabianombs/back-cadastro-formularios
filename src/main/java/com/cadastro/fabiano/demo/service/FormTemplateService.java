@@ -138,6 +138,10 @@ public class FormTemplateService {
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
 
+        // Tela de agradecimento
+        template.setShowHeaderLogoOnThankYou(request.showHeaderLogoOnThankYou());
+        template.setShowFooterLogoOnThankYou(request.showFooterLogoOnThankYou());
+
         List<FormField> fields = request.fields().stream()
                 .map(f -> {
                     FormField field = new FormField();
@@ -204,6 +208,10 @@ public class FormTemplateService {
         // LGPD
         template.setLgpdEnabled(request.lgpdEnabled());
         template.setLgpdText(request.lgpdText());
+
+        // Tela de agradecimento
+        template.setShowHeaderLogoOnThankYou(request.showHeaderLogoOnThankYou());
+        template.setShowFooterLogoOnThankYou(request.showFooterLogoOnThankYou());
 
         FormTemplate saved = templateRepository.save(template);
 
@@ -439,7 +447,9 @@ public class FormTemplateService {
                 scheduleConfig,
                 buildAppearanceResponse(template),
                 template.isLgpdEnabled(),
-                template.getLgpdText()
+                template.getLgpdText(),
+                template.isShowHeaderLogoOnThankYou(),
+                template.isShowFooterLogoOnThankYou()
         );
     }
 }

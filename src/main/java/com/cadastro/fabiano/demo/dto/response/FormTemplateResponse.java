@@ -15,5 +15,7 @@ public record FormTemplateResponse(
         ScheduleConfigResponse scheduleConfig,
         TemplateAppearanceResponse appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        boolean showHeaderLogoOnThankYou,
+        boolean showFooterLogoOnThankYou
 ) {}

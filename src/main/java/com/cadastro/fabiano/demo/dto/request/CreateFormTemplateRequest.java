@@ -9,6 +9,8 @@ public record CreateFormTemplateRequest(
         ScheduleConfigRequest scheduleConfig,
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        boolean showHeaderLogoOnThankYou,
+        boolean showFooterLogoOnThankYou
 ) {
 }

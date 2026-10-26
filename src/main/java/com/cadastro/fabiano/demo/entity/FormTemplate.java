@@ -155,4 +155,16 @@ public class FormTemplate {
     @Column(name = "lgpd_text", columnDefinition = "TEXT")
     private String lgpdText;
 
+    // =====================
+    // TELA DE AGRADECIMENTO
+    // =====================
+
+    @Column(name = "show_header_logo_on_thank_you", nullable = false)
+    @Builder.Default
+    private boolean showHeaderLogoOnThankYou = true;
+
+    @Column(name = "show_footer_logo_on_thank_you", nullable = false)
+    @Builder.Default
+    private boolean showFooterLogoOnThankYou = true;
+
 }

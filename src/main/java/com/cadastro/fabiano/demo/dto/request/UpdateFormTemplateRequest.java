@@ -7,6 +7,8 @@ public record UpdateFormTemplateRequest(
         List<UpdateFormFieldRequest> fields,
         TemplateAppearanceRequest appearance,
         boolean lgpdEnabled,
-        String lgpdText
+        String lgpdText,
+        boolean showHeaderLogoOnThankYou,
+        boolean showFooterLogoOnThankYou
 ) {
 }
