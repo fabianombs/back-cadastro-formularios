@@ -54,5 +54,7 @@ public record FormTemplateResponse(
         String thankYouTitleColor,
         String thankYouTextColor,
         String thankYouFontFamily,
-        String thankYouTitleFontSize
+        String thankYouTitleFontSize,
+        boolean showHeaderLogoOnThankYou,
+        boolean showFooterLogoOnThankYou
 ) {}
