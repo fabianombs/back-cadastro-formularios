@@ -12,6 +12,7 @@ public record TemplateAppearanceResponse(
         String formTextColor,
         String fieldBackgroundColor,
         String fieldTextColor,
+        String fieldBorderColor,
         String cardBackgroundColor,
         String cardBorderColor,
         String fontFamily,

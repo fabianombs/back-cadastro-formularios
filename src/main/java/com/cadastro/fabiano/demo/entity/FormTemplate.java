@@ -151,6 +151,10 @@ public class FormTemplate {
     @Column(name = "field_text_color")
     private String fieldTextColor;
 
+    /** Cor da borda dos campos */
+    @Column(name = "field_border_color")
+    private String fieldBorderColor;
+
     /** Cor de fundo dos cards, tabelas e filtros */
     @Column(name = "card_background_color")
     private String cardBackgroundColor;
