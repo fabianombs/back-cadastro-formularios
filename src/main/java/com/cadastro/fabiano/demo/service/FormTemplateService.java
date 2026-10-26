@@ -181,6 +181,8 @@ public class FormTemplateService {
         template.setThankYouTextColor(request.thankYouTextColor());
         template.setThankYouFontFamily(request.thankYouFontFamily());
         template.setThankYouTitleFontSize(request.thankYouTitleFontSize());
+        template.setShowHeaderLogoOnThankYou(request.showHeaderLogoOnThankYou() == null || request.showHeaderLogoOnThankYou());
+        template.setShowFooterLogoOnThankYou(request.showFooterLogoOnThankYou() == null || request.showFooterLogoOnThankYou());
 
         // Slug do link de visualização — definido pelo admin; obrigatório
         if (request.viewSlug() != null && !request.viewSlug().isBlank()) {
@@ -295,6 +297,8 @@ public class FormTemplateService {
         template.setThankYouTextColor(request.thankYouTextColor());
         template.setThankYouFontFamily(request.thankYouFontFamily());
         template.setThankYouTitleFontSize(request.thankYouTitleFontSize());
+        if (request.showHeaderLogoOnThankYou() != null) template.setShowHeaderLogoOnThankYou(request.showHeaderLogoOnThankYou());
+        if (request.showFooterLogoOnThankYou() != null) template.setShowFooterLogoOnThankYou(request.showFooterLogoOnThankYou());
 
         // Aplica toggles de visualização do cliente enviados pelo frontend
         if (request.viewAllowExport() != null)      template.setViewAllowExport(request.viewAllowExport());
@@ -666,7 +670,9 @@ public class FormTemplateService {
                 template.getThankYouTitleColor(),
                 template.getThankYouTextColor(),
                 template.getThankYouFontFamily(),
-                template.getThankYouTitleFontSize()
+                template.getThankYouTitleFontSize(),
+                template.isShowHeaderLogoOnThankYou(),
+                template.isShowFooterLogoOnThankYou()
         );
     }
 }
