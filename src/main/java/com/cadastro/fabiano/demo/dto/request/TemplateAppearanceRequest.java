@@ -18,6 +18,8 @@ public record TemplateAppearanceRequest(
         String formTextColor,
         String fieldBackgroundColor,
         String fieldTextColor,
+        /** Cor da borda dos campos */
+        String fieldBorderColor,
         /** Cor de fundo dos cards, tabelas e área de filtros */
         String cardBackgroundColor,
         /** Cor da borda dos cards e tabelas */

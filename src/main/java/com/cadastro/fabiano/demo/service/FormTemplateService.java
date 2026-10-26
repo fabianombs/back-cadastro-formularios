@@ -522,6 +522,7 @@ public class FormTemplateService {
         template.setFormTextColor(a.formTextColor());
         template.setFieldBackgroundColor(a.fieldBackgroundColor());
         template.setFieldTextColor(a.fieldTextColor());
+        template.setFieldBorderColor(a.fieldBorderColor());
         template.setCardBackgroundColor(a.cardBackgroundColor());
         template.setCardBorderColor(a.cardBorderColor());
         template.setFontFamily(a.fontFamily());
@@ -542,6 +543,7 @@ public class FormTemplateService {
                 && t.getFormTextColor() == null
                 && t.getFieldBackgroundColor() == null
                 && t.getFieldTextColor() == null
+                && t.getFieldBorderColor() == null
                 && t.getCardBackgroundColor() == null
                 && t.getCardBorderColor() == null
                 && t.getFontFamily() == null
@@ -562,6 +564,7 @@ public class FormTemplateService {
                 t.getFormTextColor(),
                 t.getFieldBackgroundColor(),
                 t.getFieldTextColor(),
+                t.getFieldBorderColor(),
                 t.getCardBackgroundColor(),
                 t.getCardBorderColor(),
                 t.getFontFamily(),
