@@ -297,6 +297,15 @@ public class FormTemplate {
     @Column(name = "thank_you_title_font_size", length = 20)
     private String thankYouTitleFontSize;
 
+    // Exibir logo do topo/rodape na tela de agradecimento (padrao: sim)
+    @Column(name = "show_header_logo_on_thank_you", nullable = false)
+    @Builder.Default
+    private boolean showHeaderLogoOnThankYou = true;
+
+    @Column(name = "show_footer_logo_on_thank_you", nullable = false)
+    @Builder.Default
+    private boolean showFooterLogoOnThankYou = true;
+
     // =====================
     // QUIZ (opcional)
     // =====================

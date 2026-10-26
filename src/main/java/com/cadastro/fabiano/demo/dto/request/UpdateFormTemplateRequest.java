@@ -32,6 +32,8 @@ public record UpdateFormTemplateRequest(
         String thankYouTitleColor,
         String thankYouTextColor,
         String thankYouFontFamily,
-        String thankYouTitleFontSize
+        String thankYouTitleFontSize,
+        Boolean showHeaderLogoOnThankYou,
+        Boolean showFooterLogoOnThankYou
 ) {
 }
