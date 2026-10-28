@@ -1,6 +1,7 @@
 package com.cadastro.fabiano.demo.service;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.DuplicateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.TemplateAppearanceRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
@@ -238,6 +239,140 @@ public class FormTemplateService {
     }
 
     // ==========================
+    // DUPLICAR TEMPLATE
+    // ==========================
+
+    /**
+     * Cria uma cópia de um template para o cliente informado.
+     * <p>Copia campos, agenda, presença, aparência, LGPD, agradecimento, opções da
+     * visualização do cliente e os vínculos de quiz/pesquisa (que são da biblioteca,
+     * não do cliente). NÃO copia respostas, agendamentos nem presenças.</p>
+     * <p>O link público (slug) é novo, gerado do nome. O {@code viewToken} fica
+     * null porque a coluna é única — o admin define depois pela edição.</p>
+     * <p>Toda coleção é recriada: reaproveitar a lista do original faria o
+     * Hibernate tratar os dois templates como donos dos mesmos registros.</p>
+     *
+     * @param templateId ID do template original
+     * @param request    cliente de destino e nome da cópia (ambos opcionais:
+     *                   sem cliente usa o do original; sem nome usa "{nome} (cópia)")
+     */
+    @Transactional
+    public FormTemplateResponse duplicateTemplate(Long templateId, DuplicateFormTemplateRequest request) {
+        FormTemplate original = templateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Template não encontrado"));
+
+        Client client = request.clientId() != null
+                ? clientRepository.findById(request.clientId())
+                        .orElseThrow(() -> new RuntimeException("Cliente não encontrado"))
+                : original.getClient();
+
+        String name = request.name() != null && !request.name().isBlank()
+                ? request.name().trim()
+                : original.getName() + " (cópia)";
+
+        FormTemplate copy = new FormTemplate();
+        copy.setName(name);
+        copy.setSlug(generateUniqueSlug(name));
+        copy.setClient(client);
+        copy.setViewToken(null);
+
+        // Agenda e presença
+        copy.setHasSchedule(original.isHasSchedule());
+        copy.setHasAttendance(original.isHasAttendance());
+        copy.setAttendanceColumnOrder(original.getAttendanceColumnOrder());
+        copy.setScheduleStartTime(original.getScheduleStartTime());
+        copy.setScheduleEndTime(original.getScheduleEndTime());
+        copy.setSlotDurationMinutes(original.getSlotDurationMinutes());
+        copy.setMaxDaysAhead(original.getMaxDaysAhead());
+        copy.setSlotCapacity(original.getSlotCapacity());
+        copy.setDedupFields(original.getDedupFields() != null
+                ? new java.util.HashSet<>(original.getDedupFields())
+                : new java.util.HashSet<>());
+
+        // Aparência
+        copy.setBackgroundColor(original.getBackgroundColor());
+        copy.setBackgroundGradient(original.getBackgroundGradient());
+        copy.setBackgroundImageUrl(original.getBackgroundImageUrl());
+        copy.setBackgroundImageMobileUrl(original.getBackgroundImageMobileUrl());
+        copy.setBackgroundImageTabletUrl(original.getBackgroundImageTabletUrl());
+        copy.setHeaderImageUrl(original.getHeaderImageUrl());
+        copy.setFooterImageUrl(original.getFooterImageUrl());
+        copy.setPrimaryColor(original.getPrimaryColor());
+        copy.setFormTextColor(original.getFormTextColor());
+        copy.setFieldBackgroundColor(original.getFieldBackgroundColor());
+        copy.setFieldTextColor(original.getFieldTextColor());
+        copy.setFieldBorderColor(original.getFieldBorderColor());
+        copy.setCardBackgroundColor(original.getCardBackgroundColor());
+        copy.setCardBorderColor(original.getCardBorderColor());
+        copy.setFontFamily(original.getFontFamily());
+        copy.setTitleFontSize(original.getTitleFontSize());
+        copy.setLabelFontSize(original.getLabelFontSize());
+        copy.setButtonFontSize(original.getButtonFontSize());
+
+        // Visualização do cliente
+        copy.setViewAllowExport(original.isViewAllowExport());
+        copy.setViewShowSubmissions(original.isViewShowSubmissions());
+        copy.setViewShowAttendance(original.isViewShowAttendance());
+        copy.setViewShowAppointments(original.isViewShowAppointments());
+        copy.setViewAllowAttendanceCheck(original.isViewAllowAttendanceCheck());
+        copy.setViewAllowAddGuest(original.isViewAllowAddGuest());
+        copy.setAttendanceFontScale(original.getAttendanceFontScale());
+        copy.setAttendanceShowCompanions(original.isAttendanceShowCompanions());
+        copy.setAttendanceShowPresence(original.isAttendanceShowPresence());
+        copy.setAttendanceShowNotes(original.isAttendanceShowNotes());
+        copy.setAttendanceShowMarkedAt(original.isAttendanceShowMarkedAt());
+        copy.setAttendanceShowNumber(original.isAttendanceShowNumber());
+
+        // LGPD e tela de agradecimento
+        copy.setLgpdEnabled(original.isLgpdEnabled());
+        copy.setLgpdText(original.getLgpdText());
+        copy.setThankYouEnabled(original.isThankYouEnabled());
+        copy.setThankYouTitle(original.getThankYouTitle());
+        copy.setThankYouSubtitle(original.getThankYouSubtitle());
+        copy.setThankYouParagraph(original.getThankYouParagraph());
+        copy.setThankYouBgColor(original.getThankYouBgColor());
+        copy.setThankYouBgGradient(original.getThankYouBgGradient());
+        copy.setThankYouBgImageUrl(original.getThankYouBgImageUrl());
+        copy.setThankYouBgImageMobileUrl(original.getThankYouBgImageMobileUrl());
+        copy.setThankYouBgImageTabletUrl(original.getThankYouBgImageTabletUrl());
+        copy.setThankYouIconColor(original.getThankYouIconColor());
+        copy.setThankYouTitleColor(original.getThankYouTitleColor());
+        copy.setThankYouTextColor(original.getThankYouTextColor());
+        copy.setThankYouFontFamily(original.getThankYouFontFamily());
+        copy.setThankYouTitleFontSize(original.getThankYouTitleFontSize());
+        copy.setShowHeaderLogoOnThankYou(original.isShowHeaderLogoOnThankYou());
+        copy.setShowFooterLogoOnThankYou(original.isShowFooterLogoOnThankYou());
+
+        // Quiz e pesquisa: mesmo vínculo (são da biblioteca, não do cliente)
+        copy.setQuiz(original.getQuiz());
+        copy.setSurvey(original.getSurvey());
+
+        // Campos: novos registros, na mesma ordem do original
+        List<FormField> originalFields = original.getFields() != null ? original.getFields() : List.of();
+        List<FormField> fields = originalFields.stream()
+                .map(f -> {
+                    FormField field = new FormField();
+                    field.setLabel(f.getLabel());
+                    field.setType(f.getType());
+                    field.setRequired(f.isRequired());
+                    field.setFieldColor(f.getFieldColor());
+                    field.setColSpan(f.getColSpan());
+                    field.setOptions(f.getOptions() != null
+                            ? new java.util.ArrayList<>(f.getOptions())
+                            : new java.util.ArrayList<>());
+                    field.setFormTemplate(copy);
+                    return field;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        copy.setFields(fields);
+
+        FormTemplate saved = templateRepository.save(copy);
+
+        metricas.templateCriado();
+        return toResponse(saved);
+    }
+
+    // ==========================
     // EDITAR TEMPLATE (ADMIN)
     // ==========================
     @Transactional
@@ -398,10 +533,6 @@ public class FormTemplateService {
         FormTemplate template = templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template não encontrado"));
 
-        String headerUrl     = template.getHeaderImageUrl();
-        String footerUrl     = template.getFooterImageUrl();
-        String backgroundUrl = template.getBackgroundImageUrl();
-
         // Deleta registros relacionados que não têm cascade (FK sem orphanRemoval)
         submissionRepository.deleteByTemplate_Id(templateId);
         appointmentRepository.deleteByFormTemplate(template);
@@ -410,10 +541,9 @@ public class FormTemplateService {
         // Hard delete do template (cascade remove os FormFields via orphanRemoval)
         templateRepository.delete(template);
 
-        // Remove as imagens do servidor (template já deletado, não há mais referências)
-        if (headerUrl     != null && !headerUrl.isBlank())     imageStorageService.delete(headerUrl);
-        if (footerUrl     != null && !footerUrl.isBlank())     imageStorageService.delete(footerUrl);
-        if (backgroundUrl != null && !backgroundUrl.isBlank()) imageStorageService.delete(backgroundUrl);
+        // Remove do servidor só as imagens que nenhum OUTRO template usa: uma
+        // cópia feita por "Duplicar" aponta para os mesmos arquivos do original.
+        deleteTemplateImages(template);
 
         // Contado depois da exclusao efetiva, nao antes: se algo estourar no
         // meio, o contador nao mente dizendo que apagou.

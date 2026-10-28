@@ -1,6 +1,7 @@
 package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.DuplicateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ViewConfigRequest;
@@ -37,6 +38,17 @@ public class FormTemplateController {
             @RequestBody CreateFormTemplateRequest request) {
 
         return ResponseEntity.ok(templateService.createTemplate(request, clientId));
+    }
+
+    @PostMapping("/{id}/duplicate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FUNCIONARIO')")
+    @Operation(summary = "Duplicar template", description = "Cria uma cópia do formulário (campos, aparência e configurações) para o cliente informado, com link novo. Não copia respostas")
+    @ApiResponse(responseCode = "200", description = "Cópia criada com sucesso")
+    public ResponseEntity<FormTemplateResponse> duplicateTemplate(
+            @PathVariable Long id,
+            @RequestBody DuplicateFormTemplateRequest request) {
+
+        return ResponseEntity.ok(templateService.duplicateTemplate(id, request));
     }
 
     @GetMapping("/my-templates")
