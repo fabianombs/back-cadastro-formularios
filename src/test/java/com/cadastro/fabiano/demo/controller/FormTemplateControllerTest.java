@@ -2,6 +2,7 @@ package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.DuplicateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
@@ -93,6 +94,32 @@ class FormTemplateControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("POST /form-templates/{id}/duplicate: duplica template para o cliente informado")
+    void duplicateTemplate_success() throws Exception {
+        when(templateService.duplicateTemplate(eq(1L), eq(new DuplicateFormTemplateRequest(2L, "Cópia"))))
+                .thenReturn(buildResponse());
+
+        mockMvc.perform(post("/form-templates/1/duplicate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientId\":2,\"name\":\"Cópia\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1));
+    }
+
+    @Test
+    @DisplayName("POST /form-templates/{id}/duplicate: template inexistente retorna 400 com a mensagem")
+    void duplicateTemplate_notFound() throws Exception {
+        when(templateService.duplicateTemplate(eq(99L), any()))
+                .thenThrow(new RuntimeException("Template não encontrado"));
+
+        mockMvc.perform(post("/form-templates/99/duplicate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clientId\":2,\"name\":\"Cópia\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Template não encontrado"));
     }
 
     @Test

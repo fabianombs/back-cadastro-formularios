@@ -119,7 +119,8 @@ public class DashboardService {
                     t.isHasSchedule(), t.getFields().size(), submissions,
                     apptTotal, apptConfirmed, apptCancelled,
                     attTotal, attPresent,
-                    hasQuiz, quizLink, rankingLink
+                    hasQuiz, quizLink, rankingLink,
+                    t.getClient() != null ? t.getClient().getId() : null
             );
         }).toList();
 
