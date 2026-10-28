@@ -19,5 +19,7 @@ public record TemplateStatResponse(
         // Quiz integrado — presentes quando o template tem quiz ativo
         boolean hasQuiz,
         String quizLink,
-        String rankingLink
+        String rankingLink,
+        // Cliente dono do template — usado para pré-selecionar o cliente ao duplicar
+        Long clientId
 ) {}
