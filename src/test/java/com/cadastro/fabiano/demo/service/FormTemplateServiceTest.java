@@ -423,6 +423,132 @@ class FormTemplateServiceTest {
         verify(templateRepository, never()).save(any());
     }
 
+    // ─── moveSubmissions (Story 1.4) ─────────────────────────────────────────
+
+    private FormTemplate templateWith(Long id, Client owner, String... labels) {
+        FormTemplate t = buildTemplate("F" + id, "f" + id);
+        t.setId(id);
+        t.setClient(owner);
+        List<FormField> fields = new ArrayList<>();
+        for (String l : labels) fields.add(FormField.builder().label(l).build());
+        t.setFields(fields);
+        return t;
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: move tudo num único UPDATE para o destino e devolve o total")
+    void moveSubmissions_movesAll() {
+        FormTemplate source = templateWith(65L, client, "Nome");
+        FormTemplate target = templateWith(63L, client, "Nome");
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(source));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(target));
+        when(submissionRepository.findIdsByTemplateId(65L)).thenReturn(List.of(10L, 11L, 12L));
+        when(submissionRepository.moveAllToTemplate(65L, target)).thenReturn(3);
+
+        assertThat(service.moveSubmissions(65L, 63L).moved()).isEqualTo(3);
+
+        verify(submissionRepository).moveAllToTemplate(65L, target);
+        // nada é recriado nem apagado: preserva id, valores e createdAt
+        verify(submissionRepository, never()).save(any());
+        verify(submissionRepository, never()).deleteByTemplate_Id(any());
+        verify(templateRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: clientes diferentes é bloqueado (LGPD) e nada é movido")
+    void moveSubmissions_differentClients_blocked() {
+        Client outro = Client.builder().id(2L).name("Outro").username("outro").build();
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, client)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(templateWith(63L, outro)));
+
+        assertThatThrownBy(() -> service.moveSubmissions(65L, 63L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("mesmo cliente");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: origem sem cliente é bloqueada")
+    void moveSubmissions_sourceWithoutClient_blocked() {
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, null)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(templateWith(63L, client)));
+
+        assertThatThrownBy(() -> service.moveSubmissions(65L, 63L))
+                .hasMessageContaining("mesmo cliente");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: origem igual ao destino é recusada")
+    void moveSubmissions_sameForm_rejected() {
+        assertThatThrownBy(() -> service.moveSubmissions(63L, 63L))
+                .hasMessageContaining("mesmo formulário");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: destino não informado é recusado")
+    void moveSubmissions_nullTarget_rejected() {
+        assertThatThrownBy(() -> service.moveSubmissions(65L, null))
+                .hasMessageContaining("destino");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: origem ou destino inexistente é recusado")
+    void moveSubmissions_notFound_rejected() {
+        when(templateRepository.findById(65L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.moveSubmissions(65L, 63L))
+                .hasMessageContaining("origem não encontrado");
+
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, client)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.moveSubmissions(65L, 63L))
+                .hasMessageContaining("destino não encontrado");
+
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("moveSubmissions: origem sem cadastros → 'Nada para mover'")
+    void moveSubmissions_empty_rejected() {
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, client)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(templateWith(63L, client)));
+        when(submissionRepository.findIdsByTemplateId(65L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.moveSubmissions(65L, 63L))
+                .hasMessageContaining("Nada para mover");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("previewMoveSubmissions: totais e perguntas da origem que faltam no destino")
+    void previewMoveSubmissions_countsAndMissingLabels() {
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, client)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(templateWith(63L, client, "Nome", "CPF")));
+        when(submissionRepository.countByTemplate_Id(65L)).thenReturn(72L);
+        when(submissionRepository.countByTemplate_Id(63L)).thenReturn(182L);
+        when(submissionRepository.findDistinctLabelsByTemplateId(65L))
+                .thenReturn(List.of("Nome", "Telefone", "CPF", "Bairro"));
+
+        var preview = service.previewMoveSubmissions(65L, 63L);
+
+        assertThat(preview.sourceCount()).isEqualTo(72L);
+        assertThat(preview.targetCount()).isEqualTo(182L);
+        assertThat(preview.missingLabels()).containsExactly("Bairro", "Telefone");
+        verify(submissionRepository, never()).moveAllToTemplate(any(), any());
+    }
+
+    @Test
+    @DisplayName("previewMoveSubmissions: perguntas iguais → nenhuma faltando")
+    void previewMoveSubmissions_sameLabels() {
+        when(templateRepository.findById(65L)).thenReturn(Optional.of(templateWith(65L, client)));
+        when(templateRepository.findById(63L)).thenReturn(Optional.of(templateWith(63L, client, "Nome", "CPF")));
+        when(submissionRepository.findDistinctLabelsByTemplateId(65L)).thenReturn(List.of("CPF", "Nome"));
+
+        assertThat(service.previewMoveSubmissions(65L, 63L).missingLabels()).isEmpty();
+    }
+
     // ─── updateTemplate ───────────────────────────────────────────────────────
 
     @Test
