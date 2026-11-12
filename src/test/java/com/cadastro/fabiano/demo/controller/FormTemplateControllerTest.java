@@ -123,6 +123,58 @@ class FormTemplateControllerTest {
     }
 
     @Test
+    @DisplayName("GET /form-templates/{id}/move-submissions/preview: devolve a prévia")
+    void previewMoveSubmissions_success() throws Exception {
+        when(templateService.previewMoveSubmissions(65L, 63L))
+                .thenReturn(new com.cadastro.fabiano.demo.dto.response.MoveSubmissionsPreviewResponse(72, 182, List.of("Bairro")));
+
+        mockMvc.perform(get("/form-templates/65/move-submissions/preview").param("targetId", "63"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceCount").value(72))
+                .andExpect(jsonPath("$.targetCount").value(182))
+                .andExpect(jsonPath("$.missingLabels[0]").value("Bairro"));
+    }
+
+    @Test
+    @DisplayName("POST /form-templates/{id}/move-submissions: move e devolve o total")
+    void moveSubmissions_success() throws Exception {
+        when(templateService.moveSubmissions(65L, 63L))
+                .thenReturn(new com.cadastro.fabiano.demo.dto.response.MoveSubmissionsResponse(72));
+
+        mockMvc.perform(post("/form-templates/65/move-submissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetId\":63}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.moved").value(72));
+    }
+
+    @Test
+    @DisplayName("POST /form-templates/{id}/move-submissions: erro de regra vira 400 com a mensagem")
+    void moveSubmissions_ruleError() throws Exception {
+        when(templateService.moveSubmissions(65L, 70L))
+                .thenThrow(new RuntimeException("Só é possível mover cadastros entre formulários do mesmo cliente"));
+
+        mockMvc.perform(post("/form-templates/65/move-submissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetId\":70}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Só é possível mover cadastros entre formulários do mesmo cliente"));
+    }
+
+    @Test
+    @DisplayName("mover cadastros: os dois endpoints são só para ADMIN")
+    void moveSubmissions_adminOnly() throws Exception {
+        for (String metodo : List.of("previewMoveSubmissions", "moveSubmissions")) {
+            java.lang.reflect.Method m = java.util.Arrays.stream(FormTemplateController.class.getMethods())
+                    .filter(x -> x.getName().equals(metodo)).findFirst().orElseThrow();
+            org.springframework.security.access.prepost.PreAuthorize pa =
+                    m.getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+            org.assertj.core.api.Assertions.assertThat(pa).as(metodo).isNotNull();
+            org.assertj.core.api.Assertions.assertThat(pa.value()).as(metodo).isEqualTo("hasRole('ADMIN')");
+        }
+    }
+
+    @Test
     @DisplayName("GET /form-templates: lista todos os templates")
     void getAllTemplates_success() throws Exception {
         when(templateService.findAllTemplates(any())).thenReturn(new PageImpl<>(List.of()));

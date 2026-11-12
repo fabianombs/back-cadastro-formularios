@@ -2,9 +2,11 @@ package com.cadastro.fabiano.demo.repository;
 
 import com.cadastro.fabiano.demo.entity.Client;
 import com.cadastro.fabiano.demo.entity.FormSubmission;
+import com.cadastro.fabiano.demo.entity.FormTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -29,6 +31,18 @@ public interface FormSubmissionRepository extends JpaRepository<FormSubmission, 
     void deleteByIdInAndTemplate_Id(java.util.List<Long> ids, Long templateId);
 
     long countByTemplate_Id(Long templateId);
+
+    // Story 1.4 — mover cadastros entre formularios.
+    @Query("SELECT s.id FROM FormSubmission s WHERE s.template.id = :templateId ORDER BY s.id")
+    List<Long> findIdsByTemplateId(@Param("templateId") Long templateId);
+
+    @Query("SELECT DISTINCT KEY(v) FROM FormSubmission s JOIN s.values v WHERE s.template.id = :templateId")
+    List<String> findDistinctLabelsByTemplateId(@Param("templateId") Long templateId);
+
+    // UPDATE em lote: preserva id, valores e createdAt de cada cadastro.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE FormSubmission s SET s.template = :target WHERE s.template.id = :sourceId")
+    int moveAllToTemplate(@Param("sourceId") Long sourceId, @Param("target") FormTemplate target);
 
     long countByTemplate_Client(Client client);
 

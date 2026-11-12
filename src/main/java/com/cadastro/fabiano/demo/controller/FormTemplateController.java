@@ -2,10 +2,13 @@ package com.cadastro.fabiano.demo.controller;
 
 import com.cadastro.fabiano.demo.dto.request.CreateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.DuplicateFormTemplateRequest;
+import com.cadastro.fabiano.demo.dto.request.MoveSubmissionsRequest;
 import com.cadastro.fabiano.demo.dto.request.ScheduleConfigRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.request.ViewConfigRequest;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
+import com.cadastro.fabiano.demo.dto.response.MoveSubmissionsPreviewResponse;
+import com.cadastro.fabiano.demo.dto.response.MoveSubmissionsResponse;
 import com.cadastro.fabiano.demo.dto.response.PaginaResponse;
 import com.cadastro.fabiano.demo.service.FormTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +52,28 @@ public class FormTemplateController {
             @RequestBody DuplicateFormTemplateRequest request) {
 
         return ResponseEntity.ok(templateService.duplicateTemplate(id, request));
+    }
+
+    @GetMapping("/{id}/move-submissions/preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Prévia de mover cadastros", description = "Mostra quantos cadastros seriam movidos do formulário {id} para o destino e quais perguntas da origem não existem no destino")
+    @ApiResponse(responseCode = "200", description = "Prévia calculada")
+    public ResponseEntity<MoveSubmissionsPreviewResponse> previewMoveSubmissions(
+            @PathVariable Long id,
+            @RequestParam Long targetId) {
+
+        return ResponseEntity.ok(templateService.previewMoveSubmissions(id, targetId));
+    }
+
+    @PostMapping("/{id}/move-submissions")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Mover cadastros", description = "Move todos os cadastros do formulário {id} para outro formulário do mesmo cliente, preservando id e data. Não apaga a origem")
+    @ApiResponse(responseCode = "200", description = "Cadastros movidos")
+    public ResponseEntity<MoveSubmissionsResponse> moveSubmissions(
+            @PathVariable Long id,
+            @RequestBody MoveSubmissionsRequest request) {
+
+        return ResponseEntity.ok(templateService.moveSubmissions(id, request.targetId()));
     }
 
     @GetMapping("/my-templates")

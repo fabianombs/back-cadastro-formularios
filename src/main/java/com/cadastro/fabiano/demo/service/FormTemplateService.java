@@ -7,6 +7,8 @@ import com.cadastro.fabiano.demo.dto.request.TemplateAppearanceRequest;
 import com.cadastro.fabiano.demo.dto.request.UpdateFormTemplateRequest;
 import com.cadastro.fabiano.demo.dto.response.FormFieldResponse;
 import com.cadastro.fabiano.demo.dto.response.FormTemplateResponse;
+import com.cadastro.fabiano.demo.dto.response.MoveSubmissionsPreviewResponse;
+import com.cadastro.fabiano.demo.dto.response.MoveSubmissionsResponse;
 import com.cadastro.fabiano.demo.dto.response.ScheduleConfigResponse;
 import com.cadastro.fabiano.demo.dto.response.TemplateAppearanceResponse;
 import com.cadastro.fabiano.demo.config.MetricasDeNegocio;
@@ -35,9 +37,17 @@ import com.cadastro.fabiano.demo.utils.ColecaoDeSaida;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class FormTemplateService {
+
+    private static final Logger log = LoggerFactory.getLogger(FormTemplateService.class);
 
     private final FormTemplateRepository templateRepository;
     private final FormSubmissionRepository submissionRepository;
@@ -523,6 +533,75 @@ public class FormTemplateService {
         if (request.attendanceFontScale() != null)      template.setAttendanceFontScale(request.attendanceFontScale());
 
         return toResponse(templateRepository.save(template));
+    }
+
+    // ==========================
+    // MOVER CADASTROS ENTRE FORMULARIOS (Story 1.4)
+    // ==========================
+
+    /** Previa: quantos cadastros serao movidos e quais perguntas nao existem no destino. */
+    @Transactional(readOnly = true)
+    public MoveSubmissionsPreviewResponse previewMoveSubmissions(Long sourceId, Long targetId) {
+        FormTemplate[] pair = loadMovePair(sourceId, targetId);
+        FormTemplate target = pair[1];
+
+        Set<String> targetLabels = target.getFields() == null ? Set.of()
+                : target.getFields().stream()
+                        .map(FormField::getLabel)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<String> missing = submissionRepository.findDistinctLabelsByTemplateId(sourceId).stream()
+                .filter(label -> label != null && !targetLabels.contains(label))
+                .sorted()
+                .toList();
+
+        return new MoveSubmissionsPreviewResponse(
+                submissionRepository.countByTemplate_Id(sourceId),
+                submissionRepository.countByTemplate_Id(targetId),
+                missing);
+    }
+
+    /**
+     * Move TODOS os cadastros da origem para o destino num unico UPDATE (tudo ou nada).
+     * Preserva id, respostas e createdAt. A origem continua existindo, vazia.
+     * Os ids movidos vao para o log, porque depois de juntar nao ha como saber de
+     * qual formulario cada cadastro veio.
+     */
+    @Transactional
+    public MoveSubmissionsResponse moveSubmissions(Long sourceId, Long targetId) {
+        FormTemplate[] pair = loadMovePair(sourceId, targetId);
+
+        List<Long> ids = submissionRepository.findIdsByTemplateId(sourceId);
+        if (ids.isEmpty()) {
+            throw new RuntimeException("Nada para mover: o formulário de origem não tem cadastros");
+        }
+
+        int moved = submissionRepository.moveAllToTemplate(sourceId, pair[1]);
+        log.info("Story 1.4 - cadastros movidos do formulario {} para {}: total={} ids={}",
+                sourceId, targetId, moved, ids);
+        return new MoveSubmissionsResponse(moved);
+    }
+
+    private FormTemplate[] loadMovePair(Long sourceId, Long targetId) {
+        if (targetId == null) {
+            throw new RuntimeException("Informe o formulário de destino");
+        }
+        if (sourceId.equals(targetId)) {
+            throw new RuntimeException("Origem e destino são o mesmo formulário");
+        }
+        FormTemplate source = templateRepository.findById(sourceId)
+                .orElseThrow(() -> new RuntimeException("Formulário de origem não encontrado"));
+        FormTemplate target = templateRepository.findById(targetId)
+                .orElseThrow(() -> new RuntimeException("Formulário de destino não encontrado"));
+
+        Long sourceClient = source.getClient() != null ? source.getClient().getId() : null;
+        Long targetClient = target.getClient() != null ? target.getClient().getId() : null;
+        if (sourceClient == null || !sourceClient.equals(targetClient)) {
+            // LGPD: cadastros de um cliente nunca vao para formulario de outro
+            throw new RuntimeException("Só é possível mover cadastros entre formulários do mesmo cliente");
+        }
+        return new FormTemplate[] { source, target };
     }
 
     // ==========================
