@@ -324,6 +324,17 @@ public class QuizService {
         quiz.setThankYouTextColor(request.thankYouTextColor());
         quiz.setThankYouFontFamily(request.thankYouFontFamily());
         quiz.setThankYouTitleFontSize(request.thankYouTitleFontSize());
+        quiz.setLogoUrl(request.logoUrl());
+        quiz.setRegisterTextColor(request.registerTextColor());
+        quiz.setOptionTextColor(request.optionTextColor());
+        quiz.setQuestionCardColor(request.questionCardColor());
+        quiz.setSecondaryTextColor(request.secondaryTextColor());
+        // Ausente (null) = mostra; só um false explícito esconde a logo
+        quiz.setShowLogoRegister(!Boolean.FALSE.equals(request.showLogoRegister()));
+        quiz.setShowLogoReady(!Boolean.FALSE.equals(request.showLogoReady()));
+        quiz.setShowLogoQuestion(!Boolean.FALSE.equals(request.showLogoQuestion()));
+        quiz.setShowLogoResult(!Boolean.FALSE.equals(request.showLogoResult()));
+        quiz.setShowLogoRanking(!Boolean.FALSE.equals(request.showLogoRanking()));
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -399,7 +410,17 @@ public class QuizService {
                 quiz.getThankYouTitleColor(),
                 quiz.getThankYouTextColor(),
                 quiz.getThankYouFontFamily(),
-                quiz.getThankYouTitleFontSize()
+                quiz.getThankYouTitleFontSize(),
+                quiz.getLogoUrl(),
+                quiz.getRegisterTextColor(),
+                quiz.getOptionTextColor(),
+                quiz.getQuestionCardColor(),
+                quiz.getSecondaryTextColor(),
+                quiz.isShowLogoRegister(),
+                quiz.isShowLogoReady(),
+                quiz.isShowLogoQuestion(),
+                quiz.isShowLogoResult(),
+                quiz.isShowLogoRanking()
         );
     }
 
