@@ -677,6 +677,45 @@ class QuizServiceTest {
                 .hasMessageContaining("já finalizada");
     }
 
+    @Test
+    @DisplayName("submitAnswer: reenvio devolve o resultado anterior sem pontuar de novo")
+    void submitAnswer_retry_doesNotScoreTwice() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "quiz");
+        QuizQuestion question = buildQuestion(10L, quiz);
+        question.getOptions().add(buildOption(100L, question, true));
+        quiz.getQuestions().add(question);
+        QuizSession session = QuizSession.builder().id(5L).quizConfig(quiz)
+                .totalScore(1400).correctAnswers(1).build();
+        when(sessionRepository.findById(5L)).thenReturn(Optional.of(session));
+        when(answerRepository.findFirstBySessionAndQuestion(session, question)).thenReturn(Optional.of(
+                QuizAnswer.builder().session(session).question(question).correct(true).pointsEarned(1400).build()));
+
+        AnswerResultResponse r = service.submitAnswer(5L, new SubmitAnswerRequest(10L, 100L, 1L));
+
+        assertThat(r.correct()).isTrue();
+        assertThat(r.pointsEarned()).isEqualTo(1400);
+        assertThat(r.totalScore()).isEqualTo(1400);
+        assertThat(session.getCorrectAnswers()).isEqualTo(1);
+        verify(answerRepository, never()).save(any());
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("completeSession: reenvio mantém o horário de conclusão")
+    void completeSession_retry_keepsTime() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "quiz");
+        java.time.LocalDateTime when = java.time.LocalDateTime.of(2026, 12, 1, 10, 0);
+        QuizSession session = QuizSession.builder().id(5L).quizConfig(quiz).completed(true).completedAt(when).build();
+        when(sessionRepository.findById(5L)).thenReturn(Optional.of(session));
+        when(sessionRepository.findRanking(eq(quiz), any())).thenReturn(List.of(session));
+
+        QuizSessionResponse r = service.completeSession(5L);
+
+        assertThat(r.completedAt()).isEqualTo(when);
+        assertThat(r.rankPosition()).isEqualTo(1);
+        verify(sessionRepository, never()).save(any());
+    }
+
     // ── completeSession ───────────────────────────────────────────────────────
 
     @Test
