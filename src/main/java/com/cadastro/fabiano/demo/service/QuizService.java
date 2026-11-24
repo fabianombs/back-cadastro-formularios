@@ -197,6 +197,14 @@ public class QuizService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Pergunta não encontrada"));
 
+        // Reenvio (a resposta chegou, mas a confirmação se perdeu na rede): devolve o que
+        // já valeu, sem pontuar de novo
+        QuizAnswer previous = answerRepository.findFirstBySessionAndQuestion(session, question).orElse(null);
+        if (previous != null) {
+            return new AnswerResultResponse(previous.isCorrect(), correctOptionId(question),
+                    previous.getPointsEarned(), session.getTotalScore(), question.getExplanation());
+        }
+
         QuizOption chosenOption = null;
         boolean correct = false;
         if (request.optionId() != null) {
@@ -228,13 +236,15 @@ public class QuizService {
         if (correct) session.setCorrectAnswers(session.getCorrectAnswers() + 1);
         sessionRepository.save(session);
 
-        Long correctOptionId = question.getOptions().stream()
+        return new AnswerResultResponse(correct, correctOptionId(question), points, session.getTotalScore(),
+                question.getExplanation());
+    }
+
+    private static Long correctOptionId(QuizQuestion question) {
+        return question.getOptions().stream()
                 .filter(QuizOption::isCorrect)
                 .map(QuizOption::getId)
                 .findFirst().orElse(null);
-
-        return new AnswerResultResponse(correct, correctOptionId, points, session.getTotalScore(),
-                question.getExplanation());
     }
 
     /** Finaliza sessão e calcula posição no ranking */
@@ -243,9 +253,12 @@ public class QuizService {
         QuizSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Sessão não encontrada"));
 
-        session.setCompleted(true);
-        session.setCompletedAt(LocalDateTime.now());
-        session = sessionRepository.save(session);
+        // Reenvio não muda o horário de conclusão (é critério de desempate do ranking)
+        if (!session.isCompleted()) {
+            session.setCompleted(true);
+            session.setCompletedAt(LocalDateTime.now());
+            session = sessionRepository.save(session);
+        }
 
         List<QuizSession> ranking = sessionRepository.findRanking(
                 session.getQuizConfig(), PageRequest.of(0, 1000));
