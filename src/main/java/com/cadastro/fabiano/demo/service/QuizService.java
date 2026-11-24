@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.dto.QuizRegisterField;
 import com.cadastro.fabiano.demo.dto.request.*;
 import com.cadastro.fabiano.demo.dto.response.*;
 import com.cadastro.fabiano.demo.entity.*;
@@ -12,7 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -169,8 +174,12 @@ public class QuizService {
                 .playerContact(request.playerContact())
                 .totalQuestions(quiz.getQuestions().size())
                 .build();
+        // Sem "fields" o jogador veio de um formulário (dados já coletados lá)
+        if (hasRegisterFields(quiz) && request.fields() != null) {
+            applyRegisterData(session, quiz.getRegisterFields(), request.fields());
+        }
 
-        return toSessionResponse(sessionRepository.save(session), null);
+        return toPublicSessionResponse(sessionRepository.save(session), null);
     }
 
     /** Submete resposta de uma pergunta */
@@ -224,7 +233,8 @@ public class QuizService {
                 .map(QuizOption::getId)
                 .findFirst().orElse(null);
 
-        return new AnswerResultResponse(correct, correctOptionId, points, session.getTotalScore());
+        return new AnswerResultResponse(correct, correctOptionId, points, session.getTotalScore(),
+                question.getExplanation());
     }
 
     /** Finaliza sessão e calcula posição no ranking */
@@ -246,7 +256,7 @@ public class QuizService {
                 break;
             }
         }
-        return toSessionResponse(session, position);
+        return toPublicSessionResponse(session, position);
     }
 
     // ── Ranking e relatório ───────────────────────────────────────────────────
@@ -259,7 +269,7 @@ public class QuizService {
         long total = sessionRepository.countByQuizConfigAndCompletedTrue(quiz);
 
         List<QuizSessionResponse> list = new ArrayList<>();
-        for (int i = 0; i < sessions.size(); i++) list.add(toSessionResponse(sessions.get(i), i + 1));
+        for (int i = 0; i < sessions.size(); i++) list.add(toPublicSessionResponse(sessions.get(i), i + 1));
 
         return new RankingResponse(quiz.getName(), total, list);
     }
@@ -335,6 +345,70 @@ public class QuizService {
         quiz.setShowLogoQuestion(!Boolean.FALSE.equals(request.showLogoQuestion()));
         quiz.setShowLogoResult(!Boolean.FALSE.equals(request.showLogoResult()));
         quiz.setShowLogoRanking(!Boolean.FALSE.equals(request.showLogoRanking()));
+        quiz.setFontUrl(validFontUrl(request.fontUrl()));
+        quiz.setFontBoldUrl(validFontUrl(request.fontBoldUrl()));
+        validateRegisterFields(request.registerFields());
+        quiz.setRegisterFields(request.registerFields() == null || request.registerFields().isEmpty()
+                ? null : request.registerFields());
+    }
+
+    // ── Fonte e campos do cadastro ────────────────────────────────────────────
+
+    private static final Pattern FONT_URL = Pattern.compile("/quizzes/fonts/[0-9a-f-]{36}/[A-Za-z0-9._-]{1,100}");
+    private static final Set<String> FIELD_TYPES = Set.of("text", "email", "tel", "number");
+    private static final int MAX_FIELDS = 10;
+    private static final int MAX_VALUE = 255;
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    // Só fontes enviadas aqui: o link público não deve carregar arquivo de endereço qualquer
+    private static String validFontUrl(String url) {
+        String u = blankToNull(url);
+        if (u != null && !FONT_URL.matcher(u).matches()) throw new RuntimeException("Fonte inválida. Envie o arquivo novamente.");
+        return u;
+    }
+
+    private static boolean hasRegisterFields(QuizConfig quiz) {
+        return quiz.getRegisterFields() != null && !quiz.getRegisterFields().isEmpty();
+    }
+
+    private static void validateRegisterFields(List<QuizRegisterField> fields) {
+        if (fields == null || fields.isEmpty()) return;
+        if (fields.size() > MAX_FIELDS) throw new RuntimeException("Use no máximo " + MAX_FIELDS + " campos no cadastro.");
+        Set<String> ids = new HashSet<>();
+        Set<String> labels = new HashSet<>();
+        for (QuizRegisterField f : fields) {
+            if (f.id() == null || f.id().isBlank() || !ids.add(f.id())) throw new RuntimeException("Campo de cadastro inválido.");
+            if (f.label() == null || f.label().isBlank() || f.label().length() > 80) throw new RuntimeException("Dê um nome de até 80 letras a cada campo do cadastro.");
+            if (!labels.add(f.label().trim().toLowerCase())) throw new RuntimeException("Há campos do cadastro com o mesmo nome: " + f.label());
+            if (!FIELD_TYPES.contains(f.type())) throw new RuntimeException("Tipo de campo inválido: " + f.label());
+        }
+        if (fields.stream().noneMatch(f -> f.required() && f.showInRanking())) {
+            throw new RuntimeException("Pelo menos um campo do cadastro deve ser obrigatório e aparecer no ranking.");
+        }
+    }
+
+    private static void applyRegisterData(QuizSession session, List<QuizRegisterField> fields, Map<String, String> values) {
+        Map<String, String> data = new LinkedHashMap<>();
+        List<String> name = new ArrayList<>();
+        String contact = "";
+        for (QuizRegisterField f : fields) {
+            String v = blankToNull(values.get(f.id()));
+            if (v == null) {
+                if (f.required()) throw new RuntimeException("Preencha o campo: " + f.label());
+                continue;
+            }
+            if (v.length() > MAX_VALUE) throw new RuntimeException("Texto muito longo em: " + f.label());
+            data.put(f.label(), v);
+            if (f.showInRanking()) name.add(v);
+            if (contact.isEmpty() && ("email".equals(f.type()) || "tel".equals(f.type()))) contact = v;
+        }
+        String fullName = String.join(" ", name);
+        session.setPlayerName(fullName.length() > MAX_VALUE ? fullName.substring(0, MAX_VALUE) : fullName);
+        session.setPlayerContact(contact);
+        session.setRegisterData(data);
     }
 
     private void applyQuestions(QuizConfig quiz, QuizConfigRequest request) {
@@ -344,6 +418,7 @@ public class QuizService {
                     .quizConfig(quiz)
                     .question(qReq.question())
                     .imageUrl(qReq.imageUrl())
+                    .explanation(blankToNull(qReq.explanation()))
                     .orderIndex(qReq.orderIndex())
                     .build();
             if (qReq.options() != null) {
@@ -368,7 +443,8 @@ public class QuizService {
                                 .map(o -> new QuizOptionResponse(
                                         o.getId(), o.getOptionText(), o.getOrderIndex(),
                                         includeCorrect ? o.isCorrect() : null))
-                                .toList()))
+                                .toList(),
+                        includeCorrect ? q.getExplanation() : null))
                 .toList();
 
         return new QuizConfigResponse(
@@ -420,15 +496,26 @@ public class QuizService {
                 quiz.isShowLogoReady(),
                 quiz.isShowLogoQuestion(),
                 quiz.isShowLogoResult(),
-                quiz.isShowLogoRanking()
+                quiz.isShowLogoRanking(),
+                quiz.getFontUrl(),
+                quiz.getFontBoldUrl(),
+                quiz.getRegisterFields()
         );
+    }
+
+    // Link público: contato e campos do cadastro são dados pessoais e não saem daqui
+    private QuizSessionResponse toPublicSessionResponse(QuizSession s, Integer position) {
+        return new QuizSessionResponse(
+                s.getId(), s.getPlayerName(), null,
+                s.getTotalScore(), s.getCorrectAnswers(), s.getTotalQuestions(),
+                s.isCompleted(), s.getCompletedAt(), position, null);
     }
 
     private QuizSessionResponse toSessionResponse(QuizSession s, Integer position) {
         return new QuizSessionResponse(
                 s.getId(), s.getPlayerName(), s.getPlayerContact(),
                 s.getTotalScore(), s.getCorrectAnswers(), s.getTotalQuestions(),
-                s.isCompleted(), s.getCompletedAt(), position);
+                s.isCompleted(), s.getCompletedAt(), position, s.getRegisterData());
     }
 
     /** Gera slug a partir de texto, garantindo unicidade */

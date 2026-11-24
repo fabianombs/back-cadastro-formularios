@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.service;
 
+import com.cadastro.fabiano.demo.dto.QuizRegisterField;
 import com.cadastro.fabiano.demo.dto.request.*;
 import com.cadastro.fabiano.demo.dto.response.*;
 import com.cadastro.fabiano.demo.entity.*;
@@ -73,12 +74,12 @@ class QuizServiceTest {
                 new QuizOptionRequest("B", false, 1)
         );
         List<QuizQuestionRequest> questions = List.of(
-                new QuizQuestionRequest("P1?", null, 0, opts)
+                new QuizQuestionRequest("P1?", null, 0, opts, "Porque sim")
         );
         return new QuizConfigRequest(name, null, 30, 1000, questions,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 false, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     // ── listAll ───────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ class QuizServiceTest {
         QuizConfigRequest req = new QuizConfigRequest("Meu Quiz", "meu-slug-custom", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 false, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Meu Quiz", "meu-slug-custom");
 
         when(quizConfigRepository.existsBySlug("meu-slug-custom")).thenReturn(false);
@@ -167,7 +168,7 @@ class QuizServiceTest {
         return new QuizConfigRequest("Quiz", null, 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 false, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                logo, registerText, optionText, "#eeeeee", "#777777", null, null, null, null, null);
+                logo, registerText, optionText, "#eeeeee", "#777777", null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -213,7 +214,7 @@ class QuizServiceTest {
                     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                     false, null, null, null, null, null, null, null, null, null, null, null, null, null,
                     "https://img/logo.png", null, null, null, null,
-                    hidden != 0, hidden != 1, hidden != 2, hidden != 3, hidden != 4);
+                    hidden != 0, hidden != 1, hidden != 2, hidden != 3, hidden != 4, null, null, null);
 
             QuizConfigResponse r = service.updateQuiz(1L, req);
 
@@ -247,7 +248,7 @@ class QuizServiceTest {
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "outro-slug", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 false, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(quizConfigRepository.existsBySlug("outro-slug")).thenReturn(true);
@@ -264,7 +265,7 @@ class QuizServiceTest {
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "meu-slug", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 false, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Quiz", "meu-slug");
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
@@ -411,7 +412,7 @@ class QuizServiceTest {
     @DisplayName("startSession: cria sessão de jogador")
     void startSession_success() {
         QuizConfig quiz = buildQuiz(1L, "Quiz", "meu-quiz");
-        StartQuizSessionRequest req = new StartQuizSessionRequest("João", "joao@email.com");
+        StartQuizSessionRequest req = new StartQuizSessionRequest("João", "joao@email.com", null);
         QuizSession session = QuizSession.builder()
                 .id(1L).quizConfig(quiz).playerName("João")
                 .playerContact("joao@email.com").totalQuestions(0)
@@ -423,6 +424,146 @@ class QuizServiceTest {
         QuizSessionResponse result = service.startSession("meu-quiz", req);
 
         assertThat(result.playerName()).isEqualTo("João");
+    }
+
+    // ── campos do cadastro, fonte e explicação ────────────────────────────────
+
+    private static final List<QuizRegisterField> LATAM_FIELDS = List.of(
+            new QuizRegisterField("n", "Nome", "text", true, true),
+            new QuizRegisterField("s", "Sobrenome", "text", true, true),
+            new QuizRegisterField("c", "Código LATAM", "number", true, false),
+            new QuizRegisterField("e", "E-mail", "email", false, false));
+
+    private QuizConfigRequest buildRequestWith(String fontUrl, List<QuizRegisterField> fields) {
+        return new QuizConfigRequest("Quiz", null, 30, 1000, List.of(),
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, fontUrl, null, fields);
+    }
+
+    private QuizSession startWith(QuizConfig quiz, java.util.Map<String, String> values) {
+        when(quizConfigRepository.findBySlug("q")).thenReturn(Optional.of(quiz));
+        org.mockito.ArgumentCaptor<QuizSession> cap = org.mockito.ArgumentCaptor.forClass(QuizSession.class);
+        when(sessionRepository.save(cap.capture())).thenAnswer(i -> i.getArgument(0));
+        QuizSessionResponse r = service.startSession("q", new StartQuizSessionRequest(null, null, values));
+        assertThat(r.playerContact()).isNull();
+        assertThat(r.registerData()).isNull();
+        return cap.getValue();
+    }
+
+    @Test
+    @DisplayName("startSession: monta nome do ranking e guarda os campos configurados")
+    void startSession_customFields() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        quiz.setRegisterFields(LATAM_FIELDS);
+
+        QuizSession s = startWith(quiz, java.util.Map.of("n", " Ana ", "s", "Silva", "c", "00123", "intruso", "x"));
+
+        assertThat(s.getPlayerName()).isEqualTo("Ana Silva");
+        assertThat(s.getPlayerContact()).isEmpty();
+        assertThat(s.getRegisterData()).containsExactly(
+                entry("Nome", "Ana"), entry("Sobrenome", "Silva"), entry("Código LATAM", "00123"));
+    }
+
+    @Test
+    @DisplayName("startSession: recusa campo obrigatório vazio e valor longo demais")
+    void startSession_customFields_invalid() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        quiz.setRegisterFields(LATAM_FIELDS);
+        when(quizConfigRepository.findBySlug("q")).thenReturn(Optional.of(quiz));
+
+        assertThatThrownBy(() -> service.startSession("q", new StartQuizSessionRequest(null, null,
+                java.util.Map.of("n", "Ana", "s", "Silva", "c", "  ")))).hasMessageContaining("Código LATAM");
+        assertThatThrownBy(() -> service.startSession("q", new StartQuizSessionRequest(null, null,
+                java.util.Map.of("n", "a".repeat(256), "s", "Silva", "c", "1")))).hasMessageContaining("muito longo");
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("startSession: quem vem de formulário continua com nome e contato")
+    void startSession_fromForm_keepsNameAndContact() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        quiz.setRegisterFields(LATAM_FIELDS);
+        when(quizConfigRepository.findBySlug("q")).thenReturn(Optional.of(quiz));
+        when(sessionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        QuizSessionResponse r = service.startSession("q", new StartQuizSessionRequest("João", "j@x.com", null));
+
+        assertThat(r.playerName()).isEqualTo("João");
+        assertThat(r.playerContact()).isNull();
+    }
+
+    @Test
+    @DisplayName("getRanking não expõe contato nem campos; relatório da equipe expõe")
+    void ranking_hidesPersonalData_reportShows() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        QuizSession s = QuizSession.builder().id(9L).quizConfig(quiz).playerName("Ana Silva")
+                .playerContact("a@x.com").registerData(java.util.Map.of("Código LATAM", "1")).build();
+        when(quizConfigRepository.findBySlug("q")).thenReturn(Optional.of(quiz));
+        when(sessionRepository.findRanking(any(), any())).thenReturn(List.of(s));
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(quiz));
+        when(sessionRepository.findByQuizConfigAndCompletedTrueOrderByTotalScoreDescCompletedAtAsc(quiz)).thenReturn(List.of(s));
+
+        QuizSessionResponse pub = service.getRanking("q", 10).top().get(0);
+        QuizSessionResponse team = service.getAdminReport(1L).top().get(0);
+
+        assertThat(pub.playerName()).isEqualTo("Ana Silva");
+        assertThat(pub.playerContact()).isNull();
+        assertThat(pub.registerData()).isNull();
+        assertThat(team.playerContact()).isEqualTo("a@x.com");
+        assertThat(team.registerData()).containsEntry("Código LATAM", "1");
+    }
+
+    @Test
+    @DisplayName("updateQuiz: valida campos do cadastro e fonte")
+    void updateQuiz_validatesFieldsAndFont() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(quiz));
+        when(quizConfigRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        String font = "/quizzes/fonts/123e4567-e89b-12d3-a456-426614174000/Latam.woff";
+
+        QuizConfigResponse ok = service.updateQuiz(1L, buildRequestWith(font, LATAM_FIELDS));
+        assertThat(ok.fontUrl()).isEqualTo(font);
+        assertThat(ok.registerFields()).isEqualTo(LATAM_FIELDS);
+        assertThat(service.updateQuiz(1L, buildRequestWith(null, List.of())).registerFields()).isNull();
+
+        assertThatThrownBy(() -> service.updateQuiz(1L, buildRequestWith("https://evil/x.woff", null)))
+                .hasMessageContaining("Fonte inválida");
+        assertThatThrownBy(() -> service.updateQuiz(1L, buildRequestWith(null,
+                List.of(new QuizRegisterField("c", "Código", "text", true, false))))).hasMessageContaining("ranking");
+        assertThatThrownBy(() -> service.updateQuiz(1L, buildRequestWith(null, List.of(
+                new QuizRegisterField("a", "Nome", "text", true, true),
+                new QuizRegisterField("b", "nome", "text", true, true))))).hasMessageContaining("mesmo nome");
+        assertThatThrownBy(() -> service.updateQuiz(1L, buildRequestWith(null,
+                List.of(new QuizRegisterField("a", "Nome", "script", true, true))))).hasMessageContaining("Tipo");
+    }
+
+    @Test
+    @DisplayName("explicação só vai ao jogador depois de responder")
+    void explanation_onlyAfterAnswer() {
+        QuizConfig quiz = buildQuiz(1L, "Quiz", "q");
+        QuizQuestion question = buildQuestion(10L, quiz);
+        question.setExplanation("Porque sim");
+        question.getOptions().add(buildOption(100L, question, true));
+        quiz.getQuestions().add(question);
+        QuizSession session = QuizSession.builder().id(5L).quizConfig(quiz).build();
+        when(quizConfigRepository.findBySlug("q")).thenReturn(Optional.of(quiz));
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(quiz));
+        when(sessionRepository.findById(5L)).thenReturn(Optional.of(session));
+
+        assertThat(service.getQuizBySlug("q").questions().get(0).explanation()).isNull();
+        assertThat(service.getQuizById(1L).questions().get(0).explanation()).isEqualTo("Porque sim");
+        assertThat(service.submitAnswer(5L, new SubmitAnswerRequest(10L, null, 1L)).explanation()).isEqualTo("Porque sim");
+    }
+
+    @Test
+    @DisplayName("JSON do banco: campos e dados voltam iguais")
+    void jsonConverters_roundTrip() {
+        var f = new QuizJsonConverters.Fields();
+        var d = new QuizJsonConverters.Data();
+        assertThat(f.convertToEntityAttribute(f.convertToDatabaseColumn(LATAM_FIELDS))).isEqualTo(LATAM_FIELDS);
+        assertThat(d.convertToEntityAttribute(d.convertToDatabaseColumn(java.util.Map.of("Código", "ç")))).containsEntry("Código", "ç");
+        assertThat(f.convertToEntityAttribute(null)).isNull();
     }
 
     // ── submitAnswer ──────────────────────────────────────────────────────────

@@ -12,5 +12,7 @@ public record QuizSessionResponse(
     boolean completed,
     LocalDateTime completedAt,
     // Posição no ranking (calculada no momento da consulta)
-    Integer rankPosition
+    Integer rankPosition,
+    // Só no relatório da equipe
+    java.util.Map<String, String> registerData
 ) {}

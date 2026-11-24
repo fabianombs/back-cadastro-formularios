@@ -7,5 +7,7 @@ public record QuizQuestionResponse(
     String question,
     String imageUrl,
     int orderIndex,
-    List<QuizOptionResponse> options
+    List<QuizOptionResponse> options,
+    // Só para o editor; no link público vai em AnswerResultResponse, depois da resposta
+    String explanation
 ) {}

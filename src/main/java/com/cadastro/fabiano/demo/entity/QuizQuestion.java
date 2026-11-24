@@ -26,6 +26,10 @@ public class QuizQuestion {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    // Explicação mostrada depois de responder — null não mostra nada
+    @Column(length = 1000)
+    private String explanation;
+
     @Column(name = "order_index", nullable = false)
     private int orderIndex = 0;
 
