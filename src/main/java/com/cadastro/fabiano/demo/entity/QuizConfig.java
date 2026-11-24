@@ -145,6 +145,47 @@ public class QuizConfig {
     @Column(name = "thank_you_title_font_size", length = 20)
     private String thankYouTitleFontSize;
 
+    // Logo do cliente
+    @Column(name = "logo_url", length = 500)
+    private String logoUrl;
+
+    // Cor de fundo do card da pergunta e do resultado
+    @Column(name = "question_card_color", length = 80)
+    private String questionCardColor;
+
+    // Cor dos textos secundários ("10 perguntas · 30s", legendas do resultado)
+    @Column(name = "secondary_text_color", length = 80)
+    private String secondaryTextColor;
+
+    // Em quais telas a logo aparece — por padrão, em todas
+    @Column(name = "show_logo_register", nullable = false)
+    @Builder.Default
+    private boolean showLogoRegister = true;
+
+    @Column(name = "show_logo_ready", nullable = false)
+    @Builder.Default
+    private boolean showLogoReady = true;
+
+    @Column(name = "show_logo_question", nullable = false)
+    @Builder.Default
+    private boolean showLogoQuestion = true;
+
+    @Column(name = "show_logo_result", nullable = false)
+    @Builder.Default
+    private boolean showLogoResult = true;
+
+    @Column(name = "show_logo_ranking", nullable = false)
+    @Builder.Default
+    private boolean showLogoRanking = true;
+
+    // Cor do texto dos campos de cadastro (rótulo, exemplo e texto digitado)
+    @Column(name = "register_text_color", length = 80)
+    private String registerTextColor;
+
+    // Cor do texto dos cards de resposta — null usa textColor
+    @Column(name = "option_text_color", length = 80)
+    private String optionTextColor;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

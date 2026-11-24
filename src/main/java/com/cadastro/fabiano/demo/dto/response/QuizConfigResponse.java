@@ -50,5 +50,18 @@ public record QuizConfigResponse(
     String thankYouTitleColor,
     String thankYouTextColor,
     String thankYouFontFamily,
-    String thankYouTitleFontSize
+    String thankYouTitleFontSize,
+    // Logo do cliente e cores de texto — null mantém o visual padrão
+    String logoUrl,
+    String registerTextColor,
+    String optionTextColor,
+    // Fundo do card da pergunta/resultado e textos secundários
+    String questionCardColor,
+    String secondaryTextColor,
+    // Em quais telas a logo aparece (true = mostra)
+    boolean showLogoRegister,
+    boolean showLogoReady,
+    boolean showLogoQuestion,
+    boolean showLogoResult,
+    boolean showLogoRanking
 ) {}

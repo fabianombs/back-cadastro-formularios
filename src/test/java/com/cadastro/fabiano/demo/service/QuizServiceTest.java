@@ -77,7 +77,8 @@ class QuizServiceTest {
         );
         return new QuizConfigRequest(name, null, 30, 1000, questions,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                false, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     // ── listAll ───────────────────────────────────────────────────────────────
@@ -134,7 +135,8 @@ class QuizServiceTest {
     void createQuiz_withExplicitSlug() {
         QuizConfigRequest req = new QuizConfigRequest("Meu Quiz", "meu-slug-custom", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                false, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Meu Quiz", "meu-slug-custom");
 
         when(quizConfigRepository.existsBySlug("meu-slug-custom")).thenReturn(false);
@@ -161,13 +163,91 @@ class QuizServiceTest {
         assertThat(result.name()).isEqualTo("Novo Nome");
     }
 
+    private QuizConfigRequest buildBrandedRequest(String logo, String registerText, String optionText) {
+        return new QuizConfigRequest("Quiz", null, 30, 1000, List.of(),
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                logo, registerText, optionText, "#eeeeee", "#777777", null, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("updateQuiz: grava e devolve logo e cores de texto do cadastro e das respostas")
+    void updateQuiz_savesLogoAndTextColors() {
+        QuizConfig existing = buildQuiz(1L, "Quiz", "quiz");
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(quizConfigRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        QuizConfigResponse result = service.updateQuiz(1L,
+                buildBrandedRequest("https://img/logo.png", "#111111", "#ffffff"));
+
+        assertThat(existing.getLogoUrl()).isEqualTo("https://img/logo.png");
+        assertThat(result.logoUrl()).isEqualTo("https://img/logo.png");
+        assertThat(result.registerTextColor()).isEqualTo("#111111");
+        assertThat(result.optionTextColor()).isEqualTo("#ffffff");
+        assertThat(result.questionCardColor()).isEqualTo("#eeeeee");
+        assertThat(result.secondaryTextColor()).isEqualTo("#777777");
+    }
+
+    @Test
+    @DisplayName("updateQuiz: logo aparece em todas as telas quando a escolha não é enviada")
+    void updateQuiz_logoVisibleByDefault() {
+        QuizConfig existing = buildQuiz(1L, "Quiz", "quiz");
+        existing.setShowLogoResult(false);
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(quizConfigRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        QuizConfigResponse r = service.updateQuiz(1L, buildBrandedRequest("https://img/logo.png", null, null));
+
+        assertThat(List.of(r.showLogoRegister(), r.showLogoReady(), r.showLogoQuestion(),
+                r.showLogoResult(), r.showLogoRanking())).containsOnly(true);
+    }
+
+    @Test
+    @DisplayName("updateQuiz: cada tela guarda a própria escolha de exibir a logo")
+    void updateQuiz_savesLogoVisibilityPerScreen() {
+        for (int hidden = 0; hidden < 5; hidden++) {
+            QuizConfig existing = buildQuiz(1L, "Quiz", "quiz");
+            when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(quizConfigRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+            QuizConfigRequest req = new QuizConfigRequest("Quiz", null, 30, 1000, List.of(),
+                    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    "https://img/logo.png", null, null, null, null,
+                    hidden != 0, hidden != 1, hidden != 2, hidden != 3, hidden != 4);
+
+            QuizConfigResponse r = service.updateQuiz(1L, req);
+
+            assertThat(List.of(r.showLogoRegister(), r.showLogoReady(), r.showLogoQuestion(),
+                    r.showLogoResult(), r.showLogoRanking()))
+                    .containsExactly(hidden != 0, hidden != 1, hidden != 2, hidden != 3, hidden != 4);
+        }
+    }
+
+    @Test
+    @DisplayName("updateQuiz: permite remover logo e cores de texto")
+    void updateQuiz_clearsLogoAndTextColors() {
+        QuizConfig existing = buildQuiz(1L, "Quiz", "quiz");
+        existing.setLogoUrl("https://img/logo.png");
+        existing.setRegisterTextColor("#111111");
+        existing.setOptionTextColor("#ffffff");
+        when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(quizConfigRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        QuizConfigResponse result = service.updateQuiz(1L, buildBrandedRequest(null, null, null));
+
+        assertThat(result.logoUrl()).isNull();
+        assertThat(result.registerTextColor()).isNull();
+        assertThat(result.optionTextColor()).isNull();
+    }
+
     @Test
     @DisplayName("updateQuiz: lança exceção se slug já está em uso por outro quiz")
     void updateQuiz_slugConflict_throws() {
         QuizConfig existing = buildQuiz(1L, "Quiz", "slug-atual");
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "outro-slug", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                false, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(quizConfigRepository.existsBySlug("outro-slug")).thenReturn(true);
@@ -183,7 +263,8 @@ class QuizServiceTest {
         QuizConfig existing = buildQuiz(1L, "Quiz", "meu-slug");
         QuizConfigRequest req = new QuizConfigRequest("Quiz", "meu-slug", 30, 1000, List.of(),
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                false, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
         QuizConfig saved = buildQuiz(1L, "Quiz", "meu-slug");
 
         when(quizConfigRepository.findById(1L)).thenReturn(Optional.of(existing));
