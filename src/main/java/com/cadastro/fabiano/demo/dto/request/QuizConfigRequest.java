@@ -1,5 +1,6 @@
 package com.cadastro.fabiano.demo.dto.request;
 
+import com.cadastro.fabiano.demo.dto.QuizRegisterField;
 import java.util.List;
 
 public record QuizConfigRequest(
@@ -60,5 +61,9 @@ public record QuizConfigRequest(
     Boolean showLogoReady,
     Boolean showLogoQuestion,
     Boolean showLogoResult,
-    Boolean showLogoRanking
+    Boolean showLogoRanking,
+    // Fonte enviada (null = padrão) e campos do cadastro (null/vazio = nome e contato)
+    String fontUrl,
+    String fontBoldUrl,
+    List<QuizRegisterField> registerFields
 ) {}

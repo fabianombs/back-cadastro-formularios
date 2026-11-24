@@ -1,6 +1,7 @@
 package com.cadastro.fabiano.demo.entity;
 
 import jakarta.persistence.*;
+import com.cadastro.fabiano.demo.dto.QuizRegisterField;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
 import java.time.LocalDateTime;
@@ -185,6 +186,19 @@ public class QuizConfig {
     // Cor do texto dos cards de resposta — null usa textColor
     @Column(name = "option_text_color", length = 80)
     private String optionTextColor;
+
+    // Fonte do quiz (caminho em /quizzes/fonts) — null usa a fonte padrão
+    @Column(name = "font_url", length = 300)
+    private String fontUrl;
+
+    // Versão negrito da fonte (opcional)
+    @Column(name = "font_bold_url", length = 300)
+    private String fontBoldUrl;
+
+    // Campos do cadastro — null usa "Nome completo" e "E-mail ou telefone"
+    @Convert(converter = QuizJsonConverters.Fields.class)
+    @Column(name = "register_fields", columnDefinition = "TEXT")
+    private List<QuizRegisterField> registerFields;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

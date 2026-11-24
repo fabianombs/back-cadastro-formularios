@@ -24,6 +24,11 @@ public class QuizSession {
     @Column(name = "player_contact", nullable = false)
     private String playerContact;
 
+    // Respostas dos campos configuráveis (rótulo → valor); só a equipe vê
+    @Convert(converter = QuizJsonConverters.Data.class)
+    @Column(name = "register_data", columnDefinition = "TEXT")
+    private java.util.Map<String, String> registerData;
+
     @Column(name = "total_score", nullable = false)
     private int totalScore = 0;
 

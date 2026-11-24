@@ -6,5 +6,6 @@ public record QuizQuestionRequest(
     String question,
     String imageUrl,
     int orderIndex,
-    List<QuizOptionRequest> options
+    List<QuizOptionRequest> options,
+    String explanation
 ) {}
